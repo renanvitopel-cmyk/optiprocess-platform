@@ -4,7 +4,10 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm install && npm run build
+    # --include=dev e obrigatorio: NODE_ENV=production (abaixo) faz o npm pular as
+    # devDependencies, e o build precisa delas (typescript, @types/*, vite, prisma).
+    # Em runtime apenas as dependencies sao usadas.
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
     healthCheckPath: /api/ping
     envVars:

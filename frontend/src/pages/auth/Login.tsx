@@ -3,12 +3,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ShieldCheck } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
 import { homeForRole } from "../../auth/ProtectedRoute";
 import { TextInput } from "../../components/form/Field";
 import { getApiErrorMessage } from "../../api/client";
-import { company } from "../../lib/companyInfo";
+import { LogoFull } from "../../components/Logo";
 
 const schema = z.object({
   email: z.string().email("Informe um e-mail valido."),
@@ -43,9 +42,8 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-navy-950 px-4 py-12">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
         <div className="mb-6 flex flex-col items-center text-center">
-          <ShieldCheck className="h-10 w-10 text-navy-800" />
-          <h1 className="mt-2 text-xl font-bold text-navy-900">{company.name}</h1>
-          <p className="text-sm text-graphite-500">Acesse a gestao interna ou o portal do cliente</p>
+          <LogoFull variant="dark" className="h-32" />
+          <p className="mt-3 text-sm text-graphite-500">Acesse a gestao interna ou o portal do cliente</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>

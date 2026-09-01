@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
-import { Menu, X, ShieldCheck, LogOut } from "lucide-react";
+import { Menu, X, LogOut } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { PORTAL_NAV } from "./portalNav";
-import { company } from "../lib/companyInfo";
 import { clientDisplayName } from "../lib/format";
+import { Logo } from "../components/Logo";
 
 export function ClientPortalLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -42,9 +42,8 @@ export function ClientPortalLayout() {
     <div className="flex min-h-screen bg-gray-50">
       <aside className="hidden w-64 shrink-0 bg-navy-950 lg:block">
         <div className="sticky top-0 h-screen overflow-y-auto">
-          <Link to="/portal" className="flex h-16 items-center gap-2 px-5 font-bold text-white">
-            <ShieldCheck className="h-6 w-6 text-safety-yellow" />
-            {company.name}
+          <Link to="/portal" className="flex h-16 items-center px-5" aria-label="OptiProcess - portal do cliente">
+            <Logo variant="light" size="sm" />
           </Link>
           {nav}
         </div>
@@ -54,9 +53,8 @@ export function ClientPortalLayout() {
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-navy-950/60" onClick={() => setMobileOpen(false)} />
           <aside className="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-navy-950 shadow-xl">
-            <div className="flex h-16 items-center gap-2 px-5 font-bold text-white">
-              <ShieldCheck className="h-6 w-6 text-safety-yellow" />
-              {company.name}
+            <div className="flex h-16 items-center px-5">
+              <Logo variant="light" size="sm" />
               <button type="button" className="ml-auto text-navy-300" onClick={() => setMobileOpen(false)} aria-label="Fechar menu">
                 <X className="h-5 w-5" />
               </button>

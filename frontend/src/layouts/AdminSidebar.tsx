@@ -1,8 +1,8 @@
 import { NavLink } from "react-router-dom";
-import { ShieldCheck, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { ADMIN_NAV } from "./adminNav";
-import { company } from "../lib/companyInfo";
+import { Logo } from "../components/Logo";
 
 export function AdminSidebar({ mobileOpen, onCloseMobile }: { mobileOpen: boolean; onCloseMobile: () => void }) {
   const { user } = useAuth();
@@ -10,9 +10,8 @@ export function AdminSidebar({ mobileOpen, onCloseMobile }: { mobileOpen: boolea
 
   const content = (
     <>
-      <div className="flex h-16 items-center gap-2 px-5 font-bold text-white">
-        <ShieldCheck className="h-6 w-6 text-safety-yellow" />
-        {company.name}
+      <div className="flex h-16 items-center px-5">
+        <Logo variant="light" size="sm" />
         <button type="button" className="ml-auto text-navy-300 lg:hidden" onClick={onCloseMobile} aria-label="Fechar menu">
           <X className="h-5 w-5" />
         </button>

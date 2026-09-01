@@ -1,17 +1,15 @@
 import { Link } from "react-router-dom";
-import { MapPin, Phone, Mail, ShieldCheck } from "lucide-react";
+import { MapPin, Phone, Mail } from "lucide-react";
 import { company, serviceLines } from "../lib/companyInfo";
+import { Logo } from "../components/Logo";
 
 export function PublicFooter() {
   return (
     <footer className="border-t border-navy-900/10 bg-navy-950 text-navy-100">
       <div className="container-page grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <div className="flex items-center gap-2 font-bold text-white">
-            <ShieldCheck className="h-5 w-5 text-safety-yellow" />
-            {company.name}
-          </div>
-          <p className="mt-3 text-sm text-navy-300">{company.fullName}</p>
+          <Logo variant="light" size="lg" />
+          <p className="mt-4 text-sm text-navy-300">{company.fullName}</p>
         </div>
 
         <div>

@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { Menu, X, ShieldCheck, ChevronDown, ShoppingCart } from "lucide-react";
+import { Menu, X, ChevronDown, ShoppingCart } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { homeForRole } from "../auth/ProtectedRoute";
-import { company } from "../lib/companyInfo";
 import { useCart } from "../cart/CartContext";
+import { Logo } from "../components/Logo";
 
 const NAV_LINKS = [
   { to: "/", label: "Inicio" },
@@ -23,9 +23,8 @@ export function PublicHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-navy-900/10 bg-navy-950 text-white">
       <div className="container-page flex h-16 items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 font-bold tracking-tight">
-          <ShieldCheck className="h-6 w-6 text-safety-yellow" />
-          <span className="text-lg">{company.name}</span>
+        <Link to="/" aria-label="OptiProcess - pagina inicial">
+          <Logo variant="light" size="md" />
         </Link>
 
         <nav className="hidden items-center gap-6 text-sm font-medium lg:flex">

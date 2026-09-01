@@ -4,6 +4,7 @@ import { CartProvider } from "./cart/CartContext";
 import { ToastProvider } from "./components/Toast";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { FullPageSpinner } from "./components/Spinner";
+import { ScrollToTop } from "./components/ScrollToTop";
 
 import { PublicLayout } from "./layouts/PublicLayout";
 
@@ -67,6 +68,7 @@ export default function App() {
   return (
     <ToastProvider>
       <CartProvider>
+        <ScrollToTop />
         <Suspense fallback={<FullPageSpinner />}>
           <Routes>
             <Route element={<PublicLayout />}>

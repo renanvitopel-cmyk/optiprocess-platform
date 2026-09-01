@@ -1,0 +1,26 @@
+{
+  "name": "optiprocess-platform",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Plataforma web da OptiProcess: site institucional, gestao interna e portal do cliente",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev --workspace backend",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "build": "npm run build --workspace backend && npm run build --workspace frontend",
+    "build:backend": "npm run build --workspace backend",
+    "build:frontend": "npm run build --workspace frontend",
+    "start": "npm run start --workspace backend",
+    "prisma:generate": "npm run prisma:generate --workspace backend",
+    "prisma:migrate": "npm run prisma:migrate --workspace backend",
+    "prisma:deploy": "npm run prisma:deploy --workspace backend",
+    "seed": "npm run seed --workspace backend",
+    "typecheck": "npm run typecheck --workspace backend && npm run typecheck --workspace frontend"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

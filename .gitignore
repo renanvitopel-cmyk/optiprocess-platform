@@ -1,0 +1,27 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+npm-debug.log*
+
+# Prisma
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+
+# Local file storage fallback (dev only)
+backend/storage-local/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Vite
+frontend/dist/
+frontend/.vite/
+
+# TypeScript build info
+*.tsbuildinfo

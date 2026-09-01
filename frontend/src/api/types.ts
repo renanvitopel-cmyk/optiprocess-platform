@@ -1,0 +1,368 @@
+export type Role = "ADMIN" | "TECHNICIAN" | "COMMERCIAL" | "CLIENT";
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  clientId: string | null;
+  client: { id: string; companyName: string; tradeName: string | null } | null;
+}
+
+export type ClientStatus = "ACTIVE" | "INACTIVE" | "PROSPECT";
+
+export interface ClientRef {
+  id: string;
+  companyName: string;
+  tradeName: string | null;
+}
+
+export interface ClientContact {
+  id: string;
+  clientId: string;
+  name: string;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  isPrimary: boolean;
+}
+
+export interface Client {
+  id: string;
+  companyName: string;
+  tradeName: string | null;
+  cnpj: string | null;
+  stateRegistration: string | null;
+  addressStreet: string | null;
+  addressNumber: string | null;
+  addressComplement: string | null;
+  addressDistrict: string | null;
+  addressCity: string | null;
+  addressState: string | null;
+  addressZip: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  technicalContactName: string | null;
+  commercialContactName: string | null;
+  status: ClientStatus;
+  notes: string | null;
+  createdAt: string;
+  contacts?: ClientContact[];
+  _count?: { instruments: number; serviceOrders: number; contracts: number; calibrations?: number; orders?: number };
+}
+
+export type ServiceCategory =
+  | "ELECTRICAL_MAINTENANCE"
+  | "PANEL_MAINTENANCE"
+  | "MOTOR_MAINTENANCE"
+  | "TECHNICAL_REPORT"
+  | "CALIBRATION"
+  | "TECHNICAL_ASSISTANCE"
+  | "EV_CHARGER"
+  | "OTHER";
+
+export type ServiceOrderStatus = "BUDGET" | "APPROVED" | "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELED";
+export type ServiceOrderItemType = "CHECKLIST" | "MATERIAL";
+
+export interface ServiceOrderItem {
+  id: string;
+  serviceOrderId: string;
+  type: ServiceOrderItemType;
+  description: string;
+  done: boolean | null;
+  quantity: number | null;
+  unit: string | null;
+}
+
+export interface ServiceOrder {
+  id: string;
+  number: string;
+  clientId: string;
+  client?: ClientRef;
+  siteAddress: string;
+  category: ServiceCategory;
+  description: string;
+  technicianId: string | null;
+  technician?: { id: string; name: string } | null;
+  scheduledDate: string | null;
+  deadline: string | null;
+  laborHours: number | null;
+  status: ServiceOrderStatus;
+  clientApprovedAt: string | null;
+  createdAt: string;
+  items?: ServiceOrderItem[];
+}
+
+export type InstrumentStatus = "VALID" | "DUE_SOON" | "EXPIRED" | "IN_MAINTENANCE";
+
+export interface Instrument {
+  id: string;
+  clientId: string;
+  client?: ClientRef;
+  type: string;
+  tag: string | null;
+  manufacturer: string;
+  model: string;
+  serialNumber: string;
+  measurementRange: string | null;
+  resolution: string | null;
+  unit: string | null;
+  installationLocation: string | null;
+  calibrationFrequencyMonths: number;
+  lastCalibrationDate: string | null;
+  nextDueDate: string | null;
+  status: InstrumentStatus;
+  derivedStatus?: InstrumentStatus;
+  calibrations?: CalibrationSummary[];
+}
+
+export type CalibrationResult = "APPROVED" | "APPROVED_WITH_RESTRICTION" | "REJECTED";
+export type PointResult = "PASS" | "FAIL";
+export type DocumentStatus = "DRAFT" | "ISSUED";
+
+export interface CalibrationPoint {
+  id?: string;
+  standardValue: number;
+  indicatedValue: number;
+  error: number;
+  tolerance: number;
+  uncertainty: number;
+  result: PointResult;
+}
+
+export interface CalibrationSummary {
+  id: string;
+  certificateNumber: string;
+  calibrationDate: string;
+  validUntil: string;
+  result: CalibrationResult;
+  status: DocumentStatus;
+  visibleToClient: boolean;
+  revisionNumber: number;
+}
+
+export interface Calibration {
+  id: string;
+  certificateNumber: string;
+  clientId: string;
+  client?: ClientRef;
+  instrumentId: string;
+  instrument?: Instrument;
+  serviceOrderId: string | null;
+  serviceOrder?: { id: string; number: string } | null;
+  calibrationDate: string;
+  location: string;
+  technicianId: string;
+  technician?: { id: string; name: string };
+  standardUsed: string;
+  traceability: string;
+  ambientTemperature: number | null;
+  ambientHumidity: number | null;
+  environmentalNotes: string | null;
+  result: CalibrationResult;
+  technicalConclusion: string;
+  validUntil: string;
+  status: DocumentStatus;
+  visibleToClient: boolean;
+  qrCodeToken: string;
+  qrCodeUrl?: string;
+  qrCodeDataUrl?: string;
+  revisionNumber: number;
+  previousRevisionId: string | null;
+  points: CalibrationPoint[];
+  pdfAttachment: { id: string; fileName: string; mimeType: string; sizeBytes: number } | null;
+  createdAt: string;
+}
+
+export type TechnicalReportCategory =
+  | "ELECTRICAL_INSTALLATION"
+  | "THERMOGRAPHY"
+  | "GROUNDING"
+  | "SPDA"
+  | "OTHER";
+
+export interface TechnicalReport {
+  id: string;
+  number: string;
+  category: TechnicalReportCategory;
+  clientId: string;
+  client?: ClientRef;
+  location: string;
+  responsibleId: string;
+  responsible?: { id: string; name: string };
+  reportDate: string;
+  validUntil: string | null;
+  status: DocumentStatus;
+  observations: string | null;
+  visibleToClient: boolean;
+  pdfAttachment: { id: string; fileName: string; mimeType: string; sizeBytes: number } | null;
+  createdAt: string;
+}
+
+export type ContractStatus = "ACTIVE" | "EXPIRING_SOON" | "EXPIRED" | "CANCELED";
+export type ContractPeriodicity = "MONTHLY" | "QUARTERLY" | "SEMIANNUAL" | "ANNUAL" | "ONE_TIME" | "OTHER";
+
+export interface ServiceContract {
+  id: string;
+  clientId: string;
+  client?: ClientRef;
+  serviceName: string;
+  startDate: string;
+  endDate: string | null;
+  value: number | null;
+  periodicity: ContractPeriodicity;
+  responsibleId: string | null;
+  responsible?: { id: string; name: string } | null;
+  status: ContractStatus;
+  derivedStatus?: string;
+  notes: string | null;
+  createdAt: string;
+}
+
+export type ProductStatus = "ACTIVE" | "INACTIVE" | "UNAVAILABLE";
+export type InventoryMovementType = "IN" | "OUT" | "ADJUSTMENT";
+
+export interface ProductCategory {
+  id: string;
+  name: string;
+  slug: string;
+  _count?: { products: number };
+}
+
+export interface ProductImage {
+  id: string;
+  fileKey: string;
+  fileName: string;
+  mimeType: string;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  slug: string;
+  sku: string;
+  categoryId: string;
+  category?: ProductCategory;
+  brand: string | null;
+  description: string | null;
+  technicalSheetUrl: string | null;
+  price: number | null;
+  promoPrice: number | null;
+  priceOnRequest: boolean;
+  stockQty: number;
+  minStock: number;
+  status: ProductStatus;
+  featured: boolean;
+  images?: ProductImage[];
+}
+
+export type QuoteStatus = "NEW" | "IN_ANALYSIS" | "QUOTE_SENT" | "APPROVED" | "REJECTED" | "EXPIRED";
+export type QuoteSource = "SERVICE_REQUEST" | "PRODUCT_CART" | "CONTACT";
+
+export interface QuoteItem {
+  id: string;
+  quoteId: string;
+  productId: string;
+  product?: { id: string; name: string; sku: string; price: number | null };
+  quantity: number;
+  unitPriceRequested: number | null;
+  unitPriceOffered: number | null;
+}
+
+export interface Quote {
+  id: string;
+  number: string;
+  clientId: string | null;
+  client?: ClientRef | null;
+  source: QuoteSource;
+  status: QuoteStatus;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string | null;
+  serviceCategory: ServiceCategory | null;
+  message: string | null;
+  shippingCost: number | null;
+  notes: string | null;
+  items: QuoteItem[];
+  createdAt: string;
+}
+
+export type OrderStatus = "PENDING" | "SEPARATED" | "DELIVERED" | "CANCELED";
+export type PaymentMethod = "PIX" | "BOLETO" | "OTHER";
+export type PaymentStatus = "PENDING" | "PAID";
+
+export interface OrderItem {
+  id: string;
+  orderId: string;
+  productId: string;
+  product?: { id: string; name: string; sku: string };
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+export interface OrderStatusHistoryEntry {
+  id: string;
+  status: OrderStatus;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface Order {
+  id: string;
+  number: string;
+  clientId: string;
+  client?: ClientRef;
+  quoteId: string | null;
+  status: OrderStatus;
+  shippingCost: number | null;
+  totalAmount: number;
+  deadline: string | null;
+  paymentMethod: PaymentMethod | null;
+  paymentStatus: PaymentStatus;
+  paymentNotes: string | null;
+  items: OrderItem[];
+  statusHistory: OrderStatusHistoryEntry[];
+  createdAt: string;
+}
+
+export interface UserAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  clientId: string | null;
+  client: ClientRef | null;
+  active: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
+export interface RoleDefinitionDto {
+  key: Role;
+  label: string;
+  description: string | null;
+  permissions: string[];
+}
+
+export interface AuditLogEntry {
+  id: string;
+  userId: string | null;
+  user: { id: string; name: string; email: string } | null;
+  action: string;
+  entityType: string;
+  entityId: string;
+  description: string | null;
+  createdAt: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  link: string | null;
+  read: boolean;
+  createdAt: string;
+}

@@ -1,0 +1,39 @@
+import "dotenv/config";
+
+function required(name: string, fallback?: string): string {
+  const value = process.env[name] ?? fallback;
+  if (value === undefined || value === "") {
+    throw new Error(`Variavel de ambiente obrigatoria ausente: ${name}`);
+  }
+  return value;
+}
+
+export const env = {
+  nodeEnv: process.env.NODE_ENV ?? "development",
+  isProduction: process.env.NODE_ENV === "production",
+  port: Number(process.env.PORT ?? 4000),
+  publicUrl: (process.env.PUBLIC_URL ?? "http://localhost:4000").replace(/\/$/, ""),
+  corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
+
+  databaseUrl: required("DATABASE_URL"),
+
+  jwtSecret: required("JWT_SECRET"),
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "12h",
+
+  initialAdmin: {
+    name: process.env.INITIAL_ADMIN_NAME ?? "Administrador",
+    email: process.env.INITIAL_ADMIN_EMAIL ?? "admin@optiprocess.com.br",
+    password: process.env.INITIAL_ADMIN_PASSWORD ?? "",
+  },
+
+  storage: {
+    provider: (process.env.STORAGE_PROVIDER ?? "local") as "local" | "s3",
+    s3Endpoint: process.env.S3_ENDPOINT ?? "",
+    s3Region: process.env.S3_REGION ?? "auto",
+    s3Bucket: process.env.S3_BUCKET ?? "",
+    s3AccessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
+    s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
+  },
+
+  whatsappNumber: process.env.WHATSAPP_NUMBER ?? "",
+};

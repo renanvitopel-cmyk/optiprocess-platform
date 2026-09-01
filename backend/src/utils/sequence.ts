@@ -1,0 +1,26 @@
+import { prisma } from "../lib/prisma";
+
+const PREFIXES = {
+  serviceOrder: "OS",
+  calibration: "CAL",
+  technicalReport: "LAU",
+  quote: "ORC",
+  order: "PED",
+} as const;
+
+type SequenceKind = keyof typeof PREFIXES;
+
+/** Gera um numero sequencial unico e legivel, reiniciando a cada ano (ex.: OS-2026-000123). */
+export async function nextDocumentNumber(kind: SequenceKind, date: Date = new Date()): Promise<string> {
+  const year = date.getFullYear();
+  const counterKey = `${kind}:${year}`;
+
+  const counter = await prisma.counter.upsert({
+    where: { key: counterKey },
+    create: { key: counterKey, value: 1 },
+    update: { value: { increment: 1 } },
+  });
+
+  const sequence = String(counter.value).padStart(6, "0");
+  return `${PREFIXES[kind]}-${year}-${sequence}`;
+}

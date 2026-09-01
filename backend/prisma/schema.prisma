@@ -1,0 +1,702 @@
+// Schema do banco da plataforma OptiProcess.
+// Convencao: entidades de negocio criticas tem soft-delete (deletedAt); tabelas de
+// itens/linhas filhas (pontos de calibracao, itens de OS, itens de pedido) nao tem,
+// pois seu historico e coberto pela entidade pai + audit_logs.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  TECHNICIAN
+  COMMERCIAL
+  CLIENT
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+  PROSPECT
+}
+
+enum ServiceCategory {
+  ELECTRICAL_MAINTENANCE
+  PANEL_MAINTENANCE
+  MOTOR_MAINTENANCE
+  TECHNICAL_REPORT
+  CALIBRATION
+  TECHNICAL_ASSISTANCE
+  EV_CHARGER
+  OTHER
+}
+
+enum ServiceOrderStatus {
+  BUDGET
+  APPROVED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+enum ServiceOrderItemType {
+  CHECKLIST
+  MATERIAL
+}
+
+enum InstrumentStatus {
+  VALID
+  DUE_SOON
+  EXPIRED
+  IN_MAINTENANCE
+}
+
+enum CalibrationResult {
+  APPROVED
+  APPROVED_WITH_RESTRICTION
+  REJECTED
+}
+
+enum PointResult {
+  PASS
+  FAIL
+}
+
+enum DocumentStatus {
+  DRAFT
+  ISSUED
+}
+
+enum TechnicalReportCategory {
+  ELECTRICAL_INSTALLATION
+  THERMOGRAPHY
+  GROUNDING
+  SPDA
+  OTHER
+}
+
+enum ContractStatus {
+  ACTIVE
+  EXPIRING_SOON
+  EXPIRED
+  CANCELED
+}
+
+enum ContractPeriodicity {
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+  ONE_TIME
+  OTHER
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  UNAVAILABLE
+}
+
+enum InventoryMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+enum QuoteStatus {
+  NEW
+  IN_ANALYSIS
+  QUOTE_SENT
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum QuoteSource {
+  SERVICE_REQUEST
+  PRODUCT_CART
+  CONTACT
+}
+
+enum OrderStatus {
+  PENDING
+  SEPARATED
+  DELIVERED
+  CANCELED
+}
+
+enum PaymentMethod {
+  PIX
+  BOLETO
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+}
+
+enum AttachmentEntityType {
+  SERVICE_ORDER
+  CALIBRATION
+  TECHNICAL_REPORT
+  SERVICE_CONTRACT
+  PRODUCT
+  CLIENT
+}
+
+// ---------------------------------------------------------------------------
+// Usuarios, papeis e permissoes
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         Role
+  clientId     String?
+  client       Client?   @relation(fields: [clientId], references: [id])
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  serviceOrdersAsTechnician     ServiceOrder[]     @relation("ServiceOrderTechnician")
+  calibrationsAsTechnician      Calibration[]      @relation("CalibrationTechnician")
+  technicalReportsAsResponsible TechnicalReport[]  @relation("TechnicalReportResponsible")
+  contractsAsResponsible        ServiceContract[]  @relation("ContractResponsible")
+  auditLogs                     AuditLog[]
+  notifications                 Notification[]
+
+  @@index([clientId])
+  @@map("users")
+}
+
+// Tabelas informativas dos 4 perfis fixos e do que cada um pode fazer.
+// A autorizacao real usa o enum Role nos middlewares (mais simples e seguro);
+// estas tabelas alimentam uma tela somente-leitura em Usuarios > Perfis.
+model RoleDefinition {
+  id          String           @id @default(uuid())
+  key         Role             @unique
+  label       String
+  description String?
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id     String           @id @default(uuid())
+  key    String           @unique
+  label  String
+  module String
+  roles  RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String         @id @default(uuid())
+  roleId       String
+  role         RoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission     @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ---------------------------------------------------------------------------
+// Clientes
+// ---------------------------------------------------------------------------
+
+model Client {
+  id                     String       @id @default(uuid())
+  companyName            String
+  tradeName              String?
+  cnpj                   String?      @unique
+  stateRegistration      String?
+  addressStreet          String?
+  addressNumber          String?
+  addressComplement      String?
+  addressDistrict        String?
+  addressCity            String?
+  addressState           String?
+  addressZip             String?
+  phone                  String?
+  whatsapp               String?
+  email                  String?
+  technicalContactName   String?
+  commercialContactName  String?
+  status                 ClientStatus @default(PROSPECT)
+  notes                  String?
+  createdById            String?
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+  deletedAt               DateTime?
+
+  contacts         ClientContact[]
+  users            User[]
+  serviceOrders    ServiceOrder[]
+  instruments      Instrument[]
+  calibrations     Calibration[]
+  technicalReports TechnicalReport[]
+  contracts        ServiceContract[]
+  quotes           Quote[]
+  orders           Order[]
+
+  @@index([status])
+  @@map("clients")
+}
+
+model ClientContact {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name      String
+  role      String?
+  email     String?
+  phone     String?
+  whatsapp  String?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([clientId])
+  @@map("client_contacts")
+}
+
+// ---------------------------------------------------------------------------
+// Ordens de servico
+// ---------------------------------------------------------------------------
+
+model ServiceOrder {
+  id               String              @id @default(uuid())
+  number           String              @unique
+  clientId         String
+  client           Client              @relation(fields: [clientId], references: [id])
+  siteAddress      String
+  category         ServiceCategory
+  description      String
+  technicianId     String?
+  technician       User?               @relation("ServiceOrderTechnician", fields: [technicianId], references: [id])
+  scheduledDate    DateTime?
+  deadline         DateTime?
+  laborHours       Float?
+  status           ServiceOrderStatus  @default(BUDGET)
+  clientApprovedAt DateTime?
+  createdById      String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  deletedAt        DateTime?
+
+  items        ServiceOrderItem[]
+  calibrations Calibration[]
+
+  @@index([clientId])
+  @@index([technicianId])
+  @@index([status])
+  @@map("service_orders")
+}
+
+model ServiceOrderItem {
+  id             String               @id @default(uuid())
+  serviceOrderId String
+  serviceOrder   ServiceOrder         @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  type           ServiceOrderItemType
+  description    String
+  done           Boolean?
+  quantity       Float?
+  unit           String?
+  createdAt      DateTime             @default(now())
+
+  @@index([serviceOrderId])
+  @@map("service_order_items")
+}
+
+// ---------------------------------------------------------------------------
+// Instrumentos e calibracoes
+// ---------------------------------------------------------------------------
+
+model Instrument {
+  id                         String            @id @default(uuid())
+  clientId                   String
+  client                     Client            @relation(fields: [clientId], references: [id])
+  type                       String
+  tag                        String?
+  manufacturer               String
+  model                      String
+  serialNumber               String
+  measurementRange           String?
+  resolution                 String?
+  unit                       String?
+  installationLocation       String?
+  calibrationFrequencyMonths Int
+  lastCalibrationDate        DateTime?
+  nextDueDate                DateTime?
+  status                     InstrumentStatus  @default(VALID)
+  createdById                String?
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
+  deletedAt                  DateTime?
+
+  calibrations Calibration[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([nextDueDate])
+  @@map("instruments")
+}
+
+model Calibration {
+  id                  String            @id @default(uuid())
+  certificateNumber   String            @unique
+  clientId            String
+  client              Client            @relation(fields: [clientId], references: [id])
+  instrumentId        String
+  instrument          Instrument        @relation(fields: [instrumentId], references: [id])
+  serviceOrderId      String?
+  serviceOrder        ServiceOrder?     @relation(fields: [serviceOrderId], references: [id])
+  calibrationDate     DateTime
+  location             String
+  technicianId        String
+  technician          User              @relation("CalibrationTechnician", fields: [technicianId], references: [id])
+  standardUsed        String
+  traceability        String
+  ambientTemperature  Float?
+  ambientHumidity     Float?
+  environmentalNotes  String?
+  result              CalibrationResult
+  technicalConclusion String
+  validUntil          DateTime
+  status              DocumentStatus    @default(DRAFT)
+  visibleToClient     Boolean           @default(false)
+  qrCodeToken         String            @unique @default(uuid())
+  revisionNumber      Int               @default(1)
+  previousRevisionId  String?           @unique
+  previousRevision    Calibration?      @relation("CalibrationRevision", fields: [previousRevisionId], references: [id])
+  supersededBy        Calibration?      @relation("CalibrationRevision")
+  pdfAttachmentId     String?
+  pdfAttachment       Attachment?       @relation("CalibrationPdf", fields: [pdfAttachmentId], references: [id])
+  createdById         String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  deletedAt           DateTime?
+
+  points CalibrationPoint[]
+
+  @@index([clientId])
+  @@index([instrumentId])
+  @@index([validUntil])
+  @@map("calibrations")
+}
+
+model CalibrationPoint {
+  id             String      @id @default(uuid())
+  calibrationId  String
+  calibration    Calibration @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
+  standardValue  Float
+  indicatedValue Float
+  error          Float
+  tolerance      Float
+  uncertainty    Float
+  result         PointResult
+  sortOrder      Int         @default(0)
+
+  @@index([calibrationId])
+  @@map("calibration_points")
+}
+
+// ---------------------------------------------------------------------------
+// Laudos tecnicos
+// ---------------------------------------------------------------------------
+
+model TechnicalReport {
+  id              String                   @id @default(uuid())
+  number          String                   @unique
+  category        TechnicalReportCategory
+  clientId        String
+  client          Client                   @relation(fields: [clientId], references: [id])
+  location        String
+  responsibleId   String
+  responsible     User                     @relation("TechnicalReportResponsible", fields: [responsibleId], references: [id])
+  reportDate      DateTime
+  validUntil      DateTime?
+  status          DocumentStatus           @default(DRAFT)
+  observations    String?
+  visibleToClient Boolean                  @default(false)
+  pdfAttachmentId String?
+  pdfAttachment   Attachment?              @relation("TechnicalReportPdf", fields: [pdfAttachmentId], references: [id])
+  createdById     String?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  deletedAt       DateTime?
+
+  @@index([clientId])
+  @@map("technical_reports")
+}
+
+// ---------------------------------------------------------------------------
+// Anexos (tabela generica reutilizada por OS, calibracao, laudo, contrato, produto)
+// ---------------------------------------------------------------------------
+
+model Attachment {
+  id           String               @id @default(uuid())
+  entityType   AttachmentEntityType
+  entityId     String
+  fileKey      String
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  sortOrder    Int                  @default(0)
+  uploadedById String?
+  createdAt    DateTime             @default(now())
+
+  calibrationsAsPdf      Calibration[]     @relation("CalibrationPdf")
+  technicalReportsAsPdf  TechnicalReport[] @relation("TechnicalReportPdf")
+
+  @@index([entityType, entityId])
+  @@map("attachments")
+}
+
+// ---------------------------------------------------------------------------
+// Contratos e servicos recorrentes
+// ---------------------------------------------------------------------------
+
+model ServiceContract {
+  id            String              @id @default(uuid())
+  clientId      String
+  client        Client              @relation(fields: [clientId], references: [id])
+  serviceName   String
+  startDate     DateTime
+  endDate       DateTime?
+  value         Float?
+  periodicity   ContractPeriodicity
+  responsibleId String?
+  responsible   User?               @relation("ContractResponsible", fields: [responsibleId], references: [id])
+  status        ContractStatus      @default(ACTIVE)
+  notes         String?
+  createdById   String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  deletedAt     DateTime?
+
+  @@index([clientId])
+  @@index([endDate])
+  @@map("service_contracts")
+}
+
+// ---------------------------------------------------------------------------
+// Produtos e estoque
+// ---------------------------------------------------------------------------
+
+model ProductCategory {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+
+  products Product[]
+
+  @@map("product_categories")
+}
+
+model Product {
+  id                String        @id @default(uuid())
+  name              String
+  slug              String        @unique
+  sku               String        @unique
+  categoryId        String
+  category          ProductCategory @relation(fields: [categoryId], references: [id])
+  brand             String?
+  description       String?
+  technicalSheetUrl String?
+  price             Float?
+  promoPrice        Float?
+  priceOnRequest    Boolean       @default(false)
+  stockQty          Int           @default(0)
+  minStock          Int           @default(0)
+  status            ProductStatus @default(ACTIVE)
+  featured          Boolean       @default(false)
+  createdById       String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  inventoryMovements InventoryMovement[]
+  quoteItems         QuoteItem[]
+  orderItems         OrderItem[]
+
+  @@index([categoryId])
+  @@index([status])
+  @@map("products")
+}
+
+model InventoryMovement {
+  id             String                @id @default(uuid())
+  productId      String
+  product        Product               @relation(fields: [productId], references: [id])
+  type           InventoryMovementType
+  quantity       Int
+  reason         String?
+  relatedOrderId String?
+  createdById    String?
+  createdAt      DateTime              @default(now())
+
+  @@index([productId])
+  @@map("inventory_movements")
+}
+
+// ---------------------------------------------------------------------------
+// Orcamentos e pedidos
+// ---------------------------------------------------------------------------
+
+model Quote {
+  id              String           @id @default(uuid())
+  number          String           @unique
+  clientId        String?
+  client          Client?          @relation(fields: [clientId], references: [id])
+  source          QuoteSource
+  status          QuoteStatus      @default(NEW)
+  contactName     String
+  contactEmail    String
+  contactPhone    String?
+  serviceCategory ServiceCategory?
+  message         String?
+  shippingCost    Float?
+  notes           String?
+  createdById     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
+
+  items QuoteItem[]
+  order Order?
+
+  @@index([clientId])
+  @@index([status])
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id                 String  @id @default(uuid())
+  quoteId            String
+  quote              Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productId          String
+  product            Product @relation(fields: [productId], references: [id])
+  quantity           Int
+  unitPriceRequested Float?
+  unitPriceOffered   Float?
+
+  @@index([quoteId])
+  @@map("quote_items")
+}
+
+model Order {
+  id            String         @id @default(uuid())
+  number        String         @unique
+  clientId      String
+  client        Client         @relation(fields: [clientId], references: [id])
+  quoteId       String?        @unique
+  quote         Quote?         @relation(fields: [quoteId], references: [id])
+  status        OrderStatus    @default(PENDING)
+  shippingCost  Float?         @default(0)
+  totalAmount   Float
+  deadline      DateTime?
+  paymentMethod PaymentMethod?
+  paymentStatus PaymentStatus  @default(PENDING)
+  paymentNotes  String?
+  createdById   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?
+
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+
+  @@index([clientId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitPrice Float
+  subtotal  Float
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id          String      @id @default(uuid())
+  orderId     String
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status      OrderStatus
+  note        String?
+  changedById String?
+  createdAt   DateTime    @default(now())
+
+  @@index([orderId])
+  @@map("order_status_history")
+}
+
+// ---------------------------------------------------------------------------
+// Auditoria e notificacoes
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  action      String
+  entityType  String
+  entityId    String
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+// Contadores atomicos para numeracao sequencial (OS, certificados, laudos,
+// orcamentos, pedidos). Chave inclui o ano para reiniciar a numeracao anualmente.
+model Counter {
+  key   String @id
+  value Int    @default(0)
+
+  @@map("counters")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  type      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("notifications")
+}

@@ -1,8 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
-    "moduleResolution": "node",
+    // "node16" em vez do antigo "node"/"node10": este ultimo foi removido nas
+    // versoes mais novas do TypeScript e quebrava o build em producao.
+    // O package.json do backend declara "type": "commonjs", entao o emit continua CJS.
+    "module": "node16",
+    "moduleResolution": "node16",
     "lib": ["ES2022"],
     "outDir": "dist",
     "rootDir": "src",

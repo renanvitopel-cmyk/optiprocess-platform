@@ -2,8 +2,21 @@
 import { PrismaClient, Role, ClientStatus, ServiceCategory, ServiceOrderStatus, ServiceOrderItemType, InstrumentStatus, CalibrationResult, PointResult, DocumentStatus, TechnicalReportCategory, ContractStatus, ContractPeriodicity, ProductStatus, QuoteStatus, QuoteSource, OrderStatus, PaymentMethod, PaymentStatus, AttachmentEntityType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { getStorageProvider } from "../src/lib/storage";
+import { generateTemporaryPassword } from "../src/lib/password";
+import { env } from "../src/config/env";
 
 const prisma = new PrismaClient();
+
+// Em producao nunca cria contas de demonstracao com senha fixa e previsivel
+// (o codigo deste projeto e publico). Cada conta de demo ganha uma senha
+// aleatoria, impressa uma unica vez ao final do seed.
+const demoCredentials: { email: string; password: string }[] = [];
+
+async function demoPasswordHashFor(email: string): Promise<string> {
+  const password = env.isProduction ? generateTemporaryPassword() : "Demo@12345";
+  if (env.isProduction) demoCredentials.push({ email, password });
+  return bcrypt.hash(password, 12);
+}
 
 function daysFromNow(days: number): Date {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
@@ -128,8 +141,6 @@ async function seedRolesAndPermissions() {
 }
 
 async function seedUsers() {
-  const passwordHash = await bcrypt.hash("Demo@12345", 12);
-
   const admin = await prisma.user.upsert({
     where: { email: process.env.INITIAL_ADMIN_EMAIL?.toLowerCase() ?? "admin@optiprocess.com.br" },
     create: {
@@ -137,7 +148,7 @@ async function seedUsers() {
       email: (process.env.INITIAL_ADMIN_EMAIL ?? "admin@optiprocess.com.br").toLowerCase(),
       passwordHash: process.env.INITIAL_ADMIN_PASSWORD
         ? await bcrypt.hash(process.env.INITIAL_ADMIN_PASSWORD, 12)
-        : passwordHash,
+        : await demoPasswordHashFor("admin@optiprocess.com.br"),
       role: "ADMIN",
     },
     update: {},
@@ -145,23 +156,38 @@ async function seedUsers() {
 
   const technician = await prisma.user.upsert({
     where: { email: "rodnei@optiprocess.com.br" },
-    create: { name: "Rodnei Fernandes", email: "rodnei@optiprocess.com.br", passwordHash, role: "TECHNICIAN" },
+    create: {
+      name: "Rodnei Fernandes",
+      email: "rodnei@optiprocess.com.br",
+      passwordHash: await demoPasswordHashFor("rodnei@optiprocess.com.br"),
+      role: "TECHNICIAN",
+    },
     update: {},
   });
 
   const technician2 = await prisma.user.upsert({
     where: { email: "tecnico2@optiprocess.com.br" },
-    create: { name: "Marcos Silva", email: "tecnico2@optiprocess.com.br", passwordHash, role: "TECHNICIAN" },
+    create: {
+      name: "Marcos Silva",
+      email: "tecnico2@optiprocess.com.br",
+      passwordHash: await demoPasswordHashFor("tecnico2@optiprocess.com.br"),
+      role: "TECHNICIAN",
+    },
     update: {},
   });
 
   const commercial = await prisma.user.upsert({
     where: { email: "comercial@optiprocess.com.br" },
-    create: { name: "Ana Paula Souza", email: "comercial@optiprocess.com.br", passwordHash, role: "COMMERCIAL" },
+    create: {
+      name: "Ana Paula Souza",
+      email: "comercial@optiprocess.com.br",
+      passwordHash: await demoPasswordHashFor("comercial@optiprocess.com.br"),
+      role: "COMMERCIAL",
+    },
     update: {},
   });
 
-  return { admin, technician, technician2, commercial, demoPasswordHash: passwordHash };
+  return { admin, technician, technician2, commercial };
 }
 
 interface SeedClientDef {
@@ -184,7 +210,7 @@ interface SeedClientDef {
   loginEmail: string | undefined;
 }
 
-async function seedClients(demoPasswordHash: string) {
+async function seedClients() {
   const clientsData: SeedClientDef[] = [
     {
       companyName: "Metalurgica Vale do Sorocaba Ltda",
@@ -299,7 +325,7 @@ async function seedClients(demoPasswordHash: string) {
         create: {
           name: c.commercialContactName ?? c.tradeName ?? c.companyName,
           email: loginEmail,
-          passwordHash: demoPasswordHash,
+          passwordHash: await demoPasswordHashFor(loginEmail),
           role: "CLIENT",
           clientId: client.id,
         },
@@ -632,8 +658,8 @@ async function seedQuotesAndOrders(clients: Awaited<ReturnType<typeof seedClient
 async function main() {
   console.log("Iniciando seed...");
   await seedRolesAndPermissions();
-  const { technician, commercial, demoPasswordHash } = await seedUsers();
-  const clients = await seedClients(demoPasswordHash);
+  const { technician, commercial } = await seedUsers();
+  const clients = await seedClients();
   const instruments = await seedInstruments(clients);
   await seedCalibrations(instruments, technician.id);
   await seedTechnicalReports(clients, technician.id);
@@ -642,6 +668,14 @@ async function main() {
   const products = await seedProducts();
   await seedQuotesAndOrders(clients, products);
   console.log("Seed concluido com sucesso.");
+
+  if (demoCredentials.length > 0) {
+    console.log("\nSenhas de demonstracao geradas (producao) - anote agora, nao serao mostradas de novo:");
+    for (const cred of demoCredentials) {
+      console.log(`  ${cred.email}  ->  ${cred.password}`);
+    }
+    console.log("");
+  }
 }
 
 main()

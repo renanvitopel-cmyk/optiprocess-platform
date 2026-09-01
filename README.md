@@ -152,9 +152,14 @@ Todos os passos abaixo usam exclusivamente os planos gratuitos dos três serviç
    ```bash
    DATABASE_URL="<connection string do Neon>" npm run prisma:deploy --workspace backend
    ```
-   Opcionalmente rode o seed do mesmo jeito para ter dados de demonstração em produção.
-5. O administrador inicial também é criado automaticamente no primeiro boot do servidor (via
-   `bootstrapInitialAdmin`), então mesmo sem rodar o seed o login do admin funciona.
+   O administrador inicial já é criado automaticamente no primeiro boot do servidor (via
+   `bootstrapInitialAdmin`), então este passo normalmente só aplica as migrações.
+5. **Não é recomendado rodar o `seed` completo em produção** — ele cria clientes fictícios
+   (Metalvale, Campo Verde etc.) que não fazem sentido num banco real. Se ainda assim quiser dados
+   de demonstração em produção para testes, pode rodar (`npm run seed --workspace backend` com o
+   `DATABASE_URL` do Neon); como o `NODE_ENV` é `production`, o seed detecta isso automaticamente e
+   gera uma senha aleatória por usuário de demonstração (em vez da senha fixa usada em
+   desenvolvimento), imprimindo cada uma **uma única vez** no log do comando — anote na hora.
 
 ### Monitoramento (opcional)
 

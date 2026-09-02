@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
-import { getInstrument } from "../../api/instruments";
+import { Pencil, Plus, Trash2, CornerLeftUp } from "lucide-react";
+import { getInstrument, listAssetParts, addAssetPart, removeAssetPart } from "../../api/instruments";
+import { listSpareParts } from "../../api/spareParts";
 import { listServiceOrders } from "../../api/serviceOrders";
 import { listMeters } from "../../api/meters";
 import { listMaintenancePlans } from "../../api/maintenancePlans";
@@ -14,13 +15,18 @@ import { formatDate, formatServiceCategory } from "../../lib/format";
 import { EmptyState } from "../../components/EmptyState";
 import { PortalInstrumentFormModal } from "./PortalInstrumentFormModal";
 import { useAuth } from "../../auth/AuthContext";
+import { useToast } from "../../components/Toast";
+import { getApiErrorMessage } from "../../api/client";
 
 export default function PortalInstrumentDetail() {
   const { id = "" } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const hasCmms = !!user?.client?.contractedServices?.includes("CMMS_MAINTENANCE");
+  const { notify } = useToast();
   const [editOpen, setEditOpen] = useState(false);
+  const [addChildOpen, setAddChildOpen] = useState(false);
+  const [selectedSparePartId, setSelectedSparePartId] = useState("");
   const { data: instrument, isLoading } = useQuery({ queryKey: ["portal-instrument", id], queryFn: () => getInstrument(id) });
   const { data: serviceOrders } = useQuery({
     queryKey: ["portal-instrument-service-orders", id],
@@ -43,6 +49,37 @@ export default function PortalInstrumentDetail() {
     enabled: !!id && hasCmms,
   });
 
+  const { data: assetParts } = useQuery({
+    queryKey: ["portal-instrument-asset-parts", id],
+    queryFn: () => listAssetParts(id),
+    enabled: !!id && hasCmms,
+  });
+  const { data: spareParts } = useQuery({
+    queryKey: ["portal-spare-parts-picker"],
+    queryFn: () => listSpareParts({ active: true, pageSize: 200 }),
+    enabled: hasCmms,
+  });
+
+  async function handleAddAssetPart() {
+    if (!selectedSparePartId) return;
+    try {
+      await addAssetPart(id, selectedSparePartId);
+      setSelectedSparePartId("");
+      queryClient.invalidateQueries({ queryKey: ["portal-instrument-asset-parts", id] });
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    }
+  }
+
+  async function handleRemoveAssetPart(linkId: string) {
+    try {
+      await removeAssetPart(id, linkId);
+      queryClient.invalidateQueries({ queryKey: ["portal-instrument-asset-parts", id] });
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    }
+  }
+
   if (isLoading || !instrument) return <FullPageSpinner />;
 
   return (
@@ -57,6 +94,15 @@ export default function PortalInstrumentDetail() {
           </button>
         }
       />
+
+      {instrument.parent && (
+        <Link
+          to={`/portal/instrumentos/${instrument.parent.id}`}
+          className="mb-4 inline-flex items-center gap-1.5 text-sm text-navy-700 hover:underline"
+        >
+          <CornerLeftUp className="h-4 w-4" /> Componente de: TAG {instrument.parent.tag ?? instrument.parent.type}
+        </Link>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="card space-y-4 p-5 lg:col-span-2">
@@ -168,8 +214,72 @@ export default function PortalInstrumentDetail() {
               </div>
             </>
           )}
+
+          <div className="card p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-semibold text-navy-900">Ativos filhos</h2>
+              <button className="btn-ghost btn-sm" onClick={() => setAddChildOpen(true)}>
+                <Plus className="h-4 w-4" /> Adicionar filho
+              </button>
+            </div>
+            {!instrument.children || instrument.children.length === 0 ? (
+              <EmptyState title="Nenhum componente" description="Ex.: motor, valvula, painel - componentes deste ativo com ficha propria." />
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {instrument.children.map((c) => (
+                  <li key={c.id}>
+                    <Link to={`/portal/instrumentos/${c.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
+                      <span className="font-medium text-graphite-800">TAG {c.tag ?? c.type}</span>
+                      <span className="text-xs text-graphite-400">{c.type}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {hasCmms && (
+            <div className="card p-5">
+              <h2 className="mb-3 font-semibold text-navy-900">Pecas compativeis (BOM)</h2>
+              <div className="mb-3 flex gap-2">
+                <select className="input flex-1" value={selectedSparePartId} onChange={(e) => setSelectedSparePartId(e.target.value)}>
+                  <option value="">Selecione uma peca do almoxarifado</option>
+                  {(spareParts?.items ?? []).map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}{p.code ? ` (${p.code})` : ""}</option>
+                  ))}
+                </select>
+                <button type="button" className="btn-outline" onClick={handleAddAssetPart} disabled={!selectedSparePartId}>
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+              {!assetParts || assetParts.length === 0 ? (
+                <EmptyState title="Nenhuma peca vinculada" description="Vincule as pecas do seu almoxarifado usadas neste ativo." />
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {assetParts.map((link) => (
+                    <li key={link.id} className="flex items-center justify-between py-2.5 text-sm">
+                      <span className="text-graphite-800">{link.sparePart?.name}</span>
+                      <button onClick={() => handleRemoveAssetPart(link.id)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover vinculo">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      <PortalInstrumentFormModal
+        open={addChildOpen}
+        onClose={() => setAddChildOpen(false)}
+        initialParentId={instrument.id}
+        onSaved={() => {
+          setAddChildOpen(false);
+          queryClient.invalidateQueries({ queryKey: ["portal-instrument", id] });
+        }}
+      />
 
       <PortalInstrumentFormModal
         open={editOpen}

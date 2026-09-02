@@ -15,7 +15,7 @@ function withDerivedStatus<T extends { status: InstrumentStatus; nextDueDate: Da
 }
 
 export const listInstruments = asyncHandler(async (req: Request, res: Response) => {
-  await assertServiceAccess(req, ["CALIBRATION"]);
+  await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
   const { clientId, search, status, parentId } = req.query as {
     clientId?: string;
@@ -47,7 +47,10 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
       where,
       orderBy: { nextDueDate: "asc" },
       ...toSkipTake(pageParams),
-      include: { client: { select: { id: true, companyName: true, tradeName: true } } },
+      include: {
+        client: { select: { id: true, companyName: true, tradeName: true } },
+        parent: { select: { id: true, type: true, model: true, serialNumber: true, tag: true } },
+      },
     }),
     prisma.instrument.count({ where }),
   ]);
@@ -58,7 +61,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
 const instrumentRefSelect = { id: true, type: true, model: true, serialNumber: true, tag: true } as const;
 
 export const getInstrument = asyncHandler(async (req: Request, res: Response) => {
-  await assertServiceAccess(req, ["CALIBRATION"]);
+  await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
   const instrument = await prisma.instrument.findFirst({
     where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
     include: {
@@ -144,7 +147,7 @@ async function assertTagAvailable(clientId: string, tag: string, excludeId?: str
 }
 
 export const createInstrument = asyncHandler(async (req: Request, res: Response) => {
-  await assertServiceAccess(req, ["CALIBRATION"]);
+  await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
   const data = instrumentSchema.parse(req.body);
   // Cliente so cadastra ativo para a propria empresa - o clientId vem sempre da sessao,
   // nunca do corpo da requisicao (mesmo que o cliente tente enviar outro).
@@ -177,7 +180,7 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
 });
 
 export const updateInstrument = asyncHandler(async (req: Request, res: Response) => {
-  await assertServiceAccess(req, ["CALIBRATION"]);
+  await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
   const data = instrumentSchema.partial().parse(req.body);
   const existing = await prisma.instrument.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Instrumento");

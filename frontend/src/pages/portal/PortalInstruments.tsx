@@ -41,8 +41,18 @@ export default function PortalInstruments() {
         onPageChange={setPage}
         emptyTitle="Nenhum ativo cadastrado"
         columns={[
-          { header: "Tag", accessor: (i) => i.tag ?? "-" },
+          {
+            header: "Tag",
+            // Filhos entram recuados, para a lista mostrar a arvore de ativos.
+            accessor: (i) => (
+              <span className={i.parentId ? "pl-4 text-graphite-600" : ""}>
+                {i.parentId && <span className="mr-1 text-graphite-300">&#8627;</span>}
+                {i.tag ?? "-"}
+              </span>
+            ),
+          },
           { header: "Equipamento", accessor: (i) => <span className="font-medium text-navy-900">{i.type} - {i.model}</span> },
+          { header: "Componente de", accessor: (i) => (i.parent ? `TAG ${i.parent.tag ?? i.parent.type}` : "-") },
           { header: "Numero de serie", accessor: (i) => i.serialNumber },
           { header: "Proxima calibracao", accessor: (i) => formatDate(i.nextDueDate) },
           { header: "Status", accessor: (i) => <StatusBadge status={i.derivedStatus ?? i.status} /> },

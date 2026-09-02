@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Modal } from "../../components/Modal";
 import { TextInput } from "../../components/form/Field";
+import { InstrumentPicker } from "../../components/InstrumentPicker";
 import { createInstrument, updateInstrument } from "../../api/instruments";
 import type { Instrument } from "../../api/types";
 import { useToast } from "../../components/Toast";
@@ -17,6 +18,7 @@ const schema = z.object({
   serialNumber: z.string().min(1, "Informe o numero de serie."),
   installationLocation: z.string().optional(),
   calibrationFrequencyMonths: z.coerce.number().int().min(1, "Informe a periodicidade."),
+  parentId: z.string().uuid().optional().or(z.literal("")),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -25,11 +27,13 @@ interface Props {
   onClose: () => void;
   onSaved: (instrument: Instrument) => void;
   instrument?: Instrument;
+  /** Pre-preenche o ativo pai quando aberto pelo "Adicionar componente" da ficha do pai. */
+  initialParentId?: string;
 }
 
 /** Cadastro de ativo pelo proprio cliente no portal - sem escolha de empresa (o backend
  * sempre grava para a empresa do usuario logado) e so com os campos essenciais. */
-export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument }: Props) {
+export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, initialParentId }: Props) {
   const { notify } = useToast();
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -48,15 +52,17 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument }
               serialNumber: instrument.serialNumber,
               installationLocation: instrument.installationLocation ?? "",
               calibrationFrequencyMonths: instrument.calibrationFrequencyMonths,
+              parentId: instrument.parentId ?? "",
             }
-          : { calibrationFrequencyMonths: 12 },
+          : { calibrationFrequencyMonths: 12, parentId: initialParentId ?? "" },
       );
     }
-  }, [open, instrument, reset]);
+  }, [open, instrument, initialParentId, reset]);
 
   async function onSubmit(values: FormValues) {
     try {
-      const saved = instrument ? await updateInstrument(instrument.id, values) : await createInstrument(values);
+      const payload = { ...values, parentId: values.parentId || null };
+      const saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
       notify("success", instrument ? "Ativo atualizado." : "Ativo cadastrado.");
       onSaved(saved);
     } catch (error) {
@@ -89,6 +95,13 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument }
           />
         </div>
         <TextInput label="Tipo de ativo" required error={errors.type?.message} {...register("type")} />
+        <InstrumentPicker
+          label="Ativo pai (opcional)"
+          hint="Use para montar a arvore de ativos: o motor e' filho do compressor, a bomba e' filha da linha."
+          excludeId={instrument?.id}
+          error={errors.parentId?.message}
+          {...register("parentId")}
+        />
         <div className="grid gap-4 sm:grid-cols-3">
           <TextInput label="Fabricante" required error={errors.manufacturer?.message} {...register("manufacturer")} />
           <TextInput label="Modelo" required error={errors.model?.message} {...register("model")} />

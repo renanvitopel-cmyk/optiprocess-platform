@@ -1,11 +1,12 @@
 import { api } from "./client";
 import type { PagedResult } from "./client";
-import type { Client, ClientContact, ClientStatus } from "./types";
+import type { Client, ClientContact, ClientStatus, ServiceCategory } from "./types";
 
 export interface ListClientsParams {
   page?: number;
   pageSize?: number;
   status?: ClientStatus;
+  service?: ServiceCategory;
   search?: string;
 }
 

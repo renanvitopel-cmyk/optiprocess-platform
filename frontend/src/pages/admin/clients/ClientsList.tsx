@@ -3,11 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search } from "lucide-react";
 import { listClients } from "../../../api/clients";
-import type { ClientStatus } from "../../../api/types";
+import type { ClientStatus, ServiceCategory } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { DataTable } from "../../../components/DataTable";
 import { StatusBadge } from "../../../components/StatusBadge";
-import { clientDisplayName } from "../../../lib/format";
+import { clientDisplayName, formatServiceCategory, SERVICE_CATEGORY_OPTIONS } from "../../../lib/format";
 import { ClientFormModal } from "./ClientFormModal";
 import { useAuth } from "../../../auth/AuthContext";
 
@@ -19,12 +19,13 @@ export default function ClientsList() {
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<ClientStatus | "">("");
+  const [service, setService] = useState<ServiceCategory | "">("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["clients", search, status, page],
-    queryFn: () => listClients({ search: search || undefined, status: status || undefined, page, pageSize: 15 }),
+    queryKey: ["clients", search, status, service, page],
+    queryFn: () => listClients({ search: search || undefined, status: status || undefined, service: service || undefined, page, pageSize: 15 }),
   });
 
   return (
@@ -67,6 +68,19 @@ export default function ClientsList() {
           <option value="INACTIVE">Inativo</option>
           <option value="PROSPECT">Prospecto</option>
         </select>
+        <select
+          className="input sm:w-64"
+          value={service}
+          onChange={(e) => {
+            setService(e.target.value as ServiceCategory | "");
+            setPage(1);
+          }}
+        >
+          <option value="">Todos os servicos</option>
+          {SERVICE_CATEGORY_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
       </div>
 
       <DataTable
@@ -80,9 +94,22 @@ export default function ClientsList() {
         emptyDescription="Cadastre o primeiro cliente para comecar."
         columns={[
           { header: "Empresa", accessor: (c) => <span className="font-medium text-navy-900">{clientDisplayName(c)}</span> },
-          { header: "CNPJ", accessor: (c) => c.cnpj ?? "-" },
           { header: "Cidade", accessor: (c) => c.addressCity ?? "-" },
-          { header: "Contato", accessor: (c) => c.phone ?? c.email ?? "-" },
+          {
+            header: "Servicos contratados",
+            accessor: (c) =>
+              c.contractedServices.length === 0 ? (
+                <span className="text-graphite-400">Nenhum</span>
+              ) : (
+                <div className="flex flex-wrap gap-1">
+                  {c.contractedServices.map((s) => (
+                    <span key={s} className="rounded-full border border-navy-200 bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-700">
+                      {formatServiceCategory(s)}
+                    </span>
+                  ))}
+                </div>
+              ),
+          },
           { header: "Status", accessor: (c) => <StatusBadge status={c.status} /> },
         ]}
       />

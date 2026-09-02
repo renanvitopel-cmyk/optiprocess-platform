@@ -79,7 +79,10 @@ export const getClient = asyncHandler(async (req: Request, res: Response) => {
 const clientSchema = z.object({
   companyName: z.string().min(2, "Informe a razao social."),
   tradeName: z.string().nullish(),
-  cnpj: z.string().nullish(),
+  // CNPJ e' unico no banco - "" nao pode virar o valor gravado, senao o segundo cliente sem
+  // CNPJ preenchido colide com o primeiro (foi o que aconteceu com "Vitopel do Brasil").
+  // Normaliza para null, que o Postgres trata como "sem valor" e nao conflita.
+  cnpj: z.string().nullish().transform((v) => (v && v.trim() ? v.trim() : null)),
   stateRegistration: z.string().nullish(),
   addressStreet: z.string().nullish(),
   addressNumber: z.string().nullish(),

@@ -13,6 +13,7 @@ import { SetPasswordModal } from "./SetPasswordModal";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { Modal } from "../../../components/Modal";
+import { ConfirmDialog } from "../../../components/ConfirmDialog";
 
 const ROLE_OPTIONS: { value: Role; label: string }[] = [
   { value: "ADMIN", label: "Administrador" },
@@ -30,6 +31,10 @@ export default function UsersList() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserAccount | undefined>();
   const [passwordUser, setPasswordUser] = useState<UserAccount | undefined>();
+  // Gerar senha aleatoria descarta a senha atual: exige confirmacao explicita,
+  // para ninguem perder o proprio acesso com um clique sem querer.
+  const [resetUser, setResetUser] = useState<UserAccount | undefined>();
+  const [resetting, setResetting] = useState(false);
   const [rolesOpen, setRolesOpen] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
 
@@ -47,12 +52,17 @@ export default function UsersList() {
     }
   }
 
-  async function handleResetPassword(id: string) {
+  async function handleResetPassword() {
+    if (!resetUser) return;
+    setResetting(true);
     try {
-      const password = await resetUserPassword(id);
+      const password = await resetUserPassword(resetUser.id);
+      setResetUser(undefined);
       setTempPassword(password);
     } catch (error) {
       notify("error", getApiErrorMessage(error));
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -107,22 +117,20 @@ export default function UsersList() {
           {
             header: "Senha",
             accessor: (u) => (
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); setPasswordUser(u); }}
-                  className="text-graphite-400 hover:text-navy-700"
-                  title="Definir uma senha"
-                  aria-label={`Definir senha de ${u.name}`}
+                  className="btn-outline btn-sm whitespace-nowrap"
+                  title="Voce digita a nova senha"
                 >
-                  <KeyRound className="h-4 w-4" />
+                  <KeyRound className="h-3.5 w-3.5" /> Definir senha
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleResetPassword(u.id); }}
-                  className="text-graphite-400 hover:text-navy-700"
-                  title="Gerar senha temporaria aleatoria"
-                  aria-label={`Gerar senha temporaria para ${u.name}`}
+                  onClick={(e) => { e.stopPropagation(); setResetUser(u); }}
+                  className="btn-ghost btn-sm whitespace-nowrap text-graphite-500"
+                  title="Substitui a senha atual por uma aleatoria"
                 >
-                  <RefreshCw className="h-4 w-4" />
+                  <RefreshCw className="h-3.5 w-3.5" /> Gerar aleatoria
                 </button>
               </div>
             ),
@@ -150,11 +158,31 @@ export default function UsersList() {
       <RolesInfoModal open={rolesOpen} onClose={() => setRolesOpen(false)} />
       <SetPasswordModal user={passwordUser} onClose={() => setPasswordUser(undefined)} />
 
+      <ConfirmDialog
+        open={!!resetUser}
+        title="Gerar senha aleatoria"
+        description={
+          `A senha atual de ${resetUser?.name ?? ""} sera descartada e substituida por uma senha aleatoria, ` +
+          `exibida uma unica vez. Use isto so quando a senha foi esquecida. Para escolher a senha voce mesmo, ` +
+          `use "Definir senha".`
+        }
+        confirmLabel="Gerar senha aleatoria"
+        danger
+        loading={resetting}
+        onConfirm={handleResetPassword}
+        onCancel={() => setResetUser(undefined)}
+      />
+
       <Modal open={!!tempPassword} onClose={() => setTempPassword(null)} title="Senha temporaria gerada" size="sm">
-        <p className="text-sm text-graphite-600">
-          Compartilhe esta senha com o usuario por um canal seguro (ela nao sera exibida novamente):
+        <p className="text-sm font-medium text-safety-red">
+          Anote agora: esta senha nao sera exibida novamente.
         </p>
-        <p className="mt-3 rounded-md bg-navy-50 px-3 py-2 text-center font-mono text-lg font-bold text-navy-900">{tempPassword}</p>
+        <p className="mt-2 text-sm text-graphite-600">
+          A senha anterior deixou de funcionar. Repasse esta ao usuario por um canal seguro.
+        </p>
+        <p className="mt-3 select-all rounded-md bg-navy-50 px-3 py-2 text-center font-mono text-lg font-bold text-navy-900">
+          {tempPassword}
+        </p>
       </Modal>
     </div>
   );

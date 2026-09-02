@@ -4,7 +4,7 @@ import { InstrumentStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
-import { NotFoundError, ValidationError } from "../../utils/errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
 import { deriveDueStatus, computeNextDueDate } from "../../utils/status";
@@ -108,7 +108,13 @@ async function assertTagAvailable(clientId: string, tag: string, excludeId?: str
 }
 
 export const createInstrument = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const data = instrumentSchema.parse(req.body);
+  // Cliente so cadastra ativo para a propria empresa, nunca para outra vinda do corpo da requisicao.
+  if (req.user?.role === "CLIENT") {
+    if (!req.user.clientId) throw new ForbiddenError();
+    data.clientId = req.user.clientId;
+  }
   await assertTagAvailable(data.clientId, data.tag);
   const nextDueDate = data.lastCalibrationDate
     ? computeNextDueDate(data.lastCalibrationDate, data.calibrationFrequencyMonths)
@@ -130,9 +136,15 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
 });
 
 export const updateInstrument = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const data = instrumentSchema.partial().parse(req.body);
   const existing = await prisma.instrument.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Instrumento");
+
+  if (req.user?.role === "CLIENT") {
+    if (existing.clientId !== req.user.clientId) throw new ForbiddenError();
+    delete data.clientId; // cliente nunca transfere o ativo para outra empresa
+  }
 
   if (data.tag) {
     await assertTagAvailable(data.clientId ?? existing.clientId, data.tag, existing.id);

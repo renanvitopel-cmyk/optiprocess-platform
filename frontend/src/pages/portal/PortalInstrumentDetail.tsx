@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil } from "lucide-react";
 import { getInstrument } from "../../api/instruments";
 import { listServiceOrders } from "../../api/serviceOrders";
 import { PageHeader } from "../../components/PageHeader";
@@ -7,9 +9,12 @@ import { FullPageSpinner } from "../../components/Spinner";
 import { StatusBadge } from "../../components/StatusBadge";
 import { formatDate, formatServiceCategory } from "../../lib/format";
 import { EmptyState } from "../../components/EmptyState";
+import { PortalInstrumentFormModal } from "./PortalInstrumentFormModal";
 
 export default function PortalInstrumentDetail() {
   const { id = "" } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
+  const [editOpen, setEditOpen] = useState(false);
   const { data: instrument, isLoading } = useQuery({ queryKey: ["portal-instrument", id], queryFn: () => getInstrument(id) });
   const { data: serviceOrders } = useQuery({
     queryKey: ["portal-instrument-service-orders", id],
@@ -24,7 +29,12 @@ export default function PortalInstrumentDetail() {
       <PageHeader
         title={`TAG ${instrument.tag ?? "sem TAG"}`}
         description={`${instrument.type} - ${instrument.model}`}
-        breadcrumbs={[{ label: "Meus instrumentos", to: "/portal/instrumentos" }, { label: instrument.tag ?? instrument.model }]}
+        breadcrumbs={[{ label: "Meus ativos", to: "/portal/instrumentos" }, { label: instrument.tag ?? instrument.model }]}
+        actions={
+          <button className="btn-outline" onClick={() => setEditOpen(true)}>
+            <Pencil className="h-4 w-4" /> Editar
+          </button>
+        }
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -84,6 +94,17 @@ export default function PortalInstrumentDetail() {
           </div>
         </div>
       </div>
+
+      <PortalInstrumentFormModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        instrument={instrument}
+        onSaved={() => {
+          setEditOpen(false);
+          queryClient.invalidateQueries({ queryKey: ["portal-instrument", id] });
+          queryClient.invalidateQueries({ queryKey: ["portal-instruments"] });
+        }}
+      />
     </div>
   );
 }

@@ -9,6 +9,9 @@ instrumentsRouter.use(requireAuth);
 
 instrumentsRouter.get("/", listInstruments);
 instrumentsRouter.get("/:id", getInstrument);
-instrumentsRouter.post("/", requireRole("ADMIN", "TECHNICIAN"), createInstrument);
-instrumentsRouter.patch("/:id", requireRole("ADMIN", "TECHNICIAN"), updateInstrument);
+// CLIENT tambem pode cadastrar/editar os proprios ativos (o TAG e cadastrado pelo cliente
+// ou pela OptiProcess); o controller forca clientId para a propria empresa quando for CLIENT
+// e exige que o servico de calibracao esteja contratado.
+instrumentsRouter.post("/", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), createInstrument);
+instrumentsRouter.patch("/:id", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), updateInstrument);
 instrumentsRouter.delete("/:id", requireRole("ADMIN"), deleteInstrument);

@@ -154,7 +154,7 @@ export default function PortalInstrumentDetail() {
                         <ul className="divide-y divide-gray-100">
                           {workOrders.items.map((w) => (
                             <li key={w.id}>
-                              <Link to={`/portal/manutencao/${w.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
+                              <Link to={`/portal/manutencao/ordens/${w.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
                                 <span className="font-medium text-graphite-800">{w.number}</span>
                                 <StatusBadge status={w.status} />
                               </Link>

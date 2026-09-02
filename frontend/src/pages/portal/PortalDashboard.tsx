@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { BadgeCheck, AlertTriangle, ShieldX, FileWarning, FileSignature, ShoppingCart, Gauge, TimerReset, Activity, Wrench, Boxes } from "lucide-react";
+import { BadgeCheck, AlertTriangle, ShieldX, FileWarning, FileSignature, ShoppingCart, Gauge, TimerReset, Activity, Wrench, Boxes, ShieldCheck, ClipboardList, ListChecks } from "lucide-react";
 import { getClientDashboard } from "../../api/dashboard";
 import { listMaintenanceWorkOrders, getMaintenanceDashboard } from "../../api/maintenanceWorkOrders";
 import { useAuth } from "../../auth/AuthContext";
@@ -40,13 +40,19 @@ export default function PortalDashboard() {
           <Link to="/portal/instrumentos" className="btn-outline">
             <Gauge className="h-4 w-4" /> Meus ativos
           </Link>
+          <Link to="/portal/manutencao/planos" className="btn-outline">
+            <ShieldCheck className="h-4 w-4" /> Planos de manutencao
+          </Link>
+          <Link to="/portal/manutencao/ordens" className="btn-outline">
+            <ClipboardList className="h-4 w-4" /> Ordens de manutencao
+          </Link>
+          <Link to="/portal/manutencao/falhas" className="btn-outline">
+            <ListChecks className="h-4 w-4" /> Codigos de falha
+          </Link>
           <Link to="/portal/almoxarifado" className="btn-outline">
             <Boxes className="h-4 w-4" /> Meu almoxarifado
           </Link>
         </div>
-        <p className="mt-3 text-xs text-graphite-500">
-          Planos de manutencao e ordens de servico ficam por conta da equipe tecnica da OptiProcess.
-        </p>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="MTTR (horas)" value={cmmsDashboard!.kpis.mttrHours} icon={TimerReset} tone="navy" to="/portal/manutencao" />
@@ -58,7 +64,7 @@ export default function PortalDashboard() {
         <div className="mt-6 card p-5">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold text-navy-900">Ordens de manutencao recentes</h2>
-            <Link to="/portal/manutencao" className="text-sm text-navy-700 hover:underline">Ver todas</Link>
+            <Link to="/portal/manutencao/ordens" className="text-sm text-navy-700 hover:underline">Ver todas</Link>
           </div>
           {!workOrders || workOrders.items.length === 0 ? (
             <EmptyState title="Nenhuma ordem de manutencao" description="Ainda nao ha ordens de manutencao registradas." />
@@ -66,7 +72,7 @@ export default function PortalDashboard() {
             <ul className="divide-y divide-gray-100">
               {workOrders.items.map((w) => (
                 <li key={w.id}>
-                  <Link to={`/portal/manutencao/${w.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
+                  <Link to={`/portal/manutencao/ordens/${w.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
                     <div>
                       <p className="font-medium text-graphite-800">{w.number}</p>
                       <p className="text-xs text-graphite-400">{TYPE_LABELS[w.type]} - {w.instrument?.tag ?? "-"}</p>

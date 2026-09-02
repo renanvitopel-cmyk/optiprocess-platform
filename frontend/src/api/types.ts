@@ -446,6 +446,7 @@ export interface Meter {
 
 export interface FailureCode {
   id: string;
+  clientId: string | null;
   code: string;
   description: string;
   category: string | null;

@@ -313,6 +313,7 @@ model Client {
   maintenancePlans      MaintenancePlan[]
   maintenanceWorkOrders MaintenanceWorkOrder[]
   spareParts            SparePart[]
+  failureCodes          FailureCode[]
 
   @@index([status])
   @@map("clients")
@@ -801,7 +802,11 @@ model MeterReading {
 // Catalogo de causas de falha usado nas ordens de manutencao corretivas.
 model FailureCode {
   id          String   @id @default(uuid())
-  code        String   @unique
+  // Sem clientId = catalogo padrao da OptiProcess, visivel para todos. Com clientId =
+  // codigo criado pela propria empresa cliente no portal, visivel so para ela.
+  clientId    String?
+  client      Client?  @relation(fields: [clientId], references: [id])
+  code        String
   description String
   category    String?
   active      Boolean  @default(true)
@@ -809,6 +814,8 @@ model FailureCode {
 
   workOrders MaintenanceWorkOrder[]
 
+  @@unique([clientId, code])
+  @@index([clientId])
   @@map("failure_codes")
 }
 

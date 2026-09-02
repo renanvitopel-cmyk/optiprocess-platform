@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
+import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId } from "../../middleware/rbac";
 import { nextClientMaintenanceOrderNumber } from "../../utils/sequence";
 import { applySparePartMovement } from "../../lib/inventory";
 import { getStorageProvider } from "../../lib/storage";
@@ -76,7 +76,7 @@ export const getMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Re
 const checklistItemInput = z.object({ description: z.string().min(1) });
 
 const workOrderSchema = z.object({
-  clientId: z.string().uuid(),
+  clientId: z.string().uuid().optional(),
   instrumentId: z.string().uuid(),
   type: z.nativeEnum(MaintenanceOrderType),
   priority: z.nativeEnum(MaintenancePriority).optional(),
@@ -89,14 +89,35 @@ const workOrderSchema = z.object({
   checklist: z.array(checklistItemInput).optional(),
 });
 
+/** Um codigo de falha so pode ser usado pela empresa dona dele (ou por qualquer uma,
+ * quando faz parte do catalogo padrao da OptiProcess). */
+async function assertFailureCodeUsable(failureCodeId: string | null | undefined, clientId: string) {
+  if (!failureCodeId) return;
+  const code = await prisma.failureCode.findFirst({ where: { id: failureCodeId }, select: { clientId: true } });
+  if (!code) throw new NotFoundError("Codigo de falha");
+  if (code.clientId && code.clientId !== clientId) {
+    throw new ValidationError("Esse codigo de falha e' de outra empresa.");
+  }
+}
+
 export const createMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = workOrderSchema.parse(req.body);
-  const number = await nextClientMaintenanceOrderNumber(data.clientId);
+  const clientId = resolveClientId(req, data.clientId);
+
+  const instrument = await prisma.instrument.findFirst({ where: { id: data.instrumentId, deletedAt: null }, select: { clientId: true } });
+  if (!instrument) throw new NotFoundError("Ativo");
+  if (instrument.clientId !== clientId) throw new ValidationError("Esse ativo pertence a outra empresa.");
+
+  await assertFailureCodeUsable(data.failureCodeId, clientId);
+
+  const number = await nextClientMaintenanceOrderNumber(clientId);
   const { checklist, ...orderData } = data;
 
   const workOrder = await prisma.maintenanceWorkOrder.create({
     data: {
       ...orderData,
+      clientId,
       number,
       status: "OPEN",
       createdById: req.user?.sub,
@@ -119,11 +140,16 @@ export const createMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
 const updateSchema = workOrderSchema.partial().extend({ status: z.nativeEnum(MaintenanceOrderStatus).optional() });
 
 export const updateMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = updateSchema.parse(req.body);
   const existing = await prisma.maintenanceWorkOrder.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Ordem de manutencao");
+  assertOwnClient(req, existing.clientId);
+
+  await assertFailureCodeUsable(data.failureCodeId, existing.clientId);
 
   const { checklist, ...orderData } = data;
+  if (req.user?.role === "CLIENT") delete orderData.clientId;
   const workOrder = await prisma.maintenanceWorkOrder.update({
     where: { id: existing.id },
     data: orderData,
@@ -142,8 +168,10 @@ export const updateMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
 });
 
 export const deleteMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const existing = await prisma.maintenanceWorkOrder.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Ordem de manutencao");
+  assertOwnClient(req, existing.clientId);
 
   await prisma.maintenanceWorkOrder.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
 
@@ -159,8 +187,10 @@ export const deleteMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
 });
 
 export const startMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const existing = await prisma.maintenanceWorkOrder.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Ordem de manutencao");
+  assertOwnClient(req, existing.clientId);
   if (existing.startedAt) throw new ValidationError("Ordem de manutencao ja foi iniciada.");
 
   const workOrder = await prisma.maintenanceWorkOrder.update({
@@ -181,11 +211,13 @@ export const startMaintenanceWorkOrder = asyncHandler(async (req: Request, res: 
 });
 
 export const completeMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const existing = await prisma.maintenanceWorkOrder.findFirst({
     where: { id: req.params.id, deletedAt: null },
     include: { checklist: true },
   });
   if (!existing) throw new NotFoundError("Ordem de manutencao");
+  assertOwnClient(req, existing.clientId);
   if (existing.checklist.some((c) => c.result === "PENDING")) {
     throw new ValidationError("Resolva todos os itens do checklist antes de concluir a ordem.");
   }
@@ -222,9 +254,16 @@ const checklistUpdateSchema = z.object({
 });
 
 export const updateChecklistItem = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
   const data = checklistUpdateSchema.parse(req.body);
   const item = await prisma.maintenanceWorkOrderChecklistItem.findFirst({
-    where: { id: req.params.itemId, workOrderId: req.params.id },
+    where: { id: req.params.itemId, workOrderId: workOrder.id },
   });
   if (!item) throw new NotFoundError("Item do checklist");
 
@@ -239,8 +278,11 @@ const partSchema = z.object({
 });
 
 export const addWorkOrderPart = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = partSchema.parse(req.body);
-  const workOrder = await prisma.maintenanceWorkOrder.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+  });
   if (!workOrder) throw new NotFoundError("Ordem de manutencao");
 
   const sparePart = await prisma.sparePart.findFirst({ where: { id: data.sparePartId, deletedAt: null } });
@@ -262,8 +304,15 @@ export const addWorkOrderPart = asyncHandler(async (req: Request, res: Response)
 });
 
 export const removeWorkOrderPart = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
   const movement = await prisma.sparePartMovement.findFirst({
-    where: { id: req.params.movementId, maintenanceWorkOrderId: req.params.id },
+    where: { id: req.params.movementId, maintenanceWorkOrderId: workOrder.id },
   });
   if (!movement) throw new NotFoundError("Movimentacao");
 
@@ -296,7 +345,10 @@ export const listWorkOrderAttachmentsRoute = asyncHandler(async (req: Request, r
 });
 
 export const uploadWorkOrderAttachment = asyncHandler(async (req: Request, res: Response) => {
-  const existing = await prisma.maintenanceWorkOrder.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const existing = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+  });
   if (!existing) throw new NotFoundError("Ordem de manutencao");
 
   const file = req.file;
@@ -325,8 +377,15 @@ export const uploadWorkOrderAttachment = asyncHandler(async (req: Request, res: 
 });
 
 export const deleteWorkOrderAttachment = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
   const attachment = await prisma.attachment.findFirst({
-    where: { id: req.params.attachmentId, entityType: "MAINTENANCE_WORK_ORDER", entityId: req.params.id },
+    where: { id: req.params.attachmentId, entityType: "MAINTENANCE_WORK_ORDER", entityId: workOrder.id },
   });
   if (!attachment) throw new NotFoundError("Anexo");
 

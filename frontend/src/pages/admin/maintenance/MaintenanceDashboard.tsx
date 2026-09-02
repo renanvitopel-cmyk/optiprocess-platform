@@ -8,13 +8,16 @@ import { PageHeader } from "../../../components/PageHeader";
 import { StatCard } from "../../../components/StatCard";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { clientDisplayName } from "../../../lib/format";
+import { useCmms } from "../../../lib/cmms";
 
 export default function MaintenanceDashboard() {
+  const { isClient, base, assetsBase, partsBase } = useCmms();
   const [clientId, setClientId] = useState("");
 
   const { data: clients } = useQuery({
     queryKey: ["clients-picker-cmms"],
     queryFn: () => listClients({ pageSize: 200, service: "CMMS_MAINTENANCE" }),
+    enabled: !isClient,
   });
   const { data, isLoading } = useQuery({
     queryKey: ["maintenance-dashboard", clientId],
@@ -25,29 +28,31 @@ export default function MaintenanceDashboard() {
     <div>
       <PageHeader
         title="RLP Maintenance CMMS"
-        description="Gestao de manutencao - planos preventivos, ordens de manutencao e indicadores (ultimos 90 dias)"
+        description="Ciclo completo de manutencao - planos preventivos, ordens, pecas e indicadores (ultimos 90 dias)"
       />
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <select className="input sm:w-72" value={clientId} onChange={(e) => setClientId(e.target.value)}>
-          <option value="">Todos os clientes</option>
-          {(clients?.items ?? []).map((c) => (
-            <option key={c.id} value={c.id}>{clientDisplayName(c)}</option>
-          ))}
-        </select>
-        <Link to={`/gestao/instrumentos${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+        {!isClient && (
+          <select className="input sm:w-72" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+            <option value="">Todos os clientes</option>
+            {(clients?.items ?? []).map((c) => (
+              <option key={c.id} value={c.id}>{clientDisplayName(c)}</option>
+            ))}
+          </select>
+        )}
+        <Link to={`${assetsBase}${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <Gauge className="h-4 w-4" /> Ativos
         </Link>
-        <Link to={`/gestao/manutencao/planos${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+        <Link to={`${base}/planos${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <ShieldCheck className="h-4 w-4" /> Planos de manutencao
         </Link>
-        <Link to={`/gestao/manutencao/ordens${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+        <Link to={`${base}/ordens${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <ClipboardList className="h-4 w-4" /> Ordens de manutencao
         </Link>
-        <Link to="/gestao/manutencao/falhas" className="btn-outline">
+        <Link to={`${base}/falhas`} className="btn-outline">
           <ListChecks className="h-4 w-4" /> Codigos de falha
         </Link>
-        <Link to={`/gestao/manutencao/almoxarifado${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+        <Link to={`${partsBase}${!isClient && clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <Boxes className="h-4 w-4" /> Almoxarifado
         </Link>
       </div>

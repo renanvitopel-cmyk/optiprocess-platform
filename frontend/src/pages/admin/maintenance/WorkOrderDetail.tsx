@@ -19,7 +19,7 @@ import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { WorkOrderAttachments } from "./WorkOrderAttachments";
-import { useAuth } from "../../../auth/AuthContext";
+import { useCmms } from "../../../lib/cmms";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { clientDisplayName, formatDateTime } from "../../../lib/format";
@@ -37,9 +37,8 @@ export default function WorkOrderDetail() {
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
   const { notify } = useToast();
-  const canManage = user?.role === "ADMIN" || user?.role === "TECHNICIAN";
+  const { canManage, isClient, base } = useCmms();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -73,7 +72,7 @@ export default function WorkOrderDetail() {
     try {
       await deleteMaintenanceWorkOrder(id);
       notify("success", "OS removida.");
-      navigate("/gestao/manutencao/ordens");
+      navigate(`${base}/ordens`);
     } catch (error) {
       notify("error", getApiErrorMessage(error));
     } finally {
@@ -153,10 +152,10 @@ export default function WorkOrderDetail() {
     <div>
       <PageHeader
         title={workOrder.number}
-        description={`${clientDisplayName(workOrder.client)} - Ativo: ${workOrder.instrument?.tag ?? "-"}`}
+        description={isClient ? `Ativo: ${workOrder.instrument?.tag ?? "-"}` : `${clientDisplayName(workOrder.client)} - Ativo: ${workOrder.instrument?.tag ?? "-"}`}
         breadcrumbs={[
-          { label: "RLP Maintenance CMMS", to: "/gestao/manutencao" },
-          { label: "Ordens", to: "/gestao/manutencao/ordens" },
+          { label: "RLP Maintenance CMMS", to: base },
+          { label: "Ordens", to: `${base}/ordens` },
           { label: workOrder.number },
         ]}
         actions={
@@ -173,7 +172,7 @@ export default function WorkOrderDetail() {
                 </button>
               )}
               {!isCompleted && (
-                <button className="btn-outline" onClick={() => navigate(`/gestao/manutencao/ordens/${id}/editar`)}>
+                <button className="btn-outline" onClick={() => navigate(`${base}/ordens/${id}/editar`)}>
                   <Pencil className="h-4 w-4" /> Editar
                 </button>
               )}
@@ -199,7 +198,7 @@ export default function WorkOrderDetail() {
             </div>
             <p className="text-sm text-graphite-700">{workOrder.description}</p>
             <dl className="grid gap-4 sm:grid-cols-2">
-              <Info label="Tecnico" value={workOrder.technician?.name ?? "-"} />
+              {!isClient && <Info label="Tecnico" value={workOrder.technician?.name ?? "-"} />}
               <Info label="Codigo de falha" value={workOrder.failureCode ? `${workOrder.failureCode.code} - ${workOrder.failureCode.description}` : "-"} />
               <Info label="Iniciada em" value={formatDateTime(workOrder.startedAt)} />
               <Info label="Concluida em" value={formatDateTime(workOrder.completedAt)} />

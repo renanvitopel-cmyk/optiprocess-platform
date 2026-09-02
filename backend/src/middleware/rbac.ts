@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import type { Role, ServiceCategory } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { ForbiddenError, UnauthorizedError } from "../utils/errors";
+import { ForbiddenError, UnauthorizedError, ValidationError } from "../utils/errors";
 
 /** Restringe a rota a um conjunto de papeis. Use depois de requireAuth. */
 export function requireRole(...roles: Role[]) {
@@ -45,6 +45,20 @@ export function clientScopeFilter(req: Request): { clientId?: string } {
 }
 
 export const CLIENT_PORTAL_ROLES: Role[] = ["ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT"];
+
+/**
+ * Espelho do clientScopeFilter para criacao: um usuario CLIENT sempre grava no proprio
+ * clientId (o que vier no corpo e' ignorado), enquanto a equipe interna precisa informar
+ * explicitamente para qual empresa o registro esta sendo criado.
+ */
+export function resolveClientId(req: Request, bodyClientId?: string | null): string {
+  if (req.user?.role === "CLIENT") {
+    if (!req.user.clientId) throw new ForbiddenError();
+    return req.user.clientId;
+  }
+  if (!bodyClientId) throw new ValidationError("Informe o cliente.");
+  return bodyClientId;
+}
 
 /**
  * Servicos que a empresa do usuario CLIENT contratou (campo Client.contractedServices),

@@ -16,7 +16,7 @@ maintenancePlansRouter.use(requireAuth);
 
 maintenancePlansRouter.get("/", listMaintenancePlans);
 maintenancePlansRouter.get("/:id", getMaintenancePlan);
-maintenancePlansRouter.post("/", requireRole("ADMIN", "TECHNICIAN"), createMaintenancePlan);
-maintenancePlansRouter.patch("/:id", requireRole("ADMIN", "TECHNICIAN"), updateMaintenancePlan);
-maintenancePlansRouter.delete("/:id", requireRole("ADMIN"), deleteMaintenancePlan);
-maintenancePlansRouter.post("/:id/generate", requireRole("ADMIN", "TECHNICIAN"), generateWorkOrderFromPlan);
+maintenancePlansRouter.post("/", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), createMaintenancePlan);
+maintenancePlansRouter.patch("/:id", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), updateMaintenancePlan);
+maintenancePlansRouter.delete("/:id", requireRole("ADMIN", "CLIENT"), deleteMaintenancePlan);
+maintenancePlansRouter.post("/:id/generate", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), generateWorkOrderFromPlan);

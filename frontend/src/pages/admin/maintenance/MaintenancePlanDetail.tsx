@@ -8,7 +8,7 @@ import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { EmptyState } from "../../../components/EmptyState";
-import { useAuth } from "../../../auth/AuthContext";
+import { useCmms } from "../../../lib/cmms";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { clientDisplayName, formatDate } from "../../../lib/format";
@@ -16,9 +16,8 @@ import { clientDisplayName, formatDate } from "../../../lib/format";
 export default function MaintenancePlanDetail() {
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { notify } = useToast();
-  const canManage = user?.role === "ADMIN" || user?.role === "TECHNICIAN";
+  const { canManage, isClient, base } = useCmms();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -31,7 +30,7 @@ export default function MaintenancePlanDetail() {
     try {
       await deleteMaintenancePlan(id);
       notify("success", "Plano removido.");
-      navigate("/gestao/manutencao/planos");
+      navigate(`${base}/planos`);
     } catch (error) {
       notify("error", getApiErrorMessage(error));
     } finally {
@@ -44,7 +43,7 @@ export default function MaintenancePlanDetail() {
     try {
       const workOrder = await generateWorkOrderFromPlan(id);
       notify("success", `OS ${workOrder.number} gerada.`);
-      navigate(`/gestao/manutencao/ordens/${workOrder.id}`);
+      navigate(`${base}/ordens/${workOrder.id}`);
     } catch (error) {
       notify("error", getApiErrorMessage(error));
     } finally {
@@ -60,10 +59,10 @@ export default function MaintenancePlanDetail() {
     <div>
       <PageHeader
         title={plan.name}
-        description={`Cliente: ${clientDisplayName(plan.client)} - Ativo: ${plan.instrument?.tag ?? "-"}`}
+        description={isClient ? `Ativo: ${plan.instrument?.tag ?? "-"}` : `Cliente: ${clientDisplayName(plan.client)} - Ativo: ${plan.instrument?.tag ?? "-"}`}
         breadcrumbs={[
-          { label: "RLP Maintenance CMMS", to: "/gestao/manutencao" },
-          { label: "Planos", to: "/gestao/manutencao/planos" },
+          { label: "RLP Maintenance CMMS", to: base },
+          { label: "Planos", to: `${base}/planos` },
           { label: plan.name },
         ]}
         actions={
@@ -74,7 +73,7 @@ export default function MaintenancePlanDetail() {
                   <PlayCircle className="h-4 w-4" /> {generating ? "Gerando..." : "Gerar OS"}
                 </button>
               )}
-              <button className="btn-outline" onClick={() => navigate(`/gestao/manutencao/planos/${id}/editar`)}>
+              <button className="btn-outline" onClick={() => navigate(`${base}/planos/${id}/editar`)}>
                 <Pencil className="h-4 w-4" /> Editar
               </button>
               <button className="btn-danger" onClick={() => setConfirmDelete(true)}>
@@ -120,7 +119,7 @@ export default function MaintenancePlanDetail() {
             <ul className="divide-y divide-gray-100">
               {plan.workOrders.map((w) => (
                 <li key={w.id}>
-                  <Link to={`/gestao/manutencao/ordens/${w.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
+                  <Link to={`${base}/ordens/${w.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
                     <span className="font-medium text-graphite-800">{w.number}</span>
                     <StatusBadge status={w.status} />
                   </Link>

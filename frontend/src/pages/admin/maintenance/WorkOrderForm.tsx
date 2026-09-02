@@ -15,6 +15,7 @@ import { createMaintenanceWorkOrder, getMaintenanceWorkOrder, updateMaintenanceW
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { FullPageSpinner } from "../../../components/Spinner";
+import { useCmms } from "../../../lib/cmms";
 
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
@@ -36,6 +37,7 @@ export default function WorkOrderForm() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { notify } = useToast();
+  const { isClient, ownClientId, base } = useCmms();
   const isEdit = !!id;
 
   const { data: existing, isLoading } = useQuery({
@@ -49,7 +51,7 @@ export default function WorkOrderForm() {
   const { register, control, handleSubmit, watch, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      clientId: searchParams.get("clientId") ?? "",
+      clientId: ownClientId ?? searchParams.get("clientId") ?? "",
       instrumentId: searchParams.get("instrumentId") ?? "",
       type: "CORRECTIVE",
       priority: "MEDIUM",
@@ -88,7 +90,7 @@ export default function WorkOrderForm() {
       };
       const saved = isEdit ? await updateMaintenanceWorkOrder(id!, payload) : await createMaintenanceWorkOrder(payload);
       notify("success", isEdit ? "OS atualizada." : "OS criada.");
-      navigate(`/gestao/manutencao/ordens/${saved.id}`);
+      navigate(`${base}/ordens/${saved.id}`);
     } catch (error) {
       notify("error", getApiErrorMessage(error));
     }
@@ -101,8 +103,8 @@ export default function WorkOrderForm() {
       <PageHeader
         title={isEdit ? `Editar OS ${existing?.number ?? ""}` : "Nova ordem de manutencao"}
         breadcrumbs={[
-          { label: "RLP Maintenance CMMS", to: "/gestao/manutencao" },
-          { label: "Ordens", to: "/gestao/manutencao/ordens" },
+          { label: "RLP Maintenance CMMS", to: base },
+          { label: "Ordens", to: `${base}/ordens` },
           { label: isEdit ? "Editar" : "Nova" },
         ]}
       />
@@ -111,10 +113,14 @@ export default function WorkOrderForm() {
         <div className="card space-y-4 p-5">
           <h2 className="font-semibold text-navy-900">Identificacao</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <ClientPicker required error={errors.clientId?.message} {...register("clientId")} />
+            {isClient ? (
+              <input type="hidden" {...register("clientId")} />
+            ) : (
+              <ClientPicker required error={errors.clientId?.message} {...register("clientId")} />
+            )}
             <InstrumentPicker clientId={clientId} required error={errors.instrumentId?.message} {...register("instrumentId")} />
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className={`grid gap-4 ${isClient ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
             <SelectInput
               label="Tipo"
               required
@@ -135,7 +141,9 @@ export default function WorkOrderForm() {
               ]}
               {...register("priority")}
             />
-            <UserPicker label="Tecnico responsavel" roles={["ADMIN", "TECHNICIAN"]} error={errors.technicianId?.message} {...register("technicianId")} />
+            {!isClient && (
+              <UserPicker label="Tecnico responsavel" roles={["ADMIN", "TECHNICIAN"]} error={errors.technicianId?.message} {...register("technicianId")} />
+            )}
           </div>
           <TextareaInput label="Descricao do servico" required rows={3} error={errors.description?.message} {...register("description")} />
           <div className="grid gap-4 sm:grid-cols-3">

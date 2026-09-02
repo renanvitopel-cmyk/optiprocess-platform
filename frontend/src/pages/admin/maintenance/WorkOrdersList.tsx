@@ -3,12 +3,12 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Search } from "lucide-react";
 import { listMaintenanceWorkOrders } from "../../../api/maintenanceWorkOrders";
-import type { MaintenanceOrderStatus, MaintenanceOrderType } from "../../../api/types";
+import type { MaintenanceOrderStatus, MaintenanceOrderType, MaintenanceWorkOrder } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { DataTable } from "../../../components/DataTable";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { clientDisplayName, formatDate } from "../../../lib/format";
-import { useAuth } from "../../../auth/AuthContext";
+import { useCmms } from "../../../lib/cmms";
 
 const TYPE_LABELS: Record<MaintenanceOrderType, string> = {
   PREVENTIVE: "Preventiva",
@@ -21,8 +21,7 @@ export default function WorkOrdersList() {
   const [searchParams] = useSearchParams();
   const clientId = searchParams.get("clientId") ?? undefined;
   const instrumentId = searchParams.get("instrumentId") ?? undefined;
-  const { user } = useAuth();
-  const canManage = user?.role === "ADMIN" || user?.role === "TECHNICIAN";
+  const { canManage, isClient, base } = useCmms();
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<MaintenanceOrderStatus | "">("");
@@ -38,10 +37,10 @@ export default function WorkOrdersList() {
       <PageHeader
         title="Ordens de manutencao"
         description="OS preventivas e corretivas"
-        breadcrumbs={[{ label: "RLP Maintenance CMMS", to: "/gestao/manutencao" }, { label: "Ordens" }]}
+        breadcrumbs={[{ label: "RLP Maintenance CMMS", to: base }, { label: "Ordens" }]}
         actions={
           canManage && (
-            <button className="btn-primary" onClick={() => navigate("/gestao/manutencao/ordens/novo")}>
+            <button className="btn-primary" onClick={() => navigate(`${base}/ordens/novo`)}>
               <Plus className="h-4 w-4" /> Nova OS
             </button>
           )
@@ -71,16 +70,16 @@ export default function WorkOrdersList() {
         loading={isLoading}
         rows={data?.items ?? []}
         keyField={(o) => o.id}
-        onRowClick={(o) => navigate(`/gestao/manutencao/ordens/${o.id}`)}
+        onRowClick={(o) => navigate(`${base}/ordens/${o.id}`)}
         pagination={data}
         onPageChange={setPage}
         emptyTitle="Nenhuma ordem de manutencao"
         columns={[
           { header: "Numero", accessor: (o) => <span className="font-medium text-navy-900">{o.number}</span> },
-          { header: "Cliente", accessor: (o) => clientDisplayName(o.client) },
+          ...(isClient ? [] : [{ header: "Cliente", accessor: (o: MaintenanceWorkOrder) => clientDisplayName(o.client) }]),
           { header: "Ativo", accessor: (o) => o.instrument?.tag ?? "-" },
           { header: "Tipo", accessor: (o) => TYPE_LABELS[o.type] },
-          { header: "Tecnico", accessor: (o) => o.technician?.name ?? "-" },
+          ...(isClient ? [] : [{ header: "Tecnico", accessor: (o: MaintenanceWorkOrder) => o.technician?.name ?? "-" }]),
           { header: "Agendada", accessor: (o) => formatDate(o.scheduledDate) },
           { header: "Status", accessor: (o) => <StatusBadge status={o.status} /> },
         ]}

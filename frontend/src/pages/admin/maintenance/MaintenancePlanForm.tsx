@@ -15,6 +15,7 @@ import { createMaintenancePlan, getMaintenancePlan, updateMaintenancePlan } from
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { FullPageSpinner } from "../../../components/Spinner";
+import { useCmms } from "../../../lib/cmms";
 
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
@@ -36,6 +37,7 @@ export default function MaintenancePlanForm() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { notify } = useToast();
+  const { isClient, ownClientId, base } = useCmms();
   const isEdit = !!id;
 
   const { data: existing, isLoading } = useQuery({
@@ -47,7 +49,7 @@ export default function MaintenancePlanForm() {
   const { register, control, handleSubmit, watch, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      clientId: searchParams.get("clientId") ?? "",
+      clientId: ownClientId ?? searchParams.get("clientId") ?? "",
       instrumentId: searchParams.get("instrumentId") ?? "",
       triggerType: "TIME",
       active: true,
@@ -93,7 +95,7 @@ export default function MaintenancePlanForm() {
       };
       const saved = isEdit ? await updateMaintenancePlan(id!, payload) : await createMaintenancePlan(payload);
       notify("success", isEdit ? "Plano atualizado." : "Plano criado.");
-      navigate(`/gestao/manutencao/planos/${saved.id}`);
+      navigate(`${base}/planos/${saved.id}`);
     } catch (error) {
       notify("error", getApiErrorMessage(error));
     }
@@ -106,8 +108,8 @@ export default function MaintenancePlanForm() {
       <PageHeader
         title={isEdit ? "Editar plano de manutencao" : "Novo plano de manutencao"}
         breadcrumbs={[
-          { label: "RLP Maintenance CMMS", to: "/gestao/manutencao" },
-          { label: "Planos", to: "/gestao/manutencao/planos" },
+          { label: "RLP Maintenance CMMS", to: base },
+          { label: "Planos", to: `${base}/planos` },
           { label: isEdit ? "Editar" : "Novo" },
         ]}
       />
@@ -116,12 +118,18 @@ export default function MaintenancePlanForm() {
         <div className="card space-y-4 p-5">
           <h2 className="font-semibold text-navy-900">Identificacao</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <ClientPicker required error={errors.clientId?.message} {...register("clientId")} />
+            {isClient ? (
+              <input type="hidden" {...register("clientId")} />
+            ) : (
+              <ClientPicker required error={errors.clientId?.message} {...register("clientId")} />
+            )}
             <InstrumentPicker clientId={clientId} required error={errors.instrumentId?.message} {...register("instrumentId")} />
           </div>
           <TextInput label="Nome do plano" required placeholder="Ex.: Manutencao preventiva mensal" error={errors.name?.message} {...register("name")} />
           <TextareaInput label="Descricao (opcional)" rows={2} {...register("description")} />
-          <UserPicker label="Responsavel" roles={["ADMIN", "TECHNICIAN"]} error={errors.responsibleId?.message} {...register("responsibleId")} />
+          {!isClient && (
+            <UserPicker label="Responsavel" roles={["ADMIN", "TECHNICIAN"]} error={errors.responsibleId?.message} {...register("responsibleId")} />
+          )}
         </div>
 
         <div className="card space-y-4 p-5">

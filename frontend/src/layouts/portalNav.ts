@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Gauge, BadgeCheck, FileWarning, ClipboardList, FileSignature, ShoppingCart, User, Wrench } from "lucide-react";
+import { LayoutDashboard, Gauge, BadgeCheck, FileWarning, ClipboardList, FileSignature, ShoppingCart, User, Wrench, ShieldCheck, ListChecks, Boxes } from "lucide-react";
 import type { ServiceCategory } from "../api/types";
 
 export interface PortalNavItem {
@@ -8,14 +8,20 @@ export interface PortalNavItem {
   icon: LucideIcon;
   /** Servicos que liberam este item; omitido = sempre visivel (dashboard, pedidos, perfil). */
   requires?: ServiceCategory[];
+  /** So marca como ativo na rota exata - usado nos itens que sao "pai" de sub-rotas. */
+  exact?: boolean;
 }
 
 const PORTAL_NAV_ITEMS: PortalNavItem[] = [
   { to: "/portal", label: "Dashboard", icon: LayoutDashboard },
   // Quem contrata o CMMS tem ele como o programa principal: fica logo apos o Dashboard
   // (que ja mostra o CMMS como conteudo central para esse cliente), o resto vira incremento.
-  { to: "/portal/manutencao", label: "RLP Maintenance CMMS", icon: Wrench, requires: ["CMMS_MAINTENANCE"] },
-  { to: "/portal/instrumentos", label: "Meus ativos", icon: Gauge, requires: ["CALIBRATION"] },
+  { to: "/portal/manutencao", label: "RLP Maintenance CMMS", icon: Wrench, requires: ["CMMS_MAINTENANCE"], exact: true },
+  { to: "/portal/manutencao/planos", label: "Planos de manutencao", icon: ShieldCheck, requires: ["CMMS_MAINTENANCE"] },
+  { to: "/portal/manutencao/ordens", label: "Ordens de manutencao", icon: ClipboardList, requires: ["CMMS_MAINTENANCE"] },
+  { to: "/portal/manutencao/falhas", label: "Codigos de falha", icon: ListChecks, requires: ["CMMS_MAINTENANCE"] },
+  { to: "/portal/almoxarifado", label: "Meu almoxarifado", icon: Boxes, requires: ["CMMS_MAINTENANCE"] },
+  { to: "/portal/instrumentos", label: "Meus ativos", icon: Gauge, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
   { to: "/portal/certificados", label: "Meus certificados", icon: BadgeCheck, requires: ["CALIBRATION"] },
   { to: "/portal/laudos", label: "Meus laudos", icon: FileWarning, requires: ["TECHNICAL_REPORT"] },
   {

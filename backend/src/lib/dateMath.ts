@@ -6,6 +6,12 @@ export function addMonths(date: Date, months: number): Date {
   return result;
 }
 
+export function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
 export function differenceInCalendarDays(a: Date, b: Date): number {
   const msPerDay = 24 * 60 * 60 * 1000;
   const utcA = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());

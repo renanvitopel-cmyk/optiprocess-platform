@@ -7,6 +7,7 @@ import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagin
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { STAFF_ROLES } from "../../middleware/rbac";
+import { applyStockMovement } from "../../lib/inventory";
 
 const ACCENT_MAP: Record<string, string> = {
   á: "a", à: "a", ã: "a", â: "a", ä: "a",
@@ -219,25 +220,13 @@ export const listInventoryMovements = asyncHandler(async (req: Request, res: Res
 
 export const createInventoryMovement = asyncHandler(async (req: Request, res: Response) => {
   const data = movementSchema.parse(req.body);
-  const product = await prisma.product.findFirst({ where: { id: req.params.id, deletedAt: null } });
-  if (!product) throw new NotFoundError("Produto");
-
-  const delta = data.type === "OUT" ? -data.quantity : data.type === "IN" ? data.quantity : data.quantity;
-  const newStock = data.type === "ADJUSTMENT" ? data.quantity : product.stockQty + delta;
-  if (newStock < 0) throw new ValidationError("Estoque nao pode ficar negativo.");
-
-  const [movement] = await prisma.$transaction([
-    prisma.inventoryMovement.create({
-      data: { ...data, productId: product.id, createdById: req.user?.sub },
-    }),
-    prisma.product.update({ where: { id: product.id }, data: { stockQty: newStock } }),
-  ]);
+  const movement = await applyStockMovement({ ...data, productId: req.params.id, createdById: req.user?.sub });
 
   await writeAuditLog({
     userId: req.user?.sub,
     action: "UPDATE",
     entityType: "Product",
-    entityId: product.id,
+    entityId: req.params.id,
     description: `Movimentacao de estoque (${data.type}) de ${data.quantity} un.`,
   });
 

@@ -29,6 +29,9 @@ const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
   instrumentId: z.string().uuid().optional().or(z.literal("")),
   siteAddress: z.string().min(2, "Informe o local de atendimento."),
+  // CMMS_MAINTENANCE nao aparece no dropdown (CATEGORY_OPTIONS): manutencao com CMMS usa a
+  // Ordem de Manutencao propria, nao a OS generica. Fica listado aqui so para o tipo bater
+  // com ServiceCategory (usado tambem em Client.contractedServices).
   category: z.enum([
     "ELECTRICAL_MAINTENANCE",
     "PANEL_MAINTENANCE",
@@ -37,6 +40,7 @@ const schema = z.object({
     "CALIBRATION",
     "TECHNICAL_ASSISTANCE",
     "EV_CHARGER",
+    "CMMS_MAINTENANCE",
     "OTHER",
   ]),
   description: z.string().min(2, "Descreva o servico."),

@@ -4,22 +4,43 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
 import { getInstrument } from "../../api/instruments";
 import { listServiceOrders } from "../../api/serviceOrders";
+import { listMeters } from "../../api/meters";
+import { listMaintenancePlans } from "../../api/maintenancePlans";
+import { listMaintenanceWorkOrders } from "../../api/maintenanceWorkOrders";
 import { PageHeader } from "../../components/PageHeader";
 import { FullPageSpinner } from "../../components/Spinner";
 import { StatusBadge } from "../../components/StatusBadge";
 import { formatDate, formatServiceCategory } from "../../lib/format";
 import { EmptyState } from "../../components/EmptyState";
 import { PortalInstrumentFormModal } from "./PortalInstrumentFormModal";
+import { useAuth } from "../../auth/AuthContext";
 
 export default function PortalInstrumentDetail() {
   const { id = "" } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const hasCmms = !!user?.client?.contractedServices?.includes("CMMS_MAINTENANCE");
   const [editOpen, setEditOpen] = useState(false);
   const { data: instrument, isLoading } = useQuery({ queryKey: ["portal-instrument", id], queryFn: () => getInstrument(id) });
   const { data: serviceOrders } = useQuery({
     queryKey: ["portal-instrument-service-orders", id],
     queryFn: () => listServiceOrders({ instrumentId: id, pageSize: 20 }),
     enabled: !!id,
+  });
+  const { data: meters } = useQuery({
+    queryKey: ["portal-instrument-meters", id],
+    queryFn: () => listMeters({ instrumentId: id }),
+    enabled: !!id && hasCmms,
+  });
+  const { data: plans } = useQuery({
+    queryKey: ["portal-instrument-maintenance-plans", id],
+    queryFn: () => listMaintenancePlans({ instrumentId: id, pageSize: 10 }),
+    enabled: !!id && hasCmms,
+  });
+  const { data: workOrders } = useQuery({
+    queryKey: ["portal-instrument-maintenance-work-orders", id],
+    queryFn: () => listMaintenanceWorkOrders({ instrumentId: id, pageSize: 10 }),
+    enabled: !!id && hasCmms,
   });
 
   if (isLoading || !instrument) return <FullPageSpinner />;
@@ -92,6 +113,61 @@ export default function PortalInstrumentDetail() {
               </ul>
             )}
           </div>
+
+          {hasCmms && (
+            <>
+              <div className="card p-5">
+                <h2 className="mb-3 font-semibold text-navy-900">Medidores</h2>
+                {!meters || meters.length === 0 ? (
+                  <EmptyState title="Nenhum medidor" />
+                ) : (
+                  <ul className="divide-y divide-gray-100">
+                    {meters.map((m) => (
+                      <li key={m.id} className="py-2.5 text-sm">
+                        <p className="font-medium text-graphite-800">{m.name}</p>
+                        <p className="text-xs text-graphite-400">{m.currentValue} {m.unit}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="card p-5">
+                <h2 className="mb-3 font-semibold text-navy-900">RLP Maintenance CMMS</h2>
+                {(!plans || plans.items.length === 0) && (!workOrders || workOrders.items.length === 0) ? (
+                  <EmptyState title="Nenhuma manutencao" description="Nenhum plano ou ordem de manutencao para este ativo ainda." />
+                ) : (
+                  <>
+                    {plans && plans.items.length > 0 && (
+                      <ul className="divide-y divide-gray-100">
+                        {plans.items.map((p) => (
+                          <li key={p.id} className="flex items-center justify-between py-2.5 text-sm">
+                            <span className="font-medium text-graphite-800">{p.name}</span>
+                            <StatusBadge status={p.active ? (p.derivedStatus ?? "VALID") : "INACTIVE"} />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {workOrders && workOrders.items.length > 0 && (
+                      <>
+                        <p className="mt-3 text-xs uppercase tracking-wide text-graphite-400">Ordens de manutencao</p>
+                        <ul className="divide-y divide-gray-100">
+                          {workOrders.items.map((w) => (
+                            <li key={w.id}>
+                              <Link to={`/portal/manutencao/${w.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
+                                <span className="font-medium text-graphite-800">{w.number}</span>
+                                <StatusBadge status={w.status} />
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

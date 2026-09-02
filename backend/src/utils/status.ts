@@ -1,4 +1,4 @@
-import { addMonths, differenceInCalendarDays } from "../lib/dateMath";
+import { addMonths, addDays, differenceInCalendarDays } from "../lib/dateMath";
 
 export type DerivedDueStatus = "VALID" | "DUE_SOON" | "EXPIRED";
 
@@ -16,4 +16,10 @@ export function deriveDueStatus(validUntil: Date | null, referenceDate: Date = n
 
 export function computeNextDueDate(lastDate: Date, frequencyMonths: number): Date {
   return addMonths(lastDate, frequencyMonths);
+}
+
+/** Usado pelos planos de manutencao (CMMS) com disparo por tempo, que trabalham em dias
+ * em vez de meses para caber periodicidades curtas (semanal, quinzenal). */
+export function computeNextDueDateFromDays(lastDate: Date, frequencyDays: number): Date {
+  return addDays(lastDate, frequencyDays);
 }

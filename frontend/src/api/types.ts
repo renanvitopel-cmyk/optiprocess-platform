@@ -72,6 +72,7 @@ export type ServiceCategory =
   | "CALIBRATION"
   | "TECHNICAL_ASSISTANCE"
   | "EV_CHARGER"
+  | "CMMS_MAINTENANCE"
   | "OTHER";
 
 export type ServiceOrderStatus = "BUDGET" | "APPROVED" | "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELED";
@@ -414,4 +415,137 @@ export interface NotificationItem {
   link: string | null;
   read: boolean;
   createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// CMMS - RLP Maintenance CMMS (gestao de manutencao, pacote opcional)
+// ---------------------------------------------------------------------------
+
+export interface MeterReading {
+  id: string;
+  meterId: string;
+  value: number;
+  readAt: string;
+  recordedById: string | null;
+  createdAt: string;
+}
+
+export interface Meter {
+  id: string;
+  instrumentId: string;
+  name: string;
+  unit: string;
+  currentValue: number;
+  createdAt: string;
+  readings?: MeterReading[];
+}
+
+export interface FailureCode {
+  id: string;
+  code: string;
+  description: string;
+  category: string | null;
+  active: boolean;
+}
+
+export type MaintenanceTriggerType = "TIME" | "METER";
+export type MaintenanceOrderType = "PREVENTIVE" | "CORRECTIVE" | "PREDICTIVE";
+export type MaintenancePriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type MaintenanceOrderStatus = "OPEN" | "IN_PROGRESS" | "COMPLETED" | "CANCELED";
+export type ChecklistItemResult = "PENDING" | "OK" | "NOT_OK" | "NA";
+export type DerivedDueStatus = "VALID" | "DUE_SOON" | "EXPIRED";
+
+export interface MaintenancePlanChecklistItem {
+  id?: string;
+  description: string;
+  sortOrder?: number;
+}
+
+export interface MaintenancePlan {
+  id: string;
+  clientId: string;
+  client?: ClientRef;
+  instrumentId: string;
+  instrument?: InstrumentRef;
+  name: string;
+  description: string | null;
+  triggerType: MaintenanceTriggerType;
+  frequencyDays: number | null;
+  nextDueDate: string | null;
+  meterId: string | null;
+  meter?: { id: string; name: string; unit: string; currentValue: number } | null;
+  meterInterval: number | null;
+  lastGeneratedAt: string | null;
+  lastMeterAtGeneration: number | null;
+  active: boolean;
+  responsibleId: string | null;
+  responsible?: { id: string; name: string } | null;
+  derivedStatus?: DerivedDueStatus;
+  checklistTemplate: MaintenancePlanChecklistItem[];
+  workOrders?: { id: string; number: string; status: MaintenanceOrderStatus; completedAt: string | null }[];
+  createdAt: string;
+}
+
+export interface MaintenanceWorkOrderChecklistItem {
+  id: string;
+  workOrderId: string;
+  description: string;
+  result: ChecklistItemResult;
+  notes: string | null;
+  sortOrder: number;
+}
+
+export interface MaintenancePartUsed {
+  id: string;
+  productId: string;
+  product?: { id: string; name: string; sku: string };
+  quantity: number;
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface MaintenanceWorkOrder {
+  id: string;
+  number: string;
+  clientId: string;
+  client?: ClientRef;
+  instrumentId: string;
+  instrument?: InstrumentRef;
+  planId: string | null;
+  plan?: { id: string; name: string } | null;
+  type: MaintenanceOrderType;
+  priority: MaintenancePriority;
+  status: MaintenanceOrderStatus;
+  description: string;
+  technicianId: string | null;
+  technician?: { id: string; name: string } | null;
+  scheduledDate: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  failureCodeId: string | null;
+  failureCode?: FailureCode | null;
+  meterReadingAtExecution: number | null;
+  laborHours: number | null;
+  observations: string | null;
+  checklist?: MaintenanceWorkOrderChecklistItem[];
+  partsUsed?: MaintenancePartUsed[];
+  createdAt: string;
+}
+
+export interface MaintenanceDashboardData {
+  period: { from: string; to: string };
+  totals: {
+    workOrders: number;
+    open: number;
+    inProgress: number;
+    completed: number;
+    corrective: number;
+    preventive: number;
+  };
+  kpis: {
+    mttrHours: number;
+    mtbfHours: number;
+    availabilityPct: number;
+    planComplianceRatePct: number;
+  };
 }

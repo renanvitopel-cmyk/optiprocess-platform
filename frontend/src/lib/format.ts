@@ -29,6 +29,7 @@ const SERVICE_CATEGORY_LABELS: Record<string, string> = {
   CALIBRATION: "Calibracao",
   TECHNICAL_ASSISTANCE: "Assistencia tecnica",
   EV_CHARGER: "Carregador veicular",
+  CMMS_MAINTENANCE: "RLP Maintenance CMMS",
   OTHER: "Outros",
 };
 

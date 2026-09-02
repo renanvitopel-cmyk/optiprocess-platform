@@ -17,6 +17,7 @@ const SERVICE_OPTIONS: { value: ServiceCategory; label: string }[] = [
   { value: "CALIBRATION", label: "Calibracao de ativos" },
   { value: "TECHNICAL_ASSISTANCE", label: "Assistencia tecnica em inversores/eletronicos" },
   { value: "EV_CHARGER", label: "Carregador para veiculo eletrico" },
+  { value: "CMMS_MAINTENANCE", label: "RLP Maintenance CMMS - gestao de manutencao" },
   { value: "OTHER", label: "Outro" },
 ];
 

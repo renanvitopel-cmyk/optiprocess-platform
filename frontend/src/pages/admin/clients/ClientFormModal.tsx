@@ -37,6 +37,7 @@ const schema = z.object({
         "CALIBRATION",
         "TECHNICAL_ASSISTANCE",
         "EV_CHARGER",
+        "CMMS_MAINTENANCE",
         "OTHER",
       ]),
     )

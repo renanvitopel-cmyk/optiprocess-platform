@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Gauge, BadgeCheck, FileWarning, ClipboardList, FileSignature, ShoppingCart, User } from "lucide-react";
+import { LayoutDashboard, Gauge, BadgeCheck, FileWarning, ClipboardList, FileSignature, ShoppingCart, User, Wrench } from "lucide-react";
 import type { ServiceCategory } from "../api/types";
 
 export interface PortalNavItem {
@@ -27,10 +27,12 @@ const PORTAL_NAV_ITEMS: PortalNavItem[] = [
       "CALIBRATION",
       "TECHNICAL_ASSISTANCE",
       "EV_CHARGER",
+      "CMMS_MAINTENANCE",
       "OTHER",
     ],
   },
-  { to: "/portal/contratos", label: "Meus contratos", icon: FileSignature, requires: ["ELECTRICAL_MAINTENANCE", "PANEL_MAINTENANCE", "MOTOR_MAINTENANCE", "TECHNICAL_REPORT", "CALIBRATION", "TECHNICAL_ASSISTANCE", "EV_CHARGER", "OTHER"] },
+  { to: "/portal/contratos", label: "Meus contratos", icon: FileSignature, requires: ["ELECTRICAL_MAINTENANCE", "PANEL_MAINTENANCE", "MOTOR_MAINTENANCE", "TECHNICAL_REPORT", "CALIBRATION", "TECHNICAL_ASSISTANCE", "EV_CHARGER", "CMMS_MAINTENANCE", "OTHER"] },
+  { to: "/portal/manutencao", label: "RLP Maintenance CMMS", icon: Wrench, requires: ["CMMS_MAINTENANCE"] },
   { to: "/portal/pedidos", label: "Meus pedidos e orcamentos", icon: ShoppingCart },
   { to: "/portal/perfil", label: "Meu perfil", icon: User },
 ];

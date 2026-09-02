@@ -51,6 +51,14 @@ const OrdersList = lazy(() => import("./pages/admin/orders/OrdersList"));
 const OrderDetail = lazy(() => import("./pages/admin/orders/OrderDetail"));
 const UsersList = lazy(() => import("./pages/admin/users/UsersList"));
 const AuditLog = lazy(() => import("./pages/admin/audit/AuditLog"));
+const MaintenanceDashboard = lazy(() => import("./pages/admin/maintenance/MaintenanceDashboard"));
+const MaintenancePlansList = lazy(() => import("./pages/admin/maintenance/MaintenancePlansList"));
+const MaintenancePlanForm = lazy(() => import("./pages/admin/maintenance/MaintenancePlanForm"));
+const MaintenancePlanDetail = lazy(() => import("./pages/admin/maintenance/MaintenancePlanDetail"));
+const WorkOrdersList = lazy(() => import("./pages/admin/maintenance/WorkOrdersList"));
+const WorkOrderForm = lazy(() => import("./pages/admin/maintenance/WorkOrderForm"));
+const WorkOrderDetail = lazy(() => import("./pages/admin/maintenance/WorkOrderDetail"));
+const FailureCodesList = lazy(() => import("./pages/admin/maintenance/FailureCodesList"));
 
 const PortalDashboard = lazy(() => import("./pages/portal/PortalDashboard"));
 const PortalInstruments = lazy(() => import("./pages/portal/PortalInstruments"));
@@ -63,6 +71,8 @@ const PortalServiceOrderDetail = lazy(() => import("./pages/portal/PortalService
 const PortalContracts = lazy(() => import("./pages/portal/PortalContracts"));
 const PortalOrders = lazy(() => import("./pages/portal/PortalOrders"));
 const PortalProfile = lazy(() => import("./pages/portal/PortalProfile"));
+const PortalMaintenance = lazy(() => import("./pages/portal/PortalMaintenance"));
+const PortalMaintenanceWorkOrderDetail = lazy(() => import("./pages/portal/PortalMaintenanceWorkOrderDetail"));
 
 export default function App() {
   return (
@@ -112,6 +122,17 @@ export default function App() {
 
                 <Route path="contratos" element={<ContractsList />} />
 
+                <Route path="manutencao" element={<MaintenanceDashboard />} />
+                <Route path="manutencao/planos" element={<MaintenancePlansList />} />
+                <Route path="manutencao/planos/novo" element={<MaintenancePlanForm />} />
+                <Route path="manutencao/planos/:id/editar" element={<MaintenancePlanForm />} />
+                <Route path="manutencao/planos/:id" element={<MaintenancePlanDetail />} />
+                <Route path="manutencao/ordens" element={<WorkOrdersList />} />
+                <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
+                <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
+                <Route path="manutencao/ordens/:id" element={<WorkOrderDetail />} />
+                <Route path="manutencao/falhas" element={<FailureCodesList />} />
+
                 <Route path="produtos" element={<ProductsListAdmin />} />
                 <Route path="produtos/:id" element={<ProductDetailAdmin />} />
 
@@ -140,6 +161,8 @@ export default function App() {
                 <Route path="ordens-servico/:id" element={<PortalServiceOrderDetail />} />
                 <Route path="contratos" element={<PortalContracts />} />
                 <Route path="pedidos" element={<PortalOrders />} />
+                <Route path="manutencao" element={<PortalMaintenance />} />
+                <Route path="manutencao/:id" element={<PortalMaintenanceWorkOrderDetail />} />
                 <Route path="perfil" element={<PortalProfile />} />
               </Route>
             </Route>

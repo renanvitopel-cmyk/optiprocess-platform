@@ -6,6 +6,7 @@ const PREFIXES = {
   technicalReport: "LAU",
   quote: "ORC",
   order: "PED",
+  maintenanceWorkOrder: "OM",
 } as const;
 
 type SequenceKind = keyof typeof PREFIXES;

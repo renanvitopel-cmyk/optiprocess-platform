@@ -25,6 +25,10 @@ import { dashboardRouter } from "./modules/dashboard/routes";
 import { searchRouter } from "./modules/search/routes";
 import { publicRouter } from "./modules/public/routes";
 import { localStorageRouter } from "./modules/localStorage/routes";
+import { metersRouter } from "./modules/meters/routes";
+import { failureCodesRouter } from "./modules/failureCodes/routes";
+import { maintenancePlansRouter } from "./modules/maintenancePlans/routes";
+import { maintenanceWorkOrdersRouter } from "./modules/maintenanceWorkOrders/routes";
 
 export function createApp() {
   const app = express();
@@ -63,6 +67,10 @@ export function createApp() {
   app.use("/api/dashboard", dashboardRouter);
   app.use("/api/search", searchRouter);
   app.use("/api/public", publicRouter);
+  app.use("/api/meters", metersRouter);
+  app.use("/api/failure-codes", failureCodesRouter);
+  app.use("/api/maintenance-plans", maintenancePlansRouter);
+  app.use("/api/maintenance-work-orders", maintenanceWorkOrdersRouter);
 
   if (env.isProduction) {
     const frontendDist = path.resolve(__dirname, "../../frontend/dist");

@@ -76,7 +76,9 @@ export const getInstrument = asyncHandler(async (req: Request, res: Response) =>
 });
 
 const instrumentSchema = z.object({
-  clientId: z.string().uuid(),
+  // Opcional aqui porque o portal do cliente nunca envia clientId (o backend forca a
+  // propria empresa do usuario); obrigatorio apenas para a equipe interna, checado abaixo.
+  clientId: z.string().uuid().optional(),
   type: z.string().min(2),
   // TAG e o codigo que identifica o ativo (cadastrado pelo cliente ou pela OptiProcess) -
   // e' o que agrupa, na ficha do ativo, todas as calibracoes e ordens de servico dele.
@@ -110,18 +112,22 @@ async function assertTagAvailable(clientId: string, tag: string, excludeId?: str
 export const createInstrument = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CALIBRATION"]);
   const data = instrumentSchema.parse(req.body);
-  // Cliente so cadastra ativo para a propria empresa, nunca para outra vinda do corpo da requisicao.
+  // Cliente so cadastra ativo para a propria empresa - o clientId vem sempre da sessao,
+  // nunca do corpo da requisicao (mesmo que o cliente tente enviar outro).
   if (req.user?.role === "CLIENT") {
     if (!req.user.clientId) throw new ForbiddenError();
     data.clientId = req.user.clientId;
+  } else if (!data.clientId) {
+    throw new ValidationError("Selecione o cliente.");
   }
-  await assertTagAvailable(data.clientId, data.tag);
+  const clientId = data.clientId;
+  await assertTagAvailable(clientId, data.tag);
   const nextDueDate = data.lastCalibrationDate
     ? computeNextDueDate(data.lastCalibrationDate, data.calibrationFrequencyMonths)
     : null;
 
   const instrument = await prisma.instrument.create({
-    data: { ...data, nextDueDate, createdById: req.user?.sub },
+    data: { ...data, clientId, nextDueDate, createdById: req.user?.sub },
   });
 
   await writeAuditLog({

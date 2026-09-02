@@ -52,8 +52,8 @@ export default function InstrumentDetail() {
   return (
     <div>
       <PageHeader
-        title={`${instrument.type} - ${instrument.model}`}
-        description={`Cliente: ${clientDisplayName(instrument.client)}`}
+        title={`TAG ${instrument.tag ?? "sem TAG"}`}
+        description={`${instrument.type} - ${instrument.model} · Cliente: ${clientDisplayName(instrument.client)}`}
         breadcrumbs={[{ label: "Instrumentos", to: "/gestao/instrumentos" }, { label: instrument.tag ?? instrument.model }]}
         actions={
           canManage && (
@@ -73,7 +73,6 @@ export default function InstrumentDetail() {
         <div className="card space-y-4 p-5 lg:col-span-2">
           <StatusBadge status={instrument.derivedStatus ?? instrument.status} />
           <dl className="grid gap-4 sm:grid-cols-3">
-            <Info label="Tag / Patrimonio" value={instrument.tag ?? "-"} />
             <Info label="Fabricante" value={instrument.manufacturer} />
             <Info label="Numero de serie" value={instrument.serialNumber} />
             <Info label="Faixa de medicao" value={instrument.measurementRange ?? "-"} />
@@ -87,6 +86,9 @@ export default function InstrumentDetail() {
         </div>
 
         <div className="space-y-6">
+          <p className="text-xs text-graphite-500">
+            Tudo abaixo esta agrupado sob o TAG <span className="font-semibold text-navy-700">{instrument.tag}</span>.
+          </p>
           <div className="card p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-semibold text-navy-900">Historico de calibracoes</h2>

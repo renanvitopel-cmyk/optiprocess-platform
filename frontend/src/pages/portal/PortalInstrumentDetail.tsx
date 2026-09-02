@@ -1,22 +1,29 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getInstrument } from "../../api/instruments";
+import { listServiceOrders } from "../../api/serviceOrders";
 import { PageHeader } from "../../components/PageHeader";
 import { FullPageSpinner } from "../../components/Spinner";
 import { StatusBadge } from "../../components/StatusBadge";
-import { formatDate } from "../../lib/format";
+import { formatDate, formatServiceCategory } from "../../lib/format";
 import { EmptyState } from "../../components/EmptyState";
 
 export default function PortalInstrumentDetail() {
   const { id = "" } = useParams<{ id: string }>();
   const { data: instrument, isLoading } = useQuery({ queryKey: ["portal-instrument", id], queryFn: () => getInstrument(id) });
+  const { data: serviceOrders } = useQuery({
+    queryKey: ["portal-instrument-service-orders", id],
+    queryFn: () => listServiceOrders({ instrumentId: id, pageSize: 20 }),
+    enabled: !!id,
+  });
 
   if (isLoading || !instrument) return <FullPageSpinner />;
 
   return (
     <div>
       <PageHeader
-        title={`${instrument.type} - ${instrument.model}`}
+        title={`TAG ${instrument.tag ?? "sem TAG"}`}
+        description={`${instrument.type} - ${instrument.model}`}
         breadcrumbs={[{ label: "Meus instrumentos", to: "/portal/instrumentos" }, { label: instrument.tag ?? instrument.model }]}
       />
 
@@ -24,7 +31,6 @@ export default function PortalInstrumentDetail() {
         <div className="card space-y-4 p-5 lg:col-span-2">
           <StatusBadge status={instrument.derivedStatus ?? instrument.status} />
           <dl className="grid gap-4 sm:grid-cols-3">
-            <Info label="Tag / Patrimonio" value={instrument.tag ?? "-"} />
             <Info label="Fabricante" value={instrument.manufacturer} />
             <Info label="Numero de serie" value={instrument.serialNumber} />
             <Info label="Faixa de medicao" value={instrument.measurementRange ?? "-"} />
@@ -35,24 +41,47 @@ export default function PortalInstrumentDetail() {
           </dl>
         </div>
 
-        <div className="card p-5">
-          <h2 className="mb-3 font-semibold text-navy-900">Certificados</h2>
-          {!instrument.calibrations || instrument.calibrations.length === 0 ? (
-            <EmptyState title="Nenhum certificado disponivel" />
-          ) : (
-            <ul className="divide-y divide-gray-100">
-              {instrument.calibrations
-                .filter((c) => c.visibleToClient)
-                .map((c) => (
-                  <li key={c.id}>
-                    <Link to={`/portal/certificados/${c.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
-                      <span className="font-medium text-graphite-800">{c.certificateNumber}</span>
-                      <StatusBadge status={c.status} />
+        <div className="space-y-6">
+          <div className="card p-5">
+            <h2 className="mb-3 font-semibold text-navy-900">Certificados</h2>
+            {!instrument.calibrations || instrument.calibrations.length === 0 ? (
+              <EmptyState title="Nenhum certificado disponivel" />
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {instrument.calibrations
+                  .filter((c) => c.visibleToClient)
+                  .map((c) => (
+                    <li key={c.id}>
+                      <Link to={`/portal/certificados/${c.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
+                        <span className="font-medium text-graphite-800">{c.certificateNumber}</span>
+                        <StatusBadge status={c.status} />
+                      </Link>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="card p-5">
+            <h2 className="mb-3 font-semibold text-navy-900">Servicos neste ativo</h2>
+            {!serviceOrders || serviceOrders.items.length === 0 ? (
+              <EmptyState title="Nenhum servico" description="Nenhuma ordem de servico vinculada a este ativo ainda." />
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {serviceOrders.items.map((o) => (
+                  <li key={o.id}>
+                    <Link to={`/portal/ordens-servico/${o.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
+                      <div>
+                        <p className="font-medium text-graphite-800">{o.number}</p>
+                        <p className="text-xs text-graphite-400">{formatServiceCategory(o.category)}</p>
+                      </div>
+                      <StatusBadge status={o.status} />
                     </Link>
                   </li>
                 ))}
-            </ul>
-          )}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -4,7 +4,7 @@ import { InstrumentStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
-import { NotFoundError } from "../../utils/errors";
+import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
 import { deriveDueStatus, computeNextDueDate } from "../../utils/status";
@@ -78,7 +78,9 @@ export const getInstrument = asyncHandler(async (req: Request, res: Response) =>
 const instrumentSchema = z.object({
   clientId: z.string().uuid(),
   type: z.string().min(2),
-  tag: z.string().nullish(),
+  // TAG e o codigo que identifica o ativo (cadastrado pelo cliente ou pela OptiProcess) -
+  // e' o que agrupa, na ficha do ativo, todas as calibracoes e ordens de servico dele.
+  tag: z.string().min(1, "Informe o TAG do ativo."),
   manufacturer: z.string().min(1),
   model: z.string().min(1),
   serialNumber: z.string().min(1),
@@ -91,8 +93,23 @@ const instrumentSchema = z.object({
   status: z.nativeEnum(InstrumentStatus).optional(),
 });
 
+/** TAG e o identificador do ativo dentro da empresa cliente - nao pode repetir na mesma
+ * empresa, senao duas listas de calibracoes/OS ficariam misturadas sob o mesmo codigo. */
+async function assertTagAvailable(clientId: string, tag: string, excludeId?: string): Promise<void> {
+  const conflict = await prisma.instrument.findFirst({
+    where: {
+      clientId,
+      deletedAt: null,
+      tag: { equals: tag, mode: "insensitive" },
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+  });
+  if (conflict) throw new ValidationError(`Ja existe um ativo com o TAG "${tag}" cadastrado para este cliente.`);
+}
+
 export const createInstrument = asyncHandler(async (req: Request, res: Response) => {
   const data = instrumentSchema.parse(req.body);
+  await assertTagAvailable(data.clientId, data.tag);
   const nextDueDate = data.lastCalibrationDate
     ? computeNextDueDate(data.lastCalibrationDate, data.calibrationFrequencyMonths)
     : null;
@@ -116,6 +133,10 @@ export const updateInstrument = asyncHandler(async (req: Request, res: Response)
   const data = instrumentSchema.partial().parse(req.body);
   const existing = await prisma.instrument.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Instrumento");
+
+  if (data.tag) {
+    await assertTagAvailable(data.clientId ?? existing.clientId, data.tag, existing.id);
+  }
 
   const lastCalibrationDate = data.lastCalibrationDate ?? existing.lastCalibrationDate;
   const frequency = data.calibrationFrequencyMonths ?? existing.calibrationFrequencyMonths;

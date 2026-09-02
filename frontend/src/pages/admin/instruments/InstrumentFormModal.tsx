@@ -13,7 +13,7 @@ import { getApiErrorMessage } from "../../../api/client";
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
   type: z.string().min(2, "Informe o tipo de instrumento."),
-  tag: z.string().optional(),
+  tag: z.string().min(1, "Informe o TAG do ativo."),
   manufacturer: z.string().min(1, "Informe o fabricante."),
   model: z.string().min(1, "Informe o modelo."),
   serialNumber: z.string().min(1, "Informe o numero de serie."),
@@ -86,10 +86,16 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument }: Prop
     }>
       <form id="instrument-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
         <ClientPicker required error={errors.clientId?.message} {...register("clientId")} />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <TextInput label="Tipo de instrumento" required error={errors.type?.message} {...register("type")} />
-          <TextInput label="Tag / Patrimonio" {...register("tag")} />
+        <div className="rounded-lg border border-navy-200 bg-navy-50 p-4">
+          <TextInput
+            label="TAG do ativo"
+            required
+            hint="Codigo que identifica este ativo (definido pelo cliente ou pela OptiProcess). Todas as calibracoes e ordens de servico deste equipamento ficam agrupadas por este TAG."
+            error={errors.tag?.message}
+            {...register("tag")}
+          />
         </div>
+        <TextInput label="Tipo de instrumento" required error={errors.type?.message} {...register("type")} />
         <div className="grid gap-4 sm:grid-cols-3">
           <TextInput label="Fabricante" required error={errors.manufacturer?.message} {...register("manufacturer")} />
           <TextInput label="Modelo" required error={errors.model?.message} {...register("model")} />

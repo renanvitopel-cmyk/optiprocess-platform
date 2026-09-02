@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { BadgeCheck, AlertTriangle, ShieldX, FileWarning, FileSignature, ShoppingCart, Gauge, TimerReset, Activity, Wrench } from "lucide-react";
+import { BadgeCheck, AlertTriangle, ShieldX, FileWarning, FileSignature, ShoppingCart, Gauge, TimerReset, Activity, Wrench, Boxes } from "lucide-react";
 import { getClientDashboard } from "../../api/dashboard";
 import { listMaintenanceWorkOrders, getMaintenanceDashboard } from "../../api/maintenanceWorkOrders";
 import { useAuth } from "../../auth/AuthContext";
@@ -35,6 +35,18 @@ export default function PortalDashboard() {
       <div>
         <h1 className="text-2xl font-bold text-navy-900">RLP Maintenance CMMS</h1>
         <p className="mt-1 text-graphite-500">Gestao de manutencao de {clientDisplayName(user?.client)}</p>
+
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Link to="/portal/instrumentos" className="btn-outline">
+            <Gauge className="h-4 w-4" /> Meus ativos
+          </Link>
+          <Link to="/portal/almoxarifado" className="btn-outline">
+            <Boxes className="h-4 w-4" /> Meu almoxarifado
+          </Link>
+        </div>
+        <p className="mt-3 text-xs text-graphite-500">
+          Planos de manutencao e ordens de servico ficam por conta da equipe tecnica da OptiProcess.
+        </p>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="MTTR (horas)" value={cmmsDashboard!.kpis.mttrHours} icon={TimerReset} tone="navy" to="/portal/manutencao" />

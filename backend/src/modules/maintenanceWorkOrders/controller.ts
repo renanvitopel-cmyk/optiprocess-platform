@@ -243,6 +243,12 @@ export const addWorkOrderPart = asyncHandler(async (req: Request, res: Response)
   const workOrder = await prisma.maintenanceWorkOrder.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!workOrder) throw new NotFoundError("Ordem de manutencao");
 
+  const sparePart = await prisma.sparePart.findFirst({ where: { id: data.sparePartId, deletedAt: null } });
+  if (!sparePart) throw new NotFoundError("Peca do almoxarifado");
+  if (sparePart.clientId !== workOrder.clientId) {
+    throw new ValidationError("Essa peca e' do almoxarifado de outra empresa.");
+  }
+
   const movement = await applySparePartMovement({
     sparePartId: data.sparePartId,
     type: "OUT",

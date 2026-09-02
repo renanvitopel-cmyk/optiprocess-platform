@@ -5,6 +5,7 @@ import type { SparePart, SparePartMovement } from "./types";
 export interface ListSparePartsParams {
   page?: number;
   pageSize?: number;
+  clientId?: string;
   search?: string;
   active?: boolean;
 }
@@ -20,6 +21,7 @@ export async function getSparePart(id: string): Promise<SparePart> {
 }
 
 export interface SparePartInput {
+  clientId?: string;
   name: string;
   code?: string | null;
   category?: string | null;

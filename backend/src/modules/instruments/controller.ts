@@ -257,9 +257,18 @@ const assetPartSchema = z.object({
 });
 
 export const addAssetPart = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = assetPartSchema.parse(req.body);
-  const instrument = await prisma.instrument.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+  });
   if (!instrument) throw new NotFoundError("Instrumento");
+
+  const sparePart = await prisma.sparePart.findFirst({ where: { id: data.sparePartId, deletedAt: null } });
+  if (!sparePart) throw new NotFoundError("Peca do almoxarifado");
+  if (sparePart.clientId !== instrument.clientId) {
+    throw new ValidationError("Essa peca e' do almoxarifado de outra empresa.");
+  }
 
   const existing = await prisma.assetPart.findFirst({
     where: { instrumentId: instrument.id, sparePartId: data.sparePartId },
@@ -274,8 +283,13 @@ export const addAssetPart = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export const removeAssetPart = asyncHandler(async (req: Request, res: Response) => {
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+  });
+  if (!instrument) throw new NotFoundError("Instrumento");
+
   const link = await prisma.assetPart.findFirst({
-    where: { id: req.params.linkId, instrumentId: req.params.id },
+    where: { id: req.params.linkId, instrumentId: instrument.id },
   });
   if (!link) throw new NotFoundError("Vinculo de peca");
 

@@ -1,17 +1,18 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
-import { STAFF_ROLES, requireRole } from "../../middleware/rbac";
+import { requireRole } from "../../middleware/rbac";
 import { listSpareParts, getSparePart, createSparePart, updateSparePart, deleteSparePart, addSparePartMovement } from "./controller";
 
 export const sparePartsRouter = Router();
 
-// Almoxarifado e' recurso interno da empresa, nao por cliente - cliente nunca acessa,
-// mesmo com CMMS contratado (so ve o que foi consumido na propria OS).
-sparePartsRouter.use(requireAuth, requireRole(...STAFF_ROLES));
+// Almoxarifado e' do cliente, nao um estoque unico da OptiProcess: o cliente cadastra,
+// edita e movimenta as proprias pecas (mesmo padrao ja usado para o Ativo/TAG), sempre
+// que tiver CMMS_MAINTENANCE contratado. So a exclusao fica restrita a equipe (ADMIN).
+sparePartsRouter.use(requireAuth);
 
 sparePartsRouter.get("/", listSpareParts);
 sparePartsRouter.get("/:id", getSparePart);
-sparePartsRouter.post("/", createSparePart);
-sparePartsRouter.patch("/:id", updateSparePart);
+sparePartsRouter.post("/", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), createSparePart);
+sparePartsRouter.patch("/:id", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), updateSparePart);
 sparePartsRouter.delete("/:id", requireRole("ADMIN"), deleteSparePart);
-sparePartsRouter.post("/:id/movements", addSparePartMovement);
+sparePartsRouter.post("/:id/movements", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addSparePartMovement);

@@ -25,7 +25,8 @@ instrumentsRouter.post("/", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), create
 instrumentsRouter.patch("/:id", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), updateInstrument);
 instrumentsRouter.delete("/:id", requireRole("ADMIN"), deleteInstrument);
 
-// BOM (lista de materiais do ativo) - so equipe interna, so quem tem CMMS_MAINTENANCE.
+// BOM (lista de materiais do ativo) - o cliente tambem vincula pecas do proprio
+// almoxarifado aos proprios ativos, quem tem CMMS_MAINTENANCE contratado.
 instrumentsRouter.get("/:id/parts", listAssetParts);
-instrumentsRouter.post("/:id/parts", requireRole("ADMIN", "TECHNICIAN"), addAssetPart);
-instrumentsRouter.delete("/:id/parts/:linkId", requireRole("ADMIN", "TECHNICIAN"), removeAssetPart);
+instrumentsRouter.post("/:id/parts", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addAssetPart);
+instrumentsRouter.delete("/:id/parts/:linkId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), removeAssetPart);

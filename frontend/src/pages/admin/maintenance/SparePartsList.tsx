@@ -1,14 +1,18 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, ArrowDownCircle, ArrowUpCircle, AlertTriangle } from "lucide-react";
 import { listSpareParts, createSparePart, addSparePartMovement } from "../../../api/spareParts";
+import { listClients } from "../../../api/clients";
 import type { SparePart } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { DataTable } from "../../../components/DataTable";
+import { EmptyState } from "../../../components/EmptyState";
 import { Modal } from "../../../components/Modal";
 import { TextInput } from "../../../components/form/Field";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
+import { clientDisplayName } from "../../../lib/format";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -25,13 +29,20 @@ type FormValues = z.infer<typeof schema>;
 export default function SparePartsList() {
   const queryClient = useQueryClient();
   const { notify } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const clientId = searchParams.get("clientId") ?? "";
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
 
+  const { data: clients } = useQuery({
+    queryKey: ["clients-picker-cmms"],
+    queryFn: () => listClients({ pageSize: 200, service: "CMMS_MAINTENANCE" }),
+  });
   const { data, isLoading } = useQuery({
-    queryKey: ["spare-parts", search, page],
-    queryFn: () => listSpareParts({ search: search || undefined, page, pageSize: 15 }),
+    queryKey: ["spare-parts", clientId, search, page],
+    queryFn: () => listSpareParts({ clientId, search: search || undefined, page, pageSize: 15 }),
+    enabled: !!clientId,
   });
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
@@ -41,7 +52,7 @@ export default function SparePartsList() {
 
   async function onSubmit(values: FormValues) {
     try {
-      await createSparePart(values);
+      await createSparePart({ ...values, clientId });
       notify("success", "Peca cadastrada no almoxarifado.");
       reset({ unit: "un" });
       setCreateOpen(false);
@@ -67,67 +78,87 @@ export default function SparePartsList() {
     <div>
       <PageHeader
         title="Almoxarifado"
-        description="Pecas de manutencao usadas nos ativos (rolamentos, retentores, disjuntores...) - estoque interno, separado dos Produtos vendidos aos clientes"
+        description="Estoque de pecas de manutencao do cliente (rolamentos, retentores, disjuntores...) - cada empresa tem o seu, separado dos Produtos vendidos pela OptiProcess"
         breadcrumbs={[{ label: "RLP Maintenance CMMS", to: "/gestao/manutencao" }, { label: "Almoxarifado" }]}
         actions={
-          <button className="btn-primary" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" /> Nova peca
-          </button>
+          clientId && (
+            <button className="btn-primary" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" /> Nova peca
+            </button>
+          )
         }
       />
 
-      <div className="relative mb-4 max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-graphite-400" />
-        <input
-          className="input pl-9"
-          placeholder="Buscar por nome, codigo ou categoria..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-        />
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row">
+        <select
+          className="input sm:w-72"
+          value={clientId}
+          onChange={(e) => setSearchParams(e.target.value ? { clientId: e.target.value } : {})}
+        >
+          <option value="">Selecione o cliente</option>
+          {(clients?.items ?? []).map((c) => (
+            <option key={c.id} value={c.id}>{clientDisplayName(c)}</option>
+          ))}
+        </select>
+        {clientId && (
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-graphite-400" />
+            <input
+              className="input pl-9"
+              placeholder="Buscar por nome, codigo ou categoria..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            />
+          </div>
+        )}
       </div>
 
-      <DataTable
-        loading={isLoading}
-        rows={data?.items ?? []}
-        keyField={(p) => p.id}
-        pagination={data}
-        onPageChange={setPage}
-        emptyTitle="Nenhuma peca cadastrada no almoxarifado"
-        columns={[
-          {
-            header: "Peca",
-            accessor: (p) => (
-              <div>
-                <span className="font-medium text-navy-900">{p.name}</span>
-                {p.code && <span className="ml-2 font-mono text-xs text-graphite-400">{p.code}</span>}
-              </div>
-            ),
-          },
-          { header: "Categoria", accessor: (p) => p.category ?? "-" },
-          {
-            header: "Estoque",
-            accessor: (p) => (
-              <span className={`flex items-center gap-1.5 font-medium ${p.stockQty <= p.minStock ? "text-safety-red" : "text-graphite-800"}`}>
-                {p.stockQty <= p.minStock && <AlertTriangle className="h-3.5 w-3.5" />}
-                {p.stockQty} {p.unit} {p.minStock > 0 && <span className="text-xs text-graphite-400">(min. {p.minStock})</span>}
-              </span>
-            ),
-          },
-          {
-            header: "Movimentar",
-            accessor: (p) => (
-              <div className="flex gap-2">
-                <button onClick={() => handleMovement(p, "IN")} className="text-graphite-400 hover:text-safety-green" title="Entrada" aria-label="Registrar entrada">
-                  <ArrowDownCircle className="h-4 w-4" />
-                </button>
-                <button onClick={() => handleMovement(p, "OUT")} className="text-graphite-400 hover:text-safety-red" title="Saida" aria-label="Registrar saida">
-                  <ArrowUpCircle className="h-4 w-4" />
-                </button>
-              </div>
-            ),
-          },
-        ]}
-      />
+      {!clientId ? (
+        <EmptyState title="Selecione um cliente" description="O almoxarifado e' proprio de cada empresa - escolha uma acima para ver as pecas dela." />
+      ) : (
+        <DataTable
+          loading={isLoading}
+          rows={data?.items ?? []}
+          keyField={(p) => p.id}
+          pagination={data}
+          onPageChange={setPage}
+          emptyTitle="Nenhuma peca cadastrada no almoxarifado deste cliente"
+          columns={[
+            {
+              header: "Peca",
+              accessor: (p) => (
+                <div>
+                  <span className="font-medium text-navy-900">{p.name}</span>
+                  {p.code && <span className="ml-2 font-mono text-xs text-graphite-400">{p.code}</span>}
+                </div>
+              ),
+            },
+            { header: "Categoria", accessor: (p) => p.category ?? "-" },
+            {
+              header: "Estoque",
+              accessor: (p) => (
+                <span className={`flex items-center gap-1.5 font-medium ${p.stockQty <= p.minStock ? "text-safety-red" : "text-graphite-800"}`}>
+                  {p.stockQty <= p.minStock && <AlertTriangle className="h-3.5 w-3.5" />}
+                  {p.stockQty} {p.unit} {p.minStock > 0 && <span className="text-xs text-graphite-400">(min. {p.minStock})</span>}
+                </span>
+              ),
+            },
+            {
+              header: "Movimentar",
+              accessor: (p) => (
+                <div className="flex gap-2">
+                  <button onClick={() => handleMovement(p, "IN")} className="text-graphite-400 hover:text-safety-green" title="Entrada" aria-label="Registrar entrada">
+                    <ArrowDownCircle className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => handleMovement(p, "OUT")} className="text-graphite-400 hover:text-safety-red" title="Saida" aria-label="Registrar saida">
+                    <ArrowUpCircle className="h-4 w-4" />
+                  </button>
+                </div>
+              ),
+            },
+          ]}
+        />
+      )}
 
       <Modal
         open={createOpen}

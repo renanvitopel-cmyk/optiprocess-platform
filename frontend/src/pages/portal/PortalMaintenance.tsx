@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Gauge, TimerReset, Activity, Wrench } from "lucide-react";
+import { Gauge, TimerReset, Activity, Wrench, Boxes } from "lucide-react";
 import { listMaintenanceWorkOrders, getMaintenanceDashboard } from "../../api/maintenanceWorkOrders";
 import { PageHeader } from "../../components/PageHeader";
 import { DataTable } from "../../components/DataTable";
@@ -25,6 +25,18 @@ export default function PortalMaintenance() {
     <div>
       <PageHeader title="RLP Maintenance CMMS" description="Ordens e indicadores de manutencao dos seus ativos" />
 
+      <div className="mb-6 flex flex-wrap gap-3">
+        <Link to="/portal/instrumentos" className="btn-outline">
+          <Gauge className="h-4 w-4" /> Meus ativos
+        </Link>
+        <Link to="/portal/almoxarifado" className="btn-outline">
+          <Boxes className="h-4 w-4" /> Meu almoxarifado
+        </Link>
+      </div>
+      <p className="mb-6 text-xs text-graphite-500">
+        Planos de manutencao preventiva e ordens de servico ficam por conta da equipe tecnica da OptiProcess.
+      </p>
+
       {dashboard && (
         <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="MTTR (horas)" value={dashboard.kpis.mttrHours} icon={TimerReset} tone="navy" />
@@ -42,6 +54,7 @@ export default function PortalMaintenance() {
         pagination={data}
         onPageChange={setPage}
         emptyTitle="Nenhuma ordem de manutencao registrada"
+        emptyDescription="Assim que a equipe da OptiProcess abrir uma ordem para os seus ativos, ela aparece aqui."
         columns={[
           { header: "Numero", accessor: (o) => <span className="font-medium text-navy-900">{o.number}</span> },
           { header: "Ativo", accessor: (o) => o.instrument?.tag ?? "-" },

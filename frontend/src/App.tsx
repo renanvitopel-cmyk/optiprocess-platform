@@ -74,6 +74,7 @@ const PortalOrders = lazy(() => import("./pages/portal/PortalOrders"));
 const PortalProfile = lazy(() => import("./pages/portal/PortalProfile"));
 const PortalMaintenance = lazy(() => import("./pages/portal/PortalMaintenance"));
 const PortalMaintenanceWorkOrderDetail = lazy(() => import("./pages/portal/PortalMaintenanceWorkOrderDetail"));
+const PortalSpareParts = lazy(() => import("./pages/portal/PortalSpareParts"));
 
 export default function App() {
   return (
@@ -165,6 +166,7 @@ export default function App() {
                 <Route path="pedidos" element={<PortalOrders />} />
                 <Route path="manutencao" element={<PortalMaintenance />} />
                 <Route path="manutencao/:id" element={<PortalMaintenanceWorkOrderDetail />} />
+                <Route path="almoxarifado" element={<PortalSpareParts />} />
                 <Route path="perfil" element={<PortalProfile />} />
               </Route>
             </Route>

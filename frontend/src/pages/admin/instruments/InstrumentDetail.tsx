@@ -61,7 +61,11 @@ export default function InstrumentDetail() {
     queryFn: () => listAssetParts(id),
     enabled: !!id,
   });
-  const { data: spareParts } = useQuery({ queryKey: ["spare-parts-picker"], queryFn: () => listSpareParts({ active: true, pageSize: 200 }) });
+  const { data: spareParts } = useQuery({
+    queryKey: ["spare-parts-picker", instrument?.clientId],
+    queryFn: () => listSpareParts({ clientId: instrument!.clientId, active: true, pageSize: 200 }),
+    enabled: !!instrument?.clientId,
+  });
 
   async function handleAddReading(meterId: string) {
     const value = window.prompt("Nova leitura do medidor:");

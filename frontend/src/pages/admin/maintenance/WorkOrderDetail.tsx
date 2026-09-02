@@ -48,7 +48,11 @@ export default function WorkOrderDetail() {
   const [partQty, setPartQty] = useState(1);
 
   const { data: workOrder, isLoading } = useQuery({ queryKey: ["maintenance-work-order", id], queryFn: () => getMaintenanceWorkOrder(id) });
-  const { data: spareParts } = useQuery({ queryKey: ["spare-parts-picker"], queryFn: () => listSpareParts({ active: true, pageSize: 200 }) });
+  const { data: spareParts } = useQuery({
+    queryKey: ["spare-parts-picker", workOrder?.clientId],
+    queryFn: () => listSpareParts({ clientId: workOrder!.clientId, active: true, pageSize: 200 }),
+    enabled: !!workOrder?.clientId,
+  });
   const { data: assetParts } = useQuery({
     queryKey: ["instrument-asset-parts", workOrder?.instrumentId],
     queryFn: () => listAssetParts(workOrder!.instrumentId),

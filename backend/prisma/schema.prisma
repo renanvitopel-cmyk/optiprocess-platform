@@ -312,6 +312,7 @@ model Client {
   orders           Order[]
   maintenancePlans      MaintenancePlan[]
   maintenanceWorkOrders MaintenanceWorkOrder[]
+  spareParts            SparePart[]
 
   @@index([status])
   @@map("clients")
@@ -919,10 +920,14 @@ model MaintenanceWorkOrderChecklistItem {
 // (Product/InventoryMovement) usado para vender material eletrico aos clientes.
 // ---------------------------------------------------------------------------
 
+// Almoxarifado e' do proprio cliente (nao um estoque unico da OptiProcess) - cada
+// empresa cadastra e gerencia as pecas dela, sem ver o que outro cliente tem.
 model SparePart {
   id          String    @id @default(uuid())
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id])
   name        String
-  code        String?   @unique
+  code        String?
   category    String?
   unit        String    @default("un")
   stockQty    Int       @default(0)
@@ -936,6 +941,7 @@ model SparePart {
   movements  SparePartMovement[]
   assetLinks AssetPart[]
 
+  @@index([clientId])
   @@index([active])
   @@map("spare_parts")
 }

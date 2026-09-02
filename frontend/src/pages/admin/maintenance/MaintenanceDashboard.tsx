@@ -47,7 +47,7 @@ export default function MaintenanceDashboard() {
         <Link to="/gestao/manutencao/falhas" className="btn-outline">
           <ListChecks className="h-4 w-4" /> Codigos de falha
         </Link>
-        <Link to="/gestao/manutencao/almoxarifado" className="btn-outline">
+        <Link to={`/gestao/manutencao/almoxarifado${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <Boxes className="h-4 w-4" /> Almoxarifado
         </Link>
       </div>

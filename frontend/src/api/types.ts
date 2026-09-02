@@ -525,6 +525,8 @@ export interface SparePartMovement {
 
 export interface SparePart {
   id: string;
+  clientId: string;
+  client?: ClientRef;
   name: string;
   code: string | null;
   category: string | null;

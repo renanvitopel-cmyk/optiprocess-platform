@@ -35,6 +35,9 @@ export default function MaintenanceDashboard() {
             <option key={c.id} value={c.id}>{clientDisplayName(c)}</option>
           ))}
         </select>
+        <Link to={`/gestao/instrumentos${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+          <Gauge className="h-4 w-4" /> Ativos
+        </Link>
         <Link to={`/gestao/manutencao/planos${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <ShieldCheck className="h-4 w-4" /> Planos de manutencao
         </Link>

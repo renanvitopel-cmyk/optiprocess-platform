@@ -7,6 +7,7 @@ import { z } from "zod";
 import { PageHeader } from "../../../components/PageHeader";
 import { TextInput, TextareaInput, SelectInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
+import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
 import { createServiceOrder, getServiceOrder, updateServiceOrder } from "../../../api/serviceOrders";
 import { useToast } from "../../../components/Toast";
@@ -26,6 +27,7 @@ const CATEGORY_OPTIONS = [
 
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
+  instrumentId: z.string().uuid().optional().or(z.literal("")),
   siteAddress: z.string().min(2, "Informe o local de atendimento."),
   category: z.enum([
     "ELECTRICAL_MAINTENANCE",
@@ -59,15 +61,21 @@ export default function ServiceOrderForm() {
     enabled: isEdit,
   });
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { clientId: searchParams.get("clientId") ?? "", status: "BUDGET" },
+    defaultValues: {
+      clientId: searchParams.get("clientId") ?? "",
+      instrumentId: searchParams.get("instrumentId") ?? "",
+      status: "BUDGET",
+    },
   });
+  const clientId = watch("clientId");
 
   useEffect(() => {
     if (existing) {
       reset({
         clientId: existing.clientId,
+        instrumentId: existing.instrumentId ?? "",
         siteAddress: existing.siteAddress,
         category: existing.category,
         description: existing.description,
@@ -82,7 +90,7 @@ export default function ServiceOrderForm() {
 
   async function onSubmit(values: FormValues) {
     try {
-      const payload = { ...values, technicianId: values.technicianId || null };
+      const payload = { ...values, technicianId: values.technicianId || null, instrumentId: values.instrumentId || null };
       const saved = isEdit ? await updateServiceOrder(id!, payload) : await createServiceOrder(payload);
       notify("success", isEdit ? "OS atualizada." : "OS criada.");
       navigate(`/gestao/ordens-servico/${saved.id}`);
@@ -102,6 +110,12 @@ export default function ServiceOrderForm() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="card max-w-3xl space-y-4 p-5" noValidate>
         <ClientPicker required error={errors.clientId?.message} {...register("clientId")} />
+        <InstrumentPicker
+          label="Ativo relacionado (opcional)"
+          clientId={clientId}
+          error={errors.instrumentId?.message}
+          {...register("instrumentId")}
+        />
         <TextInput label="Local de atendimento" required error={errors.siteAddress?.message} {...register("siteAddress")} />
         <div className="grid gap-4 sm:grid-cols-2">
           <SelectInput label="Tipo de servico" required options={CATEGORY_OPTIONS} error={errors.category?.message} {...register("category")} />

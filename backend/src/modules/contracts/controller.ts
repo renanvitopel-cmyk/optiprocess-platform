@@ -4,10 +4,19 @@ import { ContractPeriodicity, ContractStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
-import { NotFoundError } from "../../utils/errors";
+import { ForbiddenError, NotFoundError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter } from "../../middleware/rbac";
+import { clientScopeFilter, contractedServicesFilter } from "../../middleware/rbac";
 import { deriveDueStatus } from "../../utils/status";
+
+/** Contratos nao tem uma categoria propria: liberado no portal para quem contratou
+ * qualquer servico (ficha de cliente sem nenhum servico marcado nao ve esta area). */
+async function assertHasAnyContractedService(req: import("express").Request): Promise<void> {
+  const services = await contractedServicesFilter(req);
+  if (services !== null && services.length === 0) {
+    throw new ForbiddenError("Nenhum servico liberado para o seu acesso no portal.");
+  }
+}
 
 function withDerivedStatus<T extends { status: ContractStatus; endDate: Date | null }>(contract: T) {
   if (contract.status === "CANCELED") return { ...contract, derivedStatus: "CANCELED" as const };
@@ -15,6 +24,7 @@ function withDerivedStatus<T extends { status: ContractStatus; endDate: Date | n
 }
 
 export const listContracts = asyncHandler(async (req: Request, res: Response) => {
+  await assertHasAnyContractedService(req);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
   const { clientId, status } = req.query as { clientId?: string; status?: ContractStatus };
 
@@ -42,6 +52,7 @@ export const listContracts = asyncHandler(async (req: Request, res: Response) =>
 });
 
 export const getContract = asyncHandler(async (req: Request, res: Response) => {
+  await assertHasAnyContractedService(req);
   const contract = await prisma.serviceContract.findFirst({
     where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
     include: {

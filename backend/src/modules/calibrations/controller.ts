@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter } from "../../middleware/rbac";
+import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
 import { nextDocumentNumber } from "../../utils/sequence";
 import { computeNextDueDate } from "../../utils/status";
 import { generateCertificateQrCode } from "../../lib/qrcode";
@@ -33,6 +33,7 @@ async function listCalibrationAttachments(calibrationId: string) {
 }
 
 export const listCalibrations = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
   const { clientId, instrumentId, search, includeSuperseded, dateFrom, dateTo, result } = req.query as {
     clientId?: string;
@@ -84,6 +85,7 @@ export const listCalibrations = asyncHandler(async (req: Request, res: Response)
 });
 
 export const getCalibration = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const isClientUser = req.user?.role === "CLIENT";
   const calibration = await prisma.calibration.findFirst({
     where: {
@@ -101,6 +103,7 @@ export const getCalibration = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const getCalibrationHistory = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const current = await prisma.calibration.findFirst({
     where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
   });
@@ -535,6 +538,7 @@ export const uploadCalibrationAttachment = asyncHandler(async (req: Request, res
 });
 
 export const listCalibrationAttachmentsRoute = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const isClientUser = req.user?.role === "CLIENT";
   const calibration = await prisma.calibration.findFirst({
     where: {
@@ -570,6 +574,7 @@ export const deleteCalibrationAttachment = asyncHandler(async (req: Request, res
 
 /** Link assinado de qualquer anexo da calibracao, respeitando o escopo do cliente. */
 export const getCalibrationAttachmentUrl = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const isClientUser = req.user?.role === "CLIENT";
   const calibration = await prisma.calibration.findFirst({
     where: {
@@ -592,6 +597,7 @@ export const getCalibrationAttachmentUrl = asyncHandler(async (req: Request, res
 });
 
 export const getCalibrationPdfUrl = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const isClientUser = req.user?.role === "CLIENT";
   const calibration = await prisma.calibration.findFirst({
     where: {

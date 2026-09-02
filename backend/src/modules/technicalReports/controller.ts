@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter } from "../../middleware/rbac";
+import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
 import { nextDocumentNumber } from "../../utils/sequence";
 import { getStorageProvider } from "../../lib/storage";
 
@@ -17,6 +17,7 @@ const detailInclude = {
 };
 
 export const listTechnicalReports = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["TECHNICAL_REPORT"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
   const { clientId, category, search } = req.query as {
     clientId?: string;
@@ -48,6 +49,7 @@ export const listTechnicalReports = asyncHandler(async (req: Request, res: Respo
 });
 
 export const getTechnicalReport = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["TECHNICAL_REPORT"]);
   const isClientUser = req.user?.role === "CLIENT";
   const report = await prisma.technicalReport.findFirst({
     where: {
@@ -205,6 +207,7 @@ export const uploadTechnicalReportPdf = asyncHandler(async (req: Request, res: R
 });
 
 export const getTechnicalReportPdfUrl = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["TECHNICAL_REPORT"]);
   const isClientUser = req.user?.role === "CLIENT";
   const report = await prisma.technicalReport.findFirst({
     where: {

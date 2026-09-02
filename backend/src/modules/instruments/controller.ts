@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { NotFoundError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter } from "../../middleware/rbac";
+import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
 import { deriveDueStatus, computeNextDueDate } from "../../utils/status";
 
 function withDerivedStatus<T extends { status: InstrumentStatus; nextDueDate: Date | null }>(instrument: T) {
@@ -15,6 +15,7 @@ function withDerivedStatus<T extends { status: InstrumentStatus; nextDueDate: Da
 }
 
 export const listInstruments = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
   const { clientId, search, status } = req.query as { clientId?: string; search?: string; status?: InstrumentStatus };
 
@@ -49,6 +50,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const getInstrument = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const instrument = await prisma.instrument.findFirst({
     where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
     include: {

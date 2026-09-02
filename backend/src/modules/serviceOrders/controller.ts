@@ -6,30 +6,40 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { NotFoundError, ForbiddenError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter } from "../../middleware/rbac";
+import { clientScopeFilter, contractedServicesFilter } from "../../middleware/rbac";
 import { nextDocumentNumber } from "../../utils/sequence";
 
 const detailInclude = {
   client: { select: { id: true, companyName: true, tradeName: true } },
   technician: { select: { id: true, name: true } },
+  instrument: { select: { id: true, type: true, model: true, serialNumber: true, tag: true } },
   items: true,
 };
 
 export const listServiceOrders = asyncHandler(async (req: Request, res: Response) => {
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
-  const { clientId, status, technicianId, search } = req.query as {
+  const { clientId, instrumentId, status, technicianId, search } = req.query as {
     clientId?: string;
+    instrumentId?: string;
     status?: ServiceOrderStatus;
     technicianId?: string;
     search?: string;
   };
 
+  // Ordens de servico nao tem uma unica categoria de modulo: cada OS carrega a
+  // propria categoria, entao o portal filtra linha a linha pelos servicos contratados
+  // em vez de bloquear o modulo inteiro (uma OS de calibracao pode aparecer mesmo
+  // que o cliente nao tenha contratado manutencao eletrica, por exemplo).
+  const contractedServices = await contractedServicesFilter(req);
+
   const where = {
     deletedAt: null,
     ...clientScopeFilter(req),
     ...(clientId ? { clientId } : {}),
+    ...(instrumentId ? { instrumentId } : {}),
     ...(status ? { status } : {}),
     ...(technicianId ? { technicianId } : {}),
+    ...(contractedServices !== null ? { category: { in: contractedServices } } : {}),
     ...(search ? { number: { contains: search, mode: "insensitive" as const } } : {}),
   };
 
@@ -41,6 +51,7 @@ export const listServiceOrders = asyncHandler(async (req: Request, res: Response
       include: {
         client: { select: { id: true, companyName: true, tradeName: true } },
         technician: { select: { id: true, name: true } },
+        instrument: { select: { id: true, type: true, model: true, serialNumber: true, tag: true } },
       },
     }),
     prisma.serviceOrder.count({ where }),
@@ -50,8 +61,14 @@ export const listServiceOrders = asyncHandler(async (req: Request, res: Response
 });
 
 export const getServiceOrder = asyncHandler(async (req: Request, res: Response) => {
+  const contractedServices = await contractedServicesFilter(req);
   const order = await prisma.serviceOrder.findFirst({
-    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    where: {
+      id: req.params.id,
+      deletedAt: null,
+      ...clientScopeFilter(req),
+      ...(contractedServices !== null ? { category: { in: contractedServices } } : {}),
+    },
     include: detailInclude,
   });
   if (!order) throw new NotFoundError("Ordem de servico");
@@ -60,6 +77,7 @@ export const getServiceOrder = asyncHandler(async (req: Request, res: Response) 
 
 const serviceOrderSchema = z.object({
   clientId: z.string().uuid(),
+  instrumentId: z.string().uuid().nullish(),
   siteAddress: z.string().min(2),
   category: z.nativeEnum(ServiceCategory),
   description: z.string().min(2),

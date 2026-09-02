@@ -1,19 +1,41 @@
 import type { LucideIcon } from "lucide-react";
 import { LayoutDashboard, Gauge, BadgeCheck, FileWarning, ClipboardList, FileSignature, ShoppingCart, User } from "lucide-react";
+import type { ServiceCategory } from "../api/types";
 
 export interface PortalNavItem {
   to: string;
   label: string;
   icon: LucideIcon;
+  /** Servicos que liberam este item; omitido = sempre visivel (dashboard, pedidos, perfil). */
+  requires?: ServiceCategory[];
 }
 
-export const PORTAL_NAV: PortalNavItem[] = [
+const PORTAL_NAV_ITEMS: PortalNavItem[] = [
   { to: "/portal", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/portal/instrumentos", label: "Meus instrumentos", icon: Gauge },
-  { to: "/portal/certificados", label: "Meus certificados", icon: BadgeCheck },
-  { to: "/portal/laudos", label: "Meus laudos", icon: FileWarning },
-  { to: "/portal/ordens-servico", label: "Minhas ordens de servico", icon: ClipboardList },
-  { to: "/portal/contratos", label: "Meus contratos", icon: FileSignature },
+  { to: "/portal/instrumentos", label: "Meus instrumentos", icon: Gauge, requires: ["CALIBRATION"] },
+  { to: "/portal/certificados", label: "Meus certificados", icon: BadgeCheck, requires: ["CALIBRATION"] },
+  { to: "/portal/laudos", label: "Meus laudos", icon: FileWarning, requires: ["TECHNICAL_REPORT"] },
+  {
+    to: "/portal/ordens-servico",
+    label: "Minhas ordens de servico",
+    icon: ClipboardList,
+    requires: [
+      "ELECTRICAL_MAINTENANCE",
+      "PANEL_MAINTENANCE",
+      "MOTOR_MAINTENANCE",
+      "TECHNICAL_REPORT",
+      "CALIBRATION",
+      "TECHNICAL_ASSISTANCE",
+      "EV_CHARGER",
+      "OTHER",
+    ],
+  },
+  { to: "/portal/contratos", label: "Meus contratos", icon: FileSignature, requires: ["ELECTRICAL_MAINTENANCE", "PANEL_MAINTENANCE", "MOTOR_MAINTENANCE", "TECHNICAL_REPORT", "CALIBRATION", "TECHNICAL_ASSISTANCE", "EV_CHARGER", "OTHER"] },
   { to: "/portal/pedidos", label: "Meus pedidos e orcamentos", icon: ShoppingCart },
   { to: "/portal/perfil", label: "Meu perfil", icon: User },
 ];
+
+/** Filtra o menu do portal pelas areas de servico que o cliente contratou. */
+export function getPortalNav(contractedServices: ServiceCategory[]): PortalNavItem[] {
+  return PORTAL_NAV_ITEMS.filter((item) => !item.requires || item.requires.some((c) => contractedServices.includes(c)));
+}

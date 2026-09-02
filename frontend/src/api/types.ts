@@ -6,7 +6,15 @@ export interface AuthUser {
   email: string;
   role: Role;
   clientId: string | null;
-  client: { id: string; companyName: string; tradeName: string | null } | null;
+  client: { id: string; companyName: string; tradeName: string | null; contractedServices: ServiceCategory[] } | null;
+}
+
+export interface PortalUserRef {
+  id: string;
+  name: string;
+  email: string;
+  active: boolean;
+  lastLoginAt: string | null;
 }
 
 export type ClientStatus = "ACTIVE" | "INACTIVE" | "PROSPECT";
@@ -51,6 +59,8 @@ export interface Client {
   notes: string | null;
   createdAt: string;
   contacts?: ClientContact[];
+  /** Usuarios de portal (role CLIENT) ja vinculados a esta empresa. */
+  users?: PortalUserRef[];
   _count?: { instruments: number; serviceOrders: number; contracts: number; calibrations?: number; orders?: number };
 }
 
@@ -77,11 +87,21 @@ export interface ServiceOrderItem {
   unit: string | null;
 }
 
+export interface InstrumentRef {
+  id: string;
+  type: string;
+  model: string;
+  serialNumber: string;
+  tag: string | null;
+}
+
 export interface ServiceOrder {
   id: string;
   number: string;
   clientId: string;
   client?: ClientRef;
+  instrumentId: string | null;
+  instrument?: InstrumentRef | null;
   siteAddress: string;
   category: ServiceCategory;
   description: string;

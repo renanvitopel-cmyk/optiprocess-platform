@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { deleteInstrument, getInstrument } from "../../../api/instruments";
+import { listServiceOrders } from "../../../api/serviceOrders";
 import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -11,7 +12,7 @@ import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { useAuth } from "../../../auth/AuthContext";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
-import { clientDisplayName, formatDate } from "../../../lib/format";
+import { clientDisplayName, formatDate, formatServiceCategory } from "../../../lib/format";
 import { EmptyState } from "../../../components/EmptyState";
 
 export default function InstrumentDetail() {
@@ -27,6 +28,11 @@ export default function InstrumentDetail() {
   const [deleting, setDeleting] = useState(false);
 
   const { data: instrument, isLoading } = useQuery({ queryKey: ["instrument", id], queryFn: () => getInstrument(id) });
+  const { data: serviceOrders } = useQuery({
+    queryKey: ["instrument-service-orders", id],
+    queryFn: () => listServiceOrders({ instrumentId: id, pageSize: 20 }),
+    enabled: !!id,
+  });
 
   async function handleDelete() {
     setDeleting(true);
@@ -80,32 +86,62 @@ export default function InstrumentDetail() {
           </dl>
         </div>
 
-        <div className="card p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-semibold text-navy-900">Historico de calibracoes</h2>
-            {canManage && (
-              <Link to={`/gestao/calibracoes/novo?instrumentId=${instrument.id}&clientId=${instrument.clientId}`} className="btn-ghost btn-sm">
-                <Plus className="h-4 w-4" /> Nova
-              </Link>
+        <div className="space-y-6">
+          <div className="card p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-semibold text-navy-900">Historico de calibracoes</h2>
+              {canManage && (
+                <Link to={`/gestao/calibracoes/novo?instrumentId=${instrument.id}&clientId=${instrument.clientId}`} className="btn-ghost btn-sm">
+                  <Plus className="h-4 w-4" /> Nova
+                </Link>
+              )}
+            </div>
+            {!instrument.calibrations || instrument.calibrations.length === 0 ? (
+              <EmptyState title="Nenhuma calibracao" description="Este instrumento ainda nao possui certificados." />
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {instrument.calibrations.map((c) => (
+                  <li key={c.id}>
+                    <Link to={`/gestao/calibracoes/${c.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
+                      <div>
+                        <p className="font-medium text-graphite-800">{c.certificateNumber}</p>
+                        <p className="text-xs text-graphite-400">{formatDate(c.calibrationDate)}</p>
+                      </div>
+                      <StatusBadge status={c.status} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-          {!instrument.calibrations || instrument.calibrations.length === 0 ? (
-            <EmptyState title="Nenhuma calibracao" description="Este instrumento ainda nao possui certificados." />
-          ) : (
-            <ul className="divide-y divide-gray-100">
-              {instrument.calibrations.map((c) => (
-                <li key={c.id}>
-                  <Link to={`/gestao/calibracoes/${c.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
-                    <div>
-                      <p className="font-medium text-graphite-800">{c.certificateNumber}</p>
-                      <p className="text-xs text-graphite-400">{formatDate(c.calibrationDate)}</p>
-                    </div>
-                    <StatusBadge status={c.status} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+
+          <div className="card p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-semibold text-navy-900">Servicos neste ativo</h2>
+              {canManage && (
+                <Link to={`/gestao/ordens-servico/novo?instrumentId=${instrument.id}&clientId=${instrument.clientId}`} className="btn-ghost btn-sm">
+                  <Plus className="h-4 w-4" /> Nova
+                </Link>
+              )}
+            </div>
+            {!serviceOrders || serviceOrders.items.length === 0 ? (
+              <EmptyState title="Nenhum servico" description="Nenhuma ordem de servico vinculada a este ativo ainda." />
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {serviceOrders.items.map((o) => (
+                  <li key={o.id}>
+                    <Link to={`/gestao/ordens-servico/${o.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
+                      <div>
+                        <p className="font-medium text-graphite-800">{o.number} - {formatServiceCategory(o.category)}</p>
+                        <p className="text-xs text-graphite-400">{o.scheduledDate ? formatDate(o.scheduledDate) : "Sem data agendada"}</p>
+                      </div>
+                      <StatusBadge status={o.status} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
 

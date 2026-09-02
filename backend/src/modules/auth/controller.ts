@@ -27,7 +27,7 @@ function serializeUser(user: {
   email: string;
   role: string;
   clientId: string | null;
-  client: { id: string; companyName: string; tradeName: string | null } | null;
+  client: { id: string; companyName: string; tradeName: string | null; contractedServices: string[] } | null;
 }) {
   return {
     id: user.id,
@@ -44,7 +44,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 
   const user = await prisma.user.findUnique({
     where: { email: email.toLowerCase() },
-    include: { client: { select: { id: true, companyName: true, tradeName: true } } },
+    include: { client: { select: { id: true, companyName: true, tradeName: true, contractedServices: true } } },
   });
 
   if (!user || !user.active || user.deletedAt) {
@@ -113,7 +113,7 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
 
   const user = await prisma.user.findUnique({
     where: { id: req.user.sub },
-    include: { client: { select: { id: true, companyName: true, tradeName: true } } },
+    include: { client: { select: { id: true, companyName: true, tradeName: true, contractedServices: true } } },
   });
 
   if (!user || !user.active || user.deletedAt) throw new UnauthorizedError();

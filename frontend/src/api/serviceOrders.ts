@@ -6,6 +6,7 @@ export interface ListServiceOrdersParams {
   page?: number;
   pageSize?: number;
   clientId?: string;
+  instrumentId?: string;
   status?: ServiceOrderStatus;
   technicianId?: string;
   search?: string;
@@ -22,7 +23,7 @@ export async function getServiceOrder(id: string): Promise<ServiceOrder> {
 }
 
 export type ServiceOrderInput = Partial<
-  Omit<ServiceOrder, "id" | "number" | "createdAt" | "items" | "client" | "technician" | "clientApprovedAt">
+  Omit<ServiceOrder, "id" | "number" | "createdAt" | "items" | "client" | "technician" | "instrument" | "clientApprovedAt">
 >;
 
 export async function createServiceOrder(input: ServiceOrderInput): Promise<ServiceOrder> {

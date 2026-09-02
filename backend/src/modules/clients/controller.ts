@@ -60,6 +60,13 @@ export const getClient = asyncHandler(async (req: Request, res: Response) => {
     where: { id: req.params.id, deletedAt: null },
     include: {
       contacts: true,
+      // Usuarios de portal (role CLIENT) vinculados a esta empresa - a ficha usa isto
+      // para mostrar se o acesso ja foi liberado e para quem.
+      users: {
+        where: { deletedAt: null },
+        select: { id: true, name: true, email: true, active: true, lastLoginAt: true },
+        orderBy: { createdAt: "asc" },
+      },
       _count: {
         select: { instruments: true, serviceOrders: true, contracts: true, calibrations: true, orders: true },
       },

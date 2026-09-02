@@ -2,17 +2,18 @@ import { useState } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
 import { Menu, X, LogOut } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
-import { PORTAL_NAV } from "./portalNav";
+import { getPortalNav } from "./portalNav";
 import { clientDisplayName } from "../lib/format";
 import { Logo } from "../components/Logo";
 
 export function ClientPortalLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, logout } = useAuth();
+  const portalNav = getPortalNav(user?.client?.contractedServices ?? []);
 
   const nav = (
     <nav className="flex flex-col gap-0.5 px-3 py-4">
-      {PORTAL_NAV.map((item) => (
+      {portalNav.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}

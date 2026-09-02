@@ -300,6 +300,10 @@ model ServiceOrder {
   number           String              @unique
   clientId         String
   client           Client              @relation(fields: [clientId], references: [id])
+  // Ativo (instrumento) ao qual este servico se refere, quando aplicavel - permite
+  // ver, na ficha do ativo, o historico de servicos alem das calibracoes.
+  instrumentId     String?
+  instrument       Instrument?         @relation(fields: [instrumentId], references: [id])
   siteAddress      String
   category         ServiceCategory
   description      String
@@ -319,6 +323,7 @@ model ServiceOrder {
   calibrations Calibration[]
 
   @@index([clientId])
+  @@index([instrumentId])
   @@index([technicianId])
   @@index([status])
   @@map("service_orders")
@@ -365,7 +370,8 @@ model Instrument {
   updatedAt                  DateTime          @updatedAt
   deletedAt                  DateTime?
 
-  calibrations Calibration[]
+  calibrations  Calibration[]
+  serviceOrders ServiceOrder[]
 
   @@index([clientId])
   @@index([status])

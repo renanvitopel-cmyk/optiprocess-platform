@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
-import type { Role } from "@prisma/client";
+import type { Role, ServiceCategory } from "@prisma/client";
+import { prisma } from "../lib/prisma";
 import { ForbiddenError, UnauthorizedError } from "../utils/errors";
 
 /** Restringe a rota a um conjunto de papeis. Use depois de requireAuth. */
@@ -44,3 +45,32 @@ export function clientScopeFilter(req: Request): { clientId?: string } {
 }
 
 export const CLIENT_PORTAL_ROLES: Role[] = ["ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT"];
+
+/**
+ * Servicos que a empresa do usuario CLIENT contratou (campo Client.contractedServices),
+ * usado para liberar cada area do portal (instrumentos/certificados, laudos, contratos,
+ * ordens de servico) apenas para quem de fato contratou aquele servico. Para a equipe
+ * interna (ADMIN/TECHNICIAN/COMMERCIAL) retorna null, que significa "sem restricao".
+ * Consulta sempre o banco (nao o JWT) para refletir na hora qualquer mudanca feita
+ * pelo admin na ficha do cliente.
+ */
+export async function contractedServicesFilter(req: Request): Promise<ServiceCategory[] | null> {
+  if (req.user?.role !== "CLIENT") return null;
+  if (!req.user.clientId) throw new ForbiddenError();
+
+  const client = await prisma.client.findUnique({
+    where: { id: req.user.clientId },
+    select: { contractedServices: true },
+  });
+  if (!client) throw new ForbiddenError();
+  return client.contractedServices;
+}
+
+/** Bloqueia o acesso quando o cliente nao contratou nenhum dos servicos informados. */
+export async function assertServiceAccess(req: Request, allowed: ServiceCategory[]): Promise<void> {
+  const services = await contractedServicesFilter(req);
+  if (services === null) return; // equipe interna: sem restricao
+  if (!allowed.some((c) => services.includes(c))) {
+    throw new ForbiddenError("Este servico nao esta liberado para o seu acesso no portal.");
+  }
+}

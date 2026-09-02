@@ -1,18 +1,19 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2, Gauge, ClipboardList, FileSignature, Star } from "lucide-react";
+import { Pencil, Trash2, Gauge, ClipboardList, FileSignature, Star, KeyRound, UserPlus } from "lucide-react";
 import { deleteClient, getClient } from "../../../api/clients";
 import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { ClientFormModal } from "./ClientFormModal";
 import { ClientContactsCard } from "./ClientContactsCard";
+import { ClientPortalAccessModal } from "./ClientPortalAccessModal";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { useAuth } from "../../../auth/AuthContext";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
-import { formatServiceCategory } from "../../../lib/format";
+import { formatServiceCategory, formatDateTime } from "../../../lib/format";
 
 export default function ClientDetail() {
   const { id = "" } = useParams<{ id: string }>();
@@ -25,6 +26,7 @@ export default function ClientDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [portalAccessOpen, setPortalAccessOpen] = useState(false);
 
   const { data: client, isLoading } = useQuery({ queryKey: ["client", id], queryFn: () => getClient(id) });
 
@@ -116,9 +118,59 @@ export default function ClientDetail() {
             </div>
           </div>
 
+          <div className={`card p-5 ${(client.users?.length ?? 0) === 0 ? "border-2 border-safety-yellow bg-yellow-50/40" : ""}`}>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-semibold text-navy-900">Portal do cliente</h2>
+              {canManage && (
+                <button className="btn-primary btn-sm" onClick={() => setPortalAccessOpen(true)}>
+                  <UserPlus className="h-4 w-4" /> {(client.users?.length ?? 0) === 0 ? "Liberar acesso" : "Adicionar acesso"}
+                </button>
+              )}
+            </div>
+            {!client.users || client.users.length === 0 ? (
+              <p className="text-sm text-graphite-600">
+                Esta empresa ainda nao tem login no portal. Libere o acesso para que ela veja, pela area dos servicos
+                contratados, seus instrumentos, certificados, laudos, OS e contratos.
+              </p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {client.users.map((u) => (
+                  <li key={u.id} className="flex items-center justify-between gap-2 py-2.5 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-graphite-800">{u.name}</p>
+                      <p className="truncate text-xs text-graphite-400">{u.email}</p>
+                      <p className="truncate text-xs text-graphite-400">
+                        {u.lastLoginAt ? `Ultimo acesso: ${formatDateTime(u.lastLoginAt)}` : "Nunca acessou"}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <StatusBadge status={u.active ? "ACTIVE" : "INACTIVE"} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {client.contractedServices.length === 0 && (
+              <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-700">
+                <KeyRound className="h-3.5 w-3.5 shrink-0" /> Nenhum servico contratado marcado: o portal ficara vazio
+                ate voce marcar ao menos um em "Editar".
+              </p>
+            )}
+          </div>
+
           <ClientContactsCard clientId={id} contacts={client.contacts ?? []} canManage={!!canManage} />
         </div>
       </div>
+
+      <ClientPortalAccessModal
+        open={portalAccessOpen}
+        onClose={() => setPortalAccessOpen(false)}
+        client={client}
+        onCreated={() => {
+          setPortalAccessOpen(false);
+          queryClient.invalidateQueries({ queryKey: ["client", id] });
+        }}
+      />
 
       <ClientFormModal
         open={editOpen}

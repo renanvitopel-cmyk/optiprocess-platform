@@ -8,7 +8,7 @@ import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
 import { deriveDueStatus, computeNextDueDateFromDays } from "../../utils/status";
-import { nextDocumentNumber } from "../../utils/sequence";
+import { nextClientMaintenanceOrderNumber } from "../../utils/sequence";
 
 const detailInclude = {
   client: { select: { id: true, companyName: true, tradeName: true } },
@@ -200,7 +200,7 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
   if (!plan) throw new NotFoundError("Plano de manutencao");
   if (!plan.active) throw new ValidationError("Plano inativo nao pode gerar ordem de manutencao.");
 
-  const number = await nextDocumentNumber("maintenanceWorkOrder");
+  const number = await nextClientMaintenanceOrderNumber(plan.clientId);
 
   const workOrder = await prisma.maintenanceWorkOrder.create({
     data: {
@@ -232,7 +232,7 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
     action: "CREATE",
     entityType: "MaintenanceWorkOrder",
     entityId: workOrder.id,
-    description: `OM ${workOrder.number} gerada a partir do plano "${plan.name}"`,
+    description: `OS ${workOrder.number} gerada a partir do plano "${plan.name}"`,
   });
 
   res.status(201).json(workOrder);

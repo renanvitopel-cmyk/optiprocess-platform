@@ -6,7 +6,6 @@ const PREFIXES = {
   technicalReport: "LAU",
   quote: "ORC",
   order: "PED",
-  maintenanceWorkOrder: "OM",
 } as const;
 
 type SequenceKind = keyof typeof PREFIXES;
@@ -24,4 +23,22 @@ export async function nextDocumentNumber(kind: SequenceKind, date: Date = new Da
 
   const sequence = String(counter.value).padStart(6, "0");
   return `${PREFIXES[kind]}-${year}-${sequence}`;
+}
+
+/**
+ * Numeracao propria por cliente para as ordens de manutencao do CMMS ("OS-1", "OS-2"...) -
+ * cada empresa comeca do 1, sem reiniciar por ano. Numeros podem se repetir entre clientes
+ * diferentes (por isso a unicidade em MaintenanceWorkOrder e' [clientId, number], nao global);
+ * o admin sempre ve o numero no contexto do cliente selecionado.
+ */
+export async function nextClientMaintenanceOrderNumber(clientId: string): Promise<string> {
+  const counterKey = `maintenanceWorkOrder:${clientId}`;
+
+  const counter = await prisma.counter.upsert({
+    where: { key: counterKey },
+    create: { key: counterKey, value: 1 },
+    update: { value: { increment: 1 } },
+  });
+
+  return `OS-${counter.value}`;
 }

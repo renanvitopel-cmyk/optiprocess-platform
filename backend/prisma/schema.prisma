@@ -858,7 +858,9 @@ model MaintenancePlanChecklistItem {
 // Ordem de Manutencao ("OM") - entidade propria do CMMS, separada de ServiceOrder.
 model MaintenanceWorkOrder {
   id           String                 @id @default(uuid())
-  number       String                 @unique
+  // Numeracao propria por cliente ("OS-1", "OS-2"...) em vez de sequencia global -
+  // por isso unico so dentro do cliente, nao globalmente.
+  number       String
   clientId     String
   client       Client                 @relation(fields: [clientId], references: [id])
   instrumentId String
@@ -888,6 +890,7 @@ model MaintenanceWorkOrder {
   checklist MaintenanceWorkOrderChecklistItem[]
   partsUsed InventoryMovement[]
 
+  @@unique([clientId, number])
   @@index([clientId])
   @@index([instrumentId])
   @@index([planId])

@@ -87,7 +87,7 @@ export default function WorkOrderForm() {
         checklist: values.checklist.filter((c) => c.description.trim()),
       };
       const saved = isEdit ? await updateMaintenanceWorkOrder(id!, payload) : await createMaintenanceWorkOrder(payload);
-      notify("success", isEdit ? "OM atualizada." : "OM criada.");
+      notify("success", isEdit ? "OS atualizada." : "OS criada.");
       navigate(`/gestao/manutencao/ordens/${saved.id}`);
     } catch (error) {
       notify("error", getApiErrorMessage(error));
@@ -99,7 +99,7 @@ export default function WorkOrderForm() {
   return (
     <div>
       <PageHeader
-        title={isEdit ? `Editar OM ${existing?.number ?? ""}` : "Nova ordem de manutencao"}
+        title={isEdit ? `Editar OS ${existing?.number ?? ""}` : "Nova ordem de manutencao"}
         breadcrumbs={[
           { label: "RLP Maintenance CMMS", to: "/gestao/manutencao" },
           { label: "Ordens", to: "/gestao/manutencao/ordens" },

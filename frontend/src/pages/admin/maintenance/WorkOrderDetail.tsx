@@ -57,7 +57,7 @@ export default function WorkOrderDetail() {
     setDeleting(true);
     try {
       await deleteMaintenanceWorkOrder(id);
-      notify("success", "OM removida.");
+      notify("success", "OS removida.");
       navigate("/gestao/manutencao/ordens");
     } catch (error) {
       notify("error", getApiErrorMessage(error));
@@ -70,7 +70,7 @@ export default function WorkOrderDetail() {
     setBusy(true);
     try {
       await startMaintenanceWorkOrder(id);
-      notify("success", "OM iniciada.");
+      notify("success", "OS iniciada.");
       invalidate();
     } catch (error) {
       notify("error", getApiErrorMessage(error));
@@ -83,7 +83,7 @@ export default function WorkOrderDetail() {
     setBusy(true);
     try {
       await completeMaintenanceWorkOrder(id);
-      notify("success", "OM concluida.");
+      notify("success", "OS concluida.");
       invalidate();
     } catch (error) {
       notify("error", getApiErrorMessage(error));
@@ -276,7 +276,7 @@ export default function WorkOrderDetail() {
       <ConfirmDialog
         open={confirmDelete}
         title="Remover ordem de manutencao"
-        description="Tem certeza que deseja remover esta OM?"
+        description="Tem certeza que deseja remover esta OS?"
         confirmLabel="Remover"
         danger
         loading={deleting}

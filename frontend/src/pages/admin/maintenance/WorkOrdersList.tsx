@@ -37,12 +37,12 @@ export default function WorkOrdersList() {
     <div>
       <PageHeader
         title="Ordens de manutencao"
-        description="OMs preventivas e corretivas"
+        description="OS preventivas e corretivas"
         breadcrumbs={[{ label: "RLP Maintenance CMMS", to: "/gestao/manutencao" }, { label: "Ordens" }]}
         actions={
           canManage && (
             <button className="btn-primary" onClick={() => navigate("/gestao/manutencao/ordens/novo")}>
-              <Plus className="h-4 w-4" /> Nova OM
+              <Plus className="h-4 w-4" /> Nova OS
             </button>
           )
         }

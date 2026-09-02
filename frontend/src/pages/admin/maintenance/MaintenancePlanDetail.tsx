@@ -43,7 +43,7 @@ export default function MaintenancePlanDetail() {
     setGenerating(true);
     try {
       const workOrder = await generateWorkOrderFromPlan(id);
-      notify("success", `OM ${workOrder.number} gerada.`);
+      notify("success", `OS ${workOrder.number} gerada.`);
       navigate(`/gestao/manutencao/ordens/${workOrder.id}`);
     } catch (error) {
       notify("error", getApiErrorMessage(error));
@@ -71,7 +71,7 @@ export default function MaintenancePlanDetail() {
             <>
               {due && plan.active && (
                 <button className="btn-primary" onClick={handleGenerate} disabled={generating}>
-                  <PlayCircle className="h-4 w-4" /> {generating ? "Gerando..." : "Gerar OM"}
+                  <PlayCircle className="h-4 w-4" /> {generating ? "Gerando..." : "Gerar OS"}
                 </button>
               )}
               <button className="btn-outline" onClick={() => navigate(`/gestao/manutencao/planos/${id}/editar`)}>
@@ -115,7 +115,7 @@ export default function MaintenancePlanDetail() {
         <div className="card p-5">
           <h2 className="mb-3 font-semibold text-navy-900">Ordens geradas</h2>
           {!plan.workOrders || plan.workOrders.length === 0 ? (
-            <EmptyState title="Nenhuma OM gerada" description="Ainda nao foi gerada nenhuma ordem a partir deste plano." />
+            <EmptyState title="Nenhuma OS gerada" description="Ainda nao foi gerada nenhuma ordem a partir deste plano." />
           ) : (
             <ul className="divide-y divide-gray-100">
               {plan.workOrders.map((w) => (

@@ -160,7 +160,7 @@ export default function MaintenancePlanForm() {
                 type="number"
                 step="any"
                 required
-                hint="Gera nova OM a cada X unidades do medidor."
+                hint="Gera nova OS a cada X unidades do medidor."
                 error={errors.meterInterval?.message}
                 {...register("meterInterval")}
               />

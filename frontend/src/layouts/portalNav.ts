@@ -12,6 +12,9 @@ export interface PortalNavItem {
 
 const PORTAL_NAV_ITEMS: PortalNavItem[] = [
   { to: "/portal", label: "Dashboard", icon: LayoutDashboard },
+  // Quem contrata o CMMS tem ele como o programa principal: fica logo apos o Dashboard
+  // (que ja mostra o CMMS como conteudo central para esse cliente), o resto vira incremento.
+  { to: "/portal/manutencao", label: "RLP Maintenance CMMS", icon: Wrench, requires: ["CMMS_MAINTENANCE"] },
   { to: "/portal/instrumentos", label: "Meus ativos", icon: Gauge, requires: ["CALIBRATION"] },
   { to: "/portal/certificados", label: "Meus certificados", icon: BadgeCheck, requires: ["CALIBRATION"] },
   { to: "/portal/laudos", label: "Meus laudos", icon: FileWarning, requires: ["TECHNICAL_REPORT"] },
@@ -32,7 +35,6 @@ const PORTAL_NAV_ITEMS: PortalNavItem[] = [
     ],
   },
   { to: "/portal/contratos", label: "Meus contratos", icon: FileSignature, requires: ["ELECTRICAL_MAINTENANCE", "PANEL_MAINTENANCE", "MOTOR_MAINTENANCE", "TECHNICAL_REPORT", "CALIBRATION", "TECHNICAL_ASSISTANCE", "EV_CHARGER", "CMMS_MAINTENANCE", "OTHER"] },
-  { to: "/portal/manutencao", label: "RLP Maintenance CMMS", icon: Wrench, requires: ["CMMS_MAINTENANCE"] },
   { to: "/portal/pedidos", label: "Meus pedidos e orcamentos", icon: ShoppingCart },
   { to: "/portal/perfil", label: "Meu perfil", icon: User },
 ];

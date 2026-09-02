@@ -7,7 +7,7 @@ import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagin
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
-import { nextDocumentNumber } from "../../utils/sequence";
+import { nextClientMaintenanceOrderNumber } from "../../utils/sequence";
 import { applyStockMovement } from "../../lib/inventory";
 import { getStorageProvider } from "../../lib/storage";
 
@@ -91,7 +91,7 @@ const workOrderSchema = z.object({
 
 export const createMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Response) => {
   const data = workOrderSchema.parse(req.body);
-  const number = await nextDocumentNumber("maintenanceWorkOrder");
+  const number = await nextClientMaintenanceOrderNumber(data.clientId);
   const { checklist, ...orderData } = data;
 
   const workOrder = await prisma.maintenanceWorkOrder.create({
@@ -110,7 +110,7 @@ export const createMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
     action: "CREATE",
     entityType: "MaintenanceWorkOrder",
     entityId: workOrder.id,
-    description: `OM ${workOrder.number} criada`,
+    description: `OS ${workOrder.number} criada`,
   });
 
   res.status(201).json(workOrder);
@@ -135,7 +135,7 @@ export const updateMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
     action: "UPDATE",
     entityType: "MaintenanceWorkOrder",
     entityId: workOrder.id,
-    description: `OM ${workOrder.number} atualizada`,
+    description: `OS ${workOrder.number} atualizada`,
   });
 
   res.json(workOrder);
@@ -152,7 +152,7 @@ export const deleteMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
     action: "DELETE",
     entityType: "MaintenanceWorkOrder",
     entityId: existing.id,
-    description: `OM ${existing.number} removida`,
+    description: `OS ${existing.number} removida`,
   });
 
   res.status(204).send();
@@ -174,7 +174,7 @@ export const startMaintenanceWorkOrder = asyncHandler(async (req: Request, res: 
     action: "UPDATE",
     entityType: "MaintenanceWorkOrder",
     entityId: workOrder.id,
-    description: `OM ${workOrder.number} iniciada`,
+    description: `OS ${workOrder.number} iniciada`,
   });
 
   res.json(workOrder);
@@ -210,7 +210,7 @@ export const completeMaintenanceWorkOrder = asyncHandler(async (req: Request, re
     action: "UPDATE",
     entityType: "MaintenanceWorkOrder",
     entityId: workOrder.id,
-    description: `OM ${workOrder.number} concluida`,
+    description: `OS ${workOrder.number} concluida`,
   });
 
   res.json(workOrder);
@@ -247,7 +247,7 @@ export const addWorkOrderPart = asyncHandler(async (req: Request, res: Response)
     productId: data.productId,
     type: "OUT",
     quantity: data.quantity,
-    reason: data.reason ?? `Consumido na OM ${workOrder.number}`,
+    reason: data.reason ?? `Consumido na OS ${workOrder.number}`,
     maintenanceWorkOrderId: workOrder.id,
     createdById: req.user?.sub,
   });
@@ -266,7 +266,7 @@ export const removeWorkOrderPart = asyncHandler(async (req: Request, res: Respon
     productId: movement.productId,
     type: "IN",
     quantity: movement.quantity,
-    reason: "Estorno de peca removida da OM",
+    reason: "Estorno de peca removida da OS",
   });
   await prisma.inventoryMovement.delete({ where: { id: movement.id } });
 

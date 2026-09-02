@@ -14,7 +14,7 @@ const SERVICE_OPTIONS: { value: ServiceCategory; label: string }[] = [
   { value: "PANEL_MAINTENANCE", label: "Paineis eletricos (QGBT, CCM, automacao)" },
   { value: "MOTOR_MAINTENANCE", label: "Manutencao de motores CA/CC" },
   { value: "TECHNICAL_REPORT", label: "Laudo tecnico" },
-  { value: "CALIBRATION", label: "Calibracao de instrumentos" },
+  { value: "CALIBRATION", label: "Calibracao de ativos" },
   { value: "TECHNICAL_ASSISTANCE", label: "Assistencia tecnica em inversores/eletronicos" },
   { value: "EV_CHARGER", label: "Carregador para veiculo eletrico" },
   { value: "OTHER", label: "Outro" },

@@ -12,7 +12,7 @@ export interface PortalNavItem {
 
 const PORTAL_NAV_ITEMS: PortalNavItem[] = [
   { to: "/portal", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/portal/instrumentos", label: "Meus instrumentos", icon: Gauge, requires: ["CALIBRATION"] },
+  { to: "/portal/instrumentos", label: "Meus ativos", icon: Gauge, requires: ["CALIBRATION"] },
   { to: "/portal/certificados", label: "Meus certificados", icon: BadgeCheck, requires: ["CALIBRATION"] },
   { to: "/portal/laudos", label: "Meus laudos", icon: FileWarning, requires: ["TECHNICAL_REPORT"] },
   {

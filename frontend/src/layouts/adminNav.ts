@@ -26,7 +26,7 @@ export const ADMIN_NAV: NavItem[] = [
   { to: "/gestao", label: "Dashboard", icon: LayoutDashboard, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
   { to: "/gestao/clientes", label: "Clientes", icon: Building2, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
   { to: "/gestao/ordens-servico", label: "Ordens de servico", icon: ClipboardList, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
-  { to: "/gestao/instrumentos", label: "Instrumentos", icon: Gauge, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
+  { to: "/gestao/instrumentos", label: "Ativos", icon: Gauge, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
   { to: "/gestao/calibracoes", label: "Calibracoes", icon: BadgeCheck, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
   { to: "/gestao/laudos", label: "Laudos tecnicos", icon: FileWarning, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
   { to: "/gestao/contratos", label: "Contratos", icon: FileSignature, roles: ["ADMIN", "COMMERCIAL"] },

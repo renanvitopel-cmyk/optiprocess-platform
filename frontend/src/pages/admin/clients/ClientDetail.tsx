@@ -111,7 +111,7 @@ export default function ClientDetail() {
           <div className="card p-5">
             <h2 className="mb-3 font-semibold text-navy-900">Resumo</h2>
             <div className="space-y-2 text-sm">
-              <SummaryRow icon={Gauge} label="Instrumentos" value={client._count?.instruments ?? 0} to={`/gestao/instrumentos?clientId=${id}`} />
+              <SummaryRow icon={Gauge} label="Ativos" value={client._count?.instruments ?? 0} to={`/gestao/instrumentos?clientId=${id}`} />
               <SummaryRow icon={ClipboardList} label="Ordens de servico" value={client._count?.serviceOrders ?? 0} to={`/gestao/ordens-servico?clientId=${id}`} />
               <SummaryRow icon={FileSignature} label="Contratos" value={client._count?.contracts ?? 0} to={`/gestao/contratos?clientId=${id}`} />
               <SummaryRow icon={Star} label="Certificados" value={client._count?.calibrations ?? 0} to={`/gestao/calibracoes?clientId=${id}`} />
@@ -130,7 +130,7 @@ export default function ClientDetail() {
             {!client.users || client.users.length === 0 ? (
               <p className="text-sm text-graphite-600">
                 Esta empresa ainda nao tem login no portal. Libere o acesso para que ela veja, pela area dos servicos
-                contratados, seus instrumentos, certificados, laudos, OS e contratos.
+                contratados, seus ativos, certificados, laudos, OS e contratos.
               </p>
             ) : (
               <ul className="divide-y divide-gray-100">

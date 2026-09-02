@@ -14,7 +14,7 @@ interface InstrumentPickerProps {
 }
 
 export const InstrumentPicker = forwardRef<HTMLSelectElement, InstrumentPickerProps>(function InstrumentPicker(
-  { label = "Instrumento", error, required, clientId, ...rest },
+  { label = "Ativo", error, required, clientId, ...rest },
   ref,
 ) {
   const { data } = useQuery({
@@ -29,7 +29,7 @@ export const InstrumentPicker = forwardRef<HTMLSelectElement, InstrumentPickerPr
       label={label}
       required={required}
       error={error}
-      placeholder={clientId ? "Selecione o instrumento" : "Selecione o cliente primeiro"}
+      placeholder={clientId ? "Selecione o ativo" : "Selecione o cliente primeiro"}
       disabled={!clientId}
       options={(data?.items ?? []).map((i) => ({ value: i.id, label: `${i.type} - ${i.model} (${i.serialNumber})` }))}
       {...rest}

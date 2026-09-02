@@ -32,12 +32,12 @@ export default function InstrumentsList() {
   return (
     <div>
       <PageHeader
-        title="Instrumentos"
+        title="Ativos"
         description="Equipamentos dos clientes sujeitos a calibracao"
         actions={
           canManage && (
             <button className="btn-primary" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" /> Novo instrumento
+              <Plus className="h-4 w-4" /> Novo ativo
             </button>
           )
         }
@@ -72,7 +72,7 @@ export default function InstrumentsList() {
         onRowClick={(i) => navigate(`/gestao/instrumentos/${i.id}`)}
         pagination={data}
         onPageChange={setPage}
-        emptyTitle="Nenhum instrumento cadastrado"
+        emptyTitle="Nenhum ativo cadastrado"
         columns={[
           { header: "Tag", accessor: (i) => i.tag ?? "-" },
           { header: "Equipamento", accessor: (i) => <span className="font-medium text-navy-900">{i.type} - {i.model}</span> },

@@ -85,7 +85,7 @@ export default function PortalCertificates() {
 
           <div>
             <label className="field-label" htmlFor="filtro-ativo">
-              Ativo / instrumento
+              Ativo
             </label>
             <select
               id="filtro-ativo"
@@ -160,7 +160,7 @@ export default function PortalCertificates() {
         }
         columns={[
           { header: "Certificado", accessor: (c) => <span className="font-medium text-navy-900">{c.certificateNumber}</span> },
-          { header: "Instrumento", accessor: (c) => `${c.instrument?.type} - ${c.instrument?.model}` },
+          { header: "Ativo", accessor: (c) => `${c.instrument?.type} - ${c.instrument?.model}` },
           { header: "Tag", accessor: (c) => c.instrument?.tag || "-" },
           { header: "N. de serie", accessor: (c) => c.instrument?.serialNumber ?? "-" },
           { header: "Data", accessor: (c) => formatDate(c.calibrationDate) },

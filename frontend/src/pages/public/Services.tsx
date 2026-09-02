@@ -9,7 +9,7 @@ export default function Services() {
         <div className="container-page">
           <h1 className="text-3xl font-bold text-white sm:text-4xl">Nossos servicos</h1>
           <p className="mt-3 max-w-2xl text-navy-200">
-            Da instalacao eletrica a calibracao de instrumentos, oferecemos solucoes tecnicas completas para
+            Da instalacao eletrica a calibracao de ativos, oferecemos solucoes tecnicas completas para
             industria e comercio.
           </p>
         </div>

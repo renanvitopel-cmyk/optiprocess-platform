@@ -18,7 +18,7 @@ export default function PortalInstruments() {
 
   return (
     <div>
-      <PageHeader title="Meus instrumentos" description="Equipamentos cadastrados sob sua responsabilidade" />
+      <PageHeader title="Meus ativos" description="Equipamentos cadastrados sob sua responsabilidade" />
 
       <DataTable
         loading={isLoading}
@@ -27,7 +27,7 @@ export default function PortalInstruments() {
         onRowClick={(i) => navigate(`/portal/instrumentos/${i.id}`)}
         pagination={data}
         onPageChange={setPage}
-        emptyTitle="Nenhum instrumento cadastrado"
+        emptyTitle="Nenhum ativo cadastrado"
         columns={[
           { header: "Tag", accessor: (i) => i.tag ?? "-" },
           { header: "Equipamento", accessor: (i) => <span className="font-medium text-navy-900">{i.type} - {i.model}</span> },

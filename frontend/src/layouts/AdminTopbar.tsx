@@ -71,7 +71,7 @@ export function AdminTopbar({ onOpenMobileMenu }: { onOpenMobileMenu: () => void
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-graphite-400" />
         <input
           type="search"
-          placeholder="Buscar clientes, instrumentos, certificados, produtos..."
+          placeholder="Buscar clientes, ativos, certificados, produtos..."
           className="input pl-9"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -101,7 +101,7 @@ export function AdminTopbar({ onOpenMobileMenu }: { onOpenMobileMenu: () => void
                   setSearchOpen(false);
                 }}
               >
-                <span className="text-xs uppercase text-graphite-400">Instrumento</span> · {i.model} ({i.serialNumber})
+                <span className="text-xs uppercase text-graphite-400">Ativo</span> · {i.model} ({i.serialNumber})
               </button>
             ))}
             {searchResults?.calibrations.map((c) => (

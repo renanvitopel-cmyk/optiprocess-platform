@@ -68,7 +68,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument }: Prop
   async function onSubmit(values: FormValues) {
     try {
       const saved = instrument ? await updateInstrument(instrument.id, values) : await createInstrument(values);
-      notify("success", instrument ? "Instrumento atualizado." : "Instrumento cadastrado.");
+      notify("success", instrument ? "Ativo atualizado." : "Ativo cadastrado.");
       onSaved(saved);
     } catch (error) {
       notify("error", getApiErrorMessage(error));
@@ -76,7 +76,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument }: Prop
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={instrument ? "Editar instrumento" : "Novo instrumento"} size="lg" footer={
+    <Modal open={open} onClose={onClose} title={instrument ? "Editar ativo" : "Novo ativo"} size="lg" footer={
       <>
         <button type="button" className="btn-outline" onClick={onClose}>Cancelar</button>
         <button type="submit" form="instrument-form" className="btn-primary" disabled={isSubmitting}>
@@ -95,7 +95,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument }: Prop
             {...register("tag")}
           />
         </div>
-        <TextInput label="Tipo de instrumento" required error={errors.type?.message} {...register("type")} />
+        <TextInput label="Tipo de ativo" required error={errors.type?.message} {...register("type")} />
         <div className="grid gap-4 sm:grid-cols-3">
           <TextInput label="Fabricante" required error={errors.manufacturer?.message} {...register("manufacturer")} />
           <TextInput label="Modelo" required error={errors.model?.message} {...register("model")} />

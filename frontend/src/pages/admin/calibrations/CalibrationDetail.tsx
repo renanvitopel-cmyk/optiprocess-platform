@@ -151,7 +151,7 @@ export default function CalibrationDetail() {
             </div>
 
             <dl className="grid gap-4 sm:grid-cols-3">
-              <Info label="Instrumento" value={`${calibration.instrument?.type} - ${calibration.instrument?.model}`} />
+              <Info label="Ativo" value={`${calibration.instrument?.type} - ${calibration.instrument?.model}`} />
               <Info label="Numero de serie" value={calibration.instrument?.serialNumber ?? "-"} />
               <Info label="Tecnico" value={calibration.technician?.name ?? "-"} />
               <Info label="Data da calibracao" value={formatDate(calibration.calibrationDate)} />

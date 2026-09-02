@@ -38,7 +38,7 @@ export default function InstrumentDetail() {
     setDeleting(true);
     try {
       await deleteInstrument(id);
-      notify("success", "Instrumento removido.");
+      notify("success", "Ativo removido.");
       navigate("/gestao/instrumentos");
     } catch (error) {
       notify("error", getApiErrorMessage(error));
@@ -54,7 +54,7 @@ export default function InstrumentDetail() {
       <PageHeader
         title={`TAG ${instrument.tag ?? "sem TAG"}`}
         description={`${instrument.type} - ${instrument.model} · Cliente: ${clientDisplayName(instrument.client)}`}
-        breadcrumbs={[{ label: "Instrumentos", to: "/gestao/instrumentos" }, { label: instrument.tag ?? instrument.model }]}
+        breadcrumbs={[{ label: "Ativos", to: "/gestao/instrumentos" }, { label: instrument.tag ?? instrument.model }]}
         actions={
           canManage && (
             <>
@@ -99,7 +99,7 @@ export default function InstrumentDetail() {
               )}
             </div>
             {!instrument.calibrations || instrument.calibrations.length === 0 ? (
-              <EmptyState title="Nenhuma calibracao" description="Este instrumento ainda nao possui certificados." />
+              <EmptyState title="Nenhuma calibracao" description="Este ativo ainda nao possui certificados." />
             ) : (
               <ul className="divide-y divide-gray-100">
                 {instrument.calibrations.map((c) => (
@@ -160,8 +160,8 @@ export default function InstrumentDetail() {
 
       <ConfirmDialog
         open={confirmDelete}
-        title="Remover instrumento"
-        description="Tem certeza que deseja remover este instrumento? O historico de calibracoes sera preservado."
+        title="Remover ativo"
+        description="Tem certeza que deseja remover este ativo? O historico de calibracoes sera preservado."
         confirmLabel="Remover"
         danger
         loading={deleting}

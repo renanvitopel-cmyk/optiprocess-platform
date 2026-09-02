@@ -15,15 +15,15 @@ import { formatFileSize } from "../../../lib/format";
 
 /** Etapas do registro de campo, na ordem em que o tecnico costuma executar. */
 const PHOTO_STEPS: { category: AttachmentCategory; label: string; hint: string }[] = [
-  { category: "LOCATION", label: "Local", hint: "Onde o instrumento esta instalado" },
-  { category: "INSTRUMENT", label: "Instrumento", hint: "O equipamento calibrado e sua identificacao" },
+  { category: "LOCATION", label: "Local", hint: "Onde o ativo esta instalado" },
+  { category: "INSTRUMENT", label: "Ativo", hint: "O equipamento calibrado e sua identificacao" },
   { category: "STANDARD", label: "Padrao usado", hint: "O padrao de referencia utilizado" },
   { category: "MEASUREMENT", label: "Leituras", hint: "As medicoes durante a calibracao" },
 ];
 
 export const CATEGORY_LABELS: Record<AttachmentCategory, string> = {
   LOCATION: "Local da calibracao",
-  INSTRUMENT: "Instrumento calibrado",
+  INSTRUMENT: "Ativo calibrado",
   STANDARD: "Padrao utilizado",
   MEASUREMENT: "Leituras / medicoes",
   DOCUMENT: "Documento",

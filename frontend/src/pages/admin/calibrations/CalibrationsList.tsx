@@ -28,7 +28,7 @@ export default function CalibrationsList() {
     <div>
       <PageHeader
         title="Calibracoes"
-        description="Certificados de calibracao de instrumentos"
+        description="Certificados de calibracao de ativos"
         actions={
           canManage && (
             <Link to="/gestao/calibracoes/novo" className="btn-primary">
@@ -62,7 +62,7 @@ export default function CalibrationsList() {
         columns={[
           { header: "Certificado", accessor: (c) => <span className="font-medium text-navy-900">{c.certificateNumber}</span> },
           { header: "Cliente", accessor: (c) => clientDisplayName(c.client) },
-          { header: "Instrumento", accessor: (c) => `${c.instrument?.model} (${c.instrument?.serialNumber})` },
+          { header: "Ativo", accessor: (c) => `${c.instrument?.model} (${c.instrument?.serialNumber})` },
           { header: "Data", accessor: (c) => formatDate(c.calibrationDate) },
           { header: "Validade", accessor: (c) => formatDate(c.validUntil) },
           { header: "Status", accessor: (c) => <StatusBadge status={c.status} /> },

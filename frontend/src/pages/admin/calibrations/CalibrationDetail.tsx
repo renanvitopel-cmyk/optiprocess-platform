@@ -1,20 +1,20 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, RefreshCw, Eye, EyeOff, FileText, ExternalLink } from "lucide-react";
+import { CheckCircle2, RefreshCw, Eye, EyeOff, FileText, ExternalLink, FileDown } from "lucide-react";
 import {
   getCalibration,
   getCalibrationHistory,
   issueCalibration,
   reviseCalibration,
   setCalibrationVisibility,
-  uploadCalibrationPdf,
+  regenerateCertificatePdf,
   getCalibrationPdfUrl,
 } from "../../../api/calibrations";
+import { CalibrationPhotos } from "./CalibrationPhotos";
 import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
-import { FileUpload } from "../../../components/FileUpload";
 import { QRCodeView } from "../../../components/QRCodeView";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { useAuth } from "../../../auth/AuthContext";
@@ -42,13 +42,16 @@ export default function CalibrationDetail() {
     queryClient.invalidateQueries({ queryKey: ["calibrations"] });
   }
 
-  async function handleUploadPdf(file: File) {
+  async function handleRegeneratePdf() {
+    setBusy(true);
     try {
-      await uploadCalibrationPdf(id, file);
-      notify("success", "PDF anexado com sucesso.");
+      await regenerateCertificatePdf(id);
+      notify("success", "PDF do certificado regerado.");
       invalidate();
     } catch (error) {
       notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -154,8 +157,8 @@ export default function CalibrationDetail() {
               <Info label="Data da calibracao" value={formatDate(calibration.calibrationDate)} />
               <Info label="Validade" value={formatDate(calibration.validUntil)} />
               <Info label="Local" value={calibration.location} />
-              <Info label="Padrao utilizado" value={calibration.standardUsed} />
-              <Info label="Rastreabilidade" value={calibration.traceability} />
+              <Info label="Metodo / procedimento" value={calibration.procedure || "-"} />
+              <Info label="Fator de abrangencia" value={calibration.coverageFactorK ? `k = ${calibration.coverageFactorK}` : "-"} />
               <Info
                 label="Condicoes ambientais"
                 value={
@@ -171,6 +174,38 @@ export default function CalibrationDetail() {
               <p className="mt-1 text-sm text-graphite-700">{calibration.technicalConclusion}</p>
             </div>
           </div>
+
+          {calibration.standards && calibration.standards.length > 0 && (
+            <div className="card p-5">
+              <h2 className="mb-3 font-semibold text-navy-900">Padroes utilizados e rastreabilidade</h2>
+              <div className="table-shell">
+                <table className="table-base">
+                  <thead>
+                    <tr>
+                      <th>Padrao</th>
+                      <th>Fabricante / Modelo</th>
+                      <th>N. de serie</th>
+                      <th>Certificado</th>
+                      <th>Validade</th>
+                      <th>Laboratorio</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {calibration.standards.map((s, i) => (
+                      <tr key={s.id ?? i}>
+                        <td className="font-medium text-navy-900">{s.description}</td>
+                        <td>{[s.manufacturer, s.model].filter(Boolean).join(" / ") || "-"}</td>
+                        <td>{s.serialNumber || "-"}</td>
+                        <td>{s.certificateNumber || "-"}</td>
+                        <td>{formatDate(s.certificateValidUntil)}</td>
+                        <td>{s.laboratory || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <div className="card p-5">
             <h2 className="mb-3 font-semibold text-navy-900">Pontos calibrados</h2>
@@ -228,29 +263,45 @@ export default function CalibrationDetail() {
           )}
 
           <div className="card p-5">
-            <h2 className="mb-3 font-semibold text-navy-900">Documento final (PDF)</h2>
+            <h2 className="mb-1 font-semibold text-navy-900">Certificado (PDF)</h2>
+            <p className="mb-3 text-xs text-graphite-500">
+              Gerado pela plataforma no momento da emissao, com os dados, padroes, pontos, QR Code e as fotos.
+            </p>
             {calibration.pdfAttachment ? (
-              <div className="flex items-center justify-between rounded-md border border-gray-200 p-3 text-sm">
-                <div className="flex items-center gap-2 text-graphite-700">
-                  <FileText className="h-4 w-4 text-navy-600" />
-                  <div>
-                    <p className="font-medium">{calibration.pdfAttachment.fileName}</p>
-                    <p className="text-xs text-graphite-400">{formatFileSize(calibration.pdfAttachment.sizeBytes)}</p>
+              <>
+                <div className="flex items-center justify-between rounded-md border border-gray-200 p-3 text-sm">
+                  <div className="flex min-w-0 items-center gap-2 text-graphite-700">
+                    <FileText className="h-4 w-4 shrink-0 text-navy-600" />
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{calibration.pdfAttachment.fileName}</p>
+                      <p className="text-xs text-graphite-400">{formatFileSize(calibration.pdfAttachment.sizeBytes)}</p>
+                    </div>
                   </div>
+                  <button type="button" onClick={handleViewPdf} className="shrink-0 text-navy-700 hover:text-navy-900" aria-label="Abrir PDF">
+                    <ExternalLink className="h-4 w-4" />
+                  </button>
                 </div>
-                <button type="button" onClick={handleViewPdf} className="text-navy-700 hover:text-navy-900" aria-label="Abrir PDF">
-                  <ExternalLink className="h-4 w-4" />
-                </button>
-              </div>
+                {canManage && (
+                  <button type="button" className="btn-outline btn-sm mt-3 w-full justify-center" onClick={handleRegeneratePdf} disabled={busy}>
+                    <RefreshCw className="h-4 w-4" /> Regerar PDF
+                  </button>
+                )}
+              </>
             ) : (
-              <p className="mb-3 text-sm text-graphite-500">Nenhum arquivo anexado ainda.</p>
-            )}
-            {canManage && isDraft && (
-              <div className="mt-3">
-                <FileUpload accept="application/pdf" label="Enviar PDF do certificado" hint="Necessario para emitir o certificado" onUpload={handleUploadPdf} />
+              <div className="rounded-md border border-dashed border-gray-300 p-4 text-center">
+                <FileDown className="mx-auto h-6 w-6 text-graphite-300" />
+                <p className="mt-2 text-sm text-graphite-500">
+                  O PDF sera gerado automaticamente ao emitir o certificado.
+                </p>
               </div>
             )}
           </div>
+
+          <CalibrationPhotos
+            calibrationId={id}
+            canEdit={!!canManage}
+            certificateAttachmentId={calibration.pdfAttachment?.id}
+          />
         </div>
       </div>
 

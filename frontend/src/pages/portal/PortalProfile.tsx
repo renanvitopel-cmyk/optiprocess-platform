@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { KeyRound } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
 import { getOwnClient } from "../../api/clients";
 import { PageHeader } from "../../components/PageHeader";
 import { FullPageSpinner } from "../../components/Spinner";
 import { StatusBadge } from "../../components/StatusBadge";
+import { ChangePasswordModal } from "../../components/ChangePasswordModal";
 
 export default function PortalProfile() {
   const { user } = useAuth();
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const { data: client, isLoading } = useQuery({ queryKey: ["own-client"], queryFn: getOwnClient });
 
   if (isLoading || !client) return <FullPageSpinner />;
@@ -20,6 +24,11 @@ export default function PortalProfile() {
           <h2 className="font-semibold text-navy-900">Sua conta</h2>
           <Info label="Nome" value={user?.name ?? "-"} />
           <Info label="E-mail" value={user?.email ?? "-"} />
+          <div className="pt-2">
+            <button type="button" className="btn-outline btn-sm" onClick={() => setPasswordOpen(true)}>
+              <KeyRound className="h-4 w-4" /> Alterar minha senha
+            </button>
+          </div>
         </div>
 
         <div className="card space-y-3 p-5">
@@ -54,6 +63,8 @@ export default function PortalProfile() {
           </p>
         </div>
       </div>
+
+      <ChangePasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
-import { comparePassword } from "../../lib/password";
+import { comparePassword, hashPassword } from "../../lib/password";
 import { AUTH_COOKIE_NAME, signAuthToken } from "../../lib/jwt";
 import { env } from "../../config/env";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -67,6 +67,44 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 
 export const logout = asyncHandler(async (_req: Request, res: Response) => {
   res.clearCookie(AUTH_COOKIE_NAME, { path: "/" });
+  res.status(204).send();
+});
+
+const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Informe a senha atual."),
+    newPassword: z.string().min(8, "A nova senha deve ter pelo menos 8 caracteres."),
+  })
+  .refine((v) => v.currentPassword !== v.newPassword, {
+    message: "A nova senha deve ser diferente da atual.",
+    path: ["newPassword"],
+  });
+
+/** Troca da propria senha: exige a senha atual, para um login esquecido aberto
+ * nao permitir que outra pessoa assuma a conta. */
+export const changeOwnPassword = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) throw new UnauthorizedError();
+  const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+
+  const user = await prisma.user.findFirst({ where: { id: req.user.sub, deletedAt: null, active: true } });
+  if (!user) throw new UnauthorizedError();
+
+  const ok = await comparePassword(currentPassword, user.passwordHash);
+  if (!ok) throw new UnauthorizedError("Senha atual incorreta.");
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: await hashPassword(newPassword) },
+  });
+
+  await writeAuditLog({
+    userId: user.id,
+    action: "UPDATE",
+    entityType: "User",
+    entityId: user.id,
+    description: "Senha alterada pelo proprio usuario",
+  });
+
   res.status(204).send();
 });
 

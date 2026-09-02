@@ -1,9 +1,13 @@
+import { useState } from "react";
+import { KeyRound } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
 import { PageHeader } from "../../components/PageHeader";
 import { formatRole, clientDisplayName } from "../../lib/format";
+import { ChangePasswordModal } from "../../components/ChangePasswordModal";
 
 export default function Profile() {
   const { user } = useAuth();
+  const [passwordOpen, setPasswordOpen] = useState(false);
   if (!user) return null;
 
   return (
@@ -31,10 +35,14 @@ export default function Profile() {
             </div>
           )}
         </dl>
-        <p className="border-t border-gray-100 pt-4 text-xs text-graphite-400">
-          Para alterar sua senha, solicite ao administrador uma redefinicao.
-        </p>
+        <div className="border-t border-gray-100 pt-4">
+          <button type="button" className="btn-outline" onClick={() => setPasswordOpen(true)}>
+            <KeyRound className="h-4 w-4" /> Alterar minha senha
+          </button>
+        </div>
       </div>
+
+      <ChangePasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
     </div>
   );
 }

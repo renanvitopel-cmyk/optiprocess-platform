@@ -162,6 +162,32 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
   res.json({ temporaryPassword });
 });
 
+const setPasswordSchema = z.object({
+  password: z.string().min(8, "A senha deve ter pelo menos 8 caracteres."),
+});
+
+/** Administrador define diretamente a senha de um usuario (sem precisar da atual). */
+export const setUserPassword = asyncHandler(async (req: Request, res: Response) => {
+  const { password } = setPasswordSchema.parse(req.body);
+  const existing = await prisma.user.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  if (!existing) throw new NotFoundError("Usuario");
+
+  await prisma.user.update({
+    where: { id: existing.id },
+    data: { passwordHash: await hashPassword(password) },
+  });
+
+  await writeAuditLog({
+    userId: req.user?.sub,
+    action: "UPDATE",
+    entityType: "User",
+    entityId: existing.id,
+    description: `Senha de ${existing.name} definida pelo administrador`,
+  });
+
+  res.status(204).send();
+});
+
 export const listRoleDefinitions = asyncHandler(async (_req: Request, res: Response) => {
   const roles = await prisma.roleDefinition.findMany({
     include: { permissions: { include: { permission: true } } },

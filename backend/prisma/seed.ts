@@ -4,6 +4,10 @@ import bcrypt from "bcryptjs";
 import { getStorageProvider } from "../src/lib/storage";
 import { generateTemporaryPassword } from "../src/lib/password";
 import { env } from "../src/config/env";
+import { buildCertificatePdf, defaultLogoPath } from "../src/lib/certificatePdf";
+import { generateCertificateQrCode } from "../src/lib/qrcode";
+import { COMPANY_INFO } from "../src/config/company";
+import { nextDocumentNumber } from "../src/utils/sequence";
 
 const prisma = new PrismaClient();
 
@@ -207,6 +211,7 @@ interface SeedClientDef {
   technicalContactName: string | undefined;
   commercialContactName: string | undefined;
   status: ClientStatus;
+  contractedServices: ServiceCategory[];
   loginEmail: string | undefined;
 }
 
@@ -229,6 +234,7 @@ async function seedClients() {
       technicalContactName: "Eng. Paulo Henrique",
       commercialContactName: "Fernanda Lima",
       status: ClientStatus.ACTIVE,
+      contractedServices: [ServiceCategory.CALIBRATION, ServiceCategory.ELECTRICAL_MAINTENANCE, ServiceCategory.TECHNICAL_REPORT],
       loginEmail: "portal@metalvale.com.br",
     },
     {
@@ -248,6 +254,7 @@ async function seedClients() {
       technicalContactName: "Eng. Camila Rocha",
       commercialContactName: "Bruno Alves",
       status: ClientStatus.ACTIVE,
+      contractedServices: [ServiceCategory.CALIBRATION, ServiceCategory.PANEL_MAINTENANCE],
       loginEmail: "portal@campoverde.com.br",
     },
     {
@@ -267,6 +274,7 @@ async function seedClients() {
       technicalContactName: "Ricardo Nogueira",
       commercialContactName: "Juliana Prado",
       status: ClientStatus.ACTIVE,
+      contractedServices: [ServiceCategory.CALIBRATION, ServiceCategory.TECHNICAL_ASSISTANCE, ServiceCategory.MOTOR_MAINTENANCE],
       loginEmail: "portal@plastisoc.com.br",
     },
     {
@@ -286,6 +294,7 @@ async function seedClients() {
       technicalContactName: undefined,
       commercialContactName: undefined,
       status: ClientStatus.PROSPECT,
+      contractedServices: [ServiceCategory.EV_CHARGER],
       loginEmail: undefined,
     },
     {
@@ -305,6 +314,7 @@ async function seedClients() {
       technicalContactName: undefined,
       commercialContactName: undefined,
       status: ClientStatus.INACTIVE,
+      contractedServices: [],
       loginEmail: undefined,
     },
   ];
@@ -397,7 +407,7 @@ async function seedCalibrations(
   let counter = 1;
   for (const instrument of instruments) {
     const calibrationDate = instrument.lastCalibrationDate ?? daysFromNow(-30);
-    const certificateNumber = `CAL-${calibrationDate.getFullYear()}-${String(counter).padStart(6, "0")}`;
+    const certificateNumber = await nextDocumentNumber("calibration", calibrationDate);
     counter += 1;
 
     const calibration = await prisma.calibration.create({
@@ -406,17 +416,35 @@ async function seedCalibrations(
         clientId: instrument.clientId,
         instrumentId: instrument.id,
         calibrationDate,
-        location: "Instalacoes do cliente",
+        location: "Instalações do cliente",
         technicianId,
-        standardUsed: "Padrao de referencia rastreavel RBC",
-        traceability: "RBC - Rede Brasileira de Calibracao (Cert. 12345/26)",
+        procedure: "IT-CAL-001 - Comparação direta com padrão de referência",
+        coverageFactorK: 2,
         ambientTemperature: 23.5,
         ambientHumidity: 55,
         result: CalibrationResult.APPROVED,
-        technicalConclusion: "Instrumento aprovado, dentro dos criterios de aceitacao estabelecidos.",
+        technicalConclusion:
+          "Instrumento aprovado. Os erros encontrados permanecem dentro da tolerância especificada em todos os " +
+          "pontos verificados, considerando a incerteza de medição declarada.",
+        observations: "Instrumento em boas condições de uso, sem sinais de desgaste ou avaria.",
         validUntil: instrument.nextDueDate ?? daysFromNow(300),
+        issuedAt: calibrationDate,
         status: DocumentStatus.ISSUED,
         visibleToClient: true,
+        standards: {
+          create: [
+            {
+              description: "Calibrador multifunção de referência",
+              manufacturer: "Presys",
+              model: "T-25N",
+              serialNumber: "PR25N-004512",
+              certificateNumber: `RBC-${2000 + counter}/2026`,
+              certificateValidUntil: daysFromNow(240),
+              laboratory: "RBC - Rede Brasileira de Calibração",
+              sortOrder: 0,
+            },
+          ],
+        },
         points: {
           create: [
             { standardValue: 0, indicatedValue: 0.1, error: 0.1, tolerance: 0.5, uncertainty: 0.05, result: PointResult.PASS, sortOrder: 0 },
@@ -427,20 +455,44 @@ async function seedCalibrations(
       },
     });
 
-    const attachmentId = await createPlaceholderAttachment(
-      AttachmentEntityType.CALIBRATION,
-      calibration.id,
-      `${certificateNumber}.pdf`,
-      `Certificado de Calibracao ${certificateNumber}`,
-      [
-        `Instrumento: ${instrument.type} - ${instrument.manufacturer} ${instrument.model}`,
-        `N. de serie: ${instrument.serialNumber}`,
-        `Data da calibracao: ${calibrationDate.toLocaleDateString("pt-BR")}`,
-        "Resultado: Aprovado",
-        "Documento de demonstracao gerado pelo seed - substitua pelo PDF real do laboratorio.",
-      ],
-    );
-    await prisma.calibration.update({ where: { id: calibration.id }, data: { pdfAttachmentId: attachmentId } });
+    // Gera o certificado com o mesmo motor usado em producao - assim os dados de
+    // demonstracao ja saem no formato real do documento.
+    const full = await prisma.calibration.findUniqueOrThrow({
+      where: { id: calibration.id },
+      include: {
+        client: true,
+        instrument: true,
+        technician: { select: { id: true, name: true } },
+        points: { orderBy: { sortOrder: "asc" } },
+        standards: { orderBy: { sortOrder: "asc" } },
+      },
+    });
+
+    const qr = await generateCertificateQrCode(full.qrCodeToken);
+    const pdf = await buildCertificatePdf({
+      calibration: full,
+      photos: [],
+      qrCodeDataUrl: qr.dataUrl,
+      validationUrl: qr.url,
+      company: COMPANY_INFO,
+      logoPath: defaultLogoPath(),
+    });
+
+    const key = `calibrations/${calibration.id}/certificado-${Date.now()}.pdf`;
+    await getStorageProvider().upload(key, pdf, "application/pdf");
+    const attachment = await prisma.attachment.create({
+      data: {
+        entityType: AttachmentEntityType.CALIBRATION,
+        entityId: calibration.id,
+        category: "DOCUMENT",
+        caption: "Certificado de calibração",
+        fileKey: key,
+        fileName: `${certificateNumber}.pdf`,
+        mimeType: "application/pdf",
+        sizeBytes: pdf.byteLength,
+      },
+    });
+    await prisma.calibration.update({ where: { id: calibration.id }, data: { pdfAttachmentId: attachment.id } });
   }
 }
 
@@ -455,7 +507,7 @@ async function seedTechnicalReports(clients: Awaited<ReturnType<typeof seedClien
   let counter = 1;
   for (const def of defs) {
     const reportDate = daysFromNow(-30 * counter);
-    const number = `LAU-${reportDate.getFullYear()}-${String(counter).padStart(6, "0")}`;
+    const number = await nextDocumentNumber("technicalReport", reportDate);
     const report = await prisma.technicalReport.create({
       data: {
         number,
@@ -498,7 +550,7 @@ async function seedServiceOrders(
     for (const status of statuses.slice(0, 3)) {
       const order = await prisma.serviceOrder.create({
         data: {
-          number: `OS-2026-${String(counter).padStart(6, "0")}`,
+          number: await nextDocumentNumber("serviceOrder"),
           clientId: client.id,
           siteAddress: `${client.addressStreet ?? "Endereco do cliente"}, ${client.addressCity ?? "Sorocaba"}/${client.addressState ?? "SP"}`,
           category: ServiceCategory.ELECTRICAL_MAINTENANCE,
@@ -609,7 +661,7 @@ async function seedProducts() {
 async function seedQuotesAndOrders(clients: Awaited<ReturnType<typeof seedClients>>, products: Awaited<ReturnType<typeof seedProducts>>) {
   const quote = await prisma.quote.create({
     data: {
-      number: "ORC-2026-000001",
+      number: await nextDocumentNumber("quote"),
       clientId: clients[0].id,
       source: QuoteSource.PRODUCT_CART,
       status: QuoteStatus.QUOTE_SENT,
@@ -627,7 +679,7 @@ async function seedQuotesAndOrders(clients: Awaited<ReturnType<typeof seedClient
 
   await prisma.quote.create({
     data: {
-      number: "ORC-2026-000002",
+      number: await nextDocumentNumber("quote"),
       source: QuoteSource.SERVICE_REQUEST,
       status: QuoteStatus.NEW,
       contactName: "Jose Ricardo",
@@ -640,7 +692,7 @@ async function seedQuotesAndOrders(clients: Awaited<ReturnType<typeof seedClient
 
   await prisma.order.create({
     data: {
-      number: "PED-2026-000001",
+      number: await nextDocumentNumber("order"),
       clientId: clients[1].id,
       status: OrderStatus.SEPARATED,
       totalAmount: 680,

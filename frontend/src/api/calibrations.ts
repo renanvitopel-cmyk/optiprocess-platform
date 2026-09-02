@@ -1,6 +1,13 @@
 import { api } from "./client";
 import type { PagedResult } from "./client";
-import type { Calibration, CalibrationPoint, CalibrationResult } from "./types";
+import type {
+  Calibration,
+  CalibrationAttachment,
+  CalibrationPoint,
+  CalibrationResult,
+  CalibrationStandard,
+  AttachmentCategory,
+} from "./types";
 
 export interface ListCalibrationsParams {
   page?: number;
@@ -9,6 +16,10 @@ export interface ListCalibrationsParams {
   instrumentId?: string;
   search?: string;
   includeSuperseded?: boolean;
+  /** Filtros usados no portal do cliente: por periodo e por resultado. */
+  dateFrom?: string;
+  dateTo?: string;
+  result?: CalibrationResult;
 }
 
 export async function listCalibrations(params: ListCalibrationsParams = {}): Promise<PagedResult<Calibration>> {
@@ -42,15 +53,19 @@ export interface CalibrationInput {
   calibrationDate: string;
   location: string;
   technicianId: string;
-  standardUsed: string;
-  traceability: string;
+  standardUsed?: string | null;
+  traceability?: string | null;
+  procedure?: string | null;
+  coverageFactorK?: number | null;
   ambientTemperature?: number | null;
   ambientHumidity?: number | null;
   environmentalNotes?: string | null;
   result: CalibrationResult;
   technicalConclusion: string;
+  observations?: string | null;
   validUntil: string;
   points: CalibrationPoint[];
+  standards?: CalibrationStandard[];
 }
 
 export async function createCalibration(input: CalibrationInput): Promise<Calibration> {
@@ -78,14 +93,45 @@ export async function setCalibrationVisibility(id: string, visibleToClient: bool
   return data;
 }
 
-export async function uploadCalibrationPdf(id: string, file: File): Promise<Calibration> {
-  const formData = new FormData();
-  formData.append("file", file);
-  const { data } = await api.post<Calibration>(`/calibrations/${id}/pdf`, formData);
+/** Regera o PDF do certificado (ex.: apos incluir ou trocar uma foto). */
+export async function regenerateCertificatePdf(id: string): Promise<Calibration> {
+  const { data } = await api.post<Calibration>(`/calibrations/${id}/regenerate-pdf`);
   return data;
 }
 
 export async function getCalibrationPdfUrl(id: string): Promise<string> {
   const { data } = await api.get<{ url: string }>(`/calibrations/${id}/pdf-url`);
+  return data.url;
+}
+
+// --------------------------------------------------------------------------
+// Registro de campo: fotos e anexos complementares
+// --------------------------------------------------------------------------
+
+export async function listCalibrationAttachments(id: string): Promise<CalibrationAttachment[]> {
+  const { data } = await api.get<CalibrationAttachment[]>(`/calibrations/${id}/attachments`);
+  return data;
+}
+
+export async function uploadCalibrationAttachment(
+  id: string,
+  file: File,
+  category: AttachmentCategory,
+  caption?: string,
+): Promise<CalibrationAttachment> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("category", category);
+  if (caption) formData.append("caption", caption);
+  const { data } = await api.post<CalibrationAttachment>(`/calibrations/${id}/attachments`, formData);
+  return data;
+}
+
+export async function deleteCalibrationAttachment(id: string, attachmentId: string): Promise<void> {
+  await api.delete(`/calibrations/${id}/attachments/${attachmentId}`);
+}
+
+export async function getCalibrationAttachmentUrl(id: string, attachmentId: string): Promise<string> {
+  const { data } = await api.get<{ url: string }>(`/calibrations/${id}/attachments/${attachmentId}/url`);
   return data.url;
 }

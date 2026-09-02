@@ -50,6 +50,11 @@ export async function resetUserPassword(id: string): Promise<string> {
   return data.temporaryPassword;
 }
 
+/** Administrador define diretamente a senha de um usuario. */
+export async function setUserPassword(id: string, password: string): Promise<void> {
+  await api.post(`/users/${id}/password`, { password });
+}
+
 export async function listRoleDefinitions(): Promise<RoleDefinitionDto[]> {
   const { data } = await api.get<RoleDefinitionDto[]>("/users/roles");
   return data;

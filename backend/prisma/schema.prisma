@@ -155,6 +155,17 @@ enum AttachmentEntityType {
   CLIENT
 }
 
+// Classifica o registro fotografico feito pelo tecnico em campo. As fotos entram
+// como anexo fotografico no certificado gerado pela plataforma.
+enum AttachmentCategory {
+  LOCATION    // local da calibracao / instalacao
+  INSTRUMENT  // instrumento calibrado
+  STANDARD    // padrao utilizado
+  MEASUREMENT // leituras e medicoes
+  DOCUMENT    // documento complementar
+  OTHER
+}
+
 // ---------------------------------------------------------------------------
 // Usuarios, papeis e permissoes
 // ---------------------------------------------------------------------------
@@ -241,6 +252,9 @@ model Client {
   technicalContactName   String?
   commercialContactName  String?
   status                 ClientStatus @default(PROSPECT)
+  // Areas de servico que o cliente contratou (marcacao rapida na ficha, usada
+  // para segmentar). Contratos com vigencia e valor ficam em ServiceContract.
+  contractedServices     ServiceCategory[]
   notes                  String?
   createdById            String?
   createdAt              DateTime     @default(now())
@@ -372,14 +386,21 @@ model Calibration {
   location             String
   technicianId        String
   technician          User              @relation("CalibrationTechnician", fields: [technicianId], references: [id])
-  standardUsed        String
-  traceability        String
+  // Resumo livre; a rastreabilidade detalhada fica em CalibrationStandard.
+  standardUsed        String?
+  traceability        String?
+  // Metodo/procedimento de calibracao adotado (ex.: norma ou IT interna).
+  procedure           String?
+  // Fator de abrangencia da incerteza declarada (k=2 => ~95% de confianca).
+  coverageFactorK     Float?            @default(2)
   ambientTemperature  Float?
   ambientHumidity     Float?
   environmentalNotes  String?
   result              CalibrationResult
   technicalConclusion String
+  observations        String?
   validUntil          DateTime
+  issuedAt            DateTime?
   status              DocumentStatus    @default(DRAFT)
   visibleToClient     Boolean           @default(false)
   qrCodeToken         String            @unique @default(uuid())
@@ -394,12 +415,33 @@ model Calibration {
   updatedAt           DateTime          @updatedAt
   deletedAt           DateTime?
 
-  points CalibrationPoint[]
+  points    CalibrationPoint[]
+  standards CalibrationStandard[]
 
   @@index([clientId])
   @@index([instrumentId])
   @@index([validUntil])
   @@map("calibrations")
+}
+
+// Padroes de referencia usados na calibracao, com a cadeia de rastreabilidade
+// (certificado do proprio padrao, validade e laboratorio emissor) - exigencia de
+// um certificado de calibracao profissional.
+model CalibrationStandard {
+  id                    String      @id @default(uuid())
+  calibrationId         String
+  calibration           Calibration @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
+  description           String
+  manufacturer          String?
+  model                 String?
+  serialNumber          String?
+  certificateNumber     String?
+  certificateValidUntil DateTime?
+  laboratory            String?
+  sortOrder             Int         @default(0)
+
+  @@index([calibrationId])
+  @@map("calibration_standards")
 }
 
 model CalibrationPoint {
@@ -455,6 +497,8 @@ model Attachment {
   id           String               @id @default(uuid())
   entityType   AttachmentEntityType
   entityId     String
+  category     AttachmentCategory   @default(OTHER)
+  caption      String?
   fileKey      String
   fileName     String
   mimeType     String

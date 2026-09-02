@@ -47,6 +47,7 @@ export interface Client {
   technicalContactName: string | null;
   commercialContactName: string | null;
   status: ClientStatus;
+  contractedServices: ServiceCategory[];
   notes: string | null;
   createdAt: string;
   contacts?: ClientContact[];
@@ -132,6 +133,29 @@ export interface CalibrationPoint {
   result: PointResult;
 }
 
+export interface CalibrationStandard {
+  id?: string;
+  description: string;
+  manufacturer?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+  certificateNumber?: string | null;
+  certificateValidUntil?: string | null;
+  laboratory?: string | null;
+}
+
+export type AttachmentCategory = "LOCATION" | "INSTRUMENT" | "STANDARD" | "MEASUREMENT" | "DOCUMENT" | "OTHER";
+
+export interface CalibrationAttachment {
+  id: string;
+  category: AttachmentCategory;
+  caption: string | null;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
 export interface CalibrationSummary {
   id: string;
   certificateNumber: string;
@@ -156,14 +180,19 @@ export interface Calibration {
   location: string;
   technicianId: string;
   technician?: { id: string; name: string };
-  standardUsed: string;
-  traceability: string;
+  standardUsed: string | null;
+  traceability: string | null;
+  procedure: string | null;
+  coverageFactorK: number | null;
   ambientTemperature: number | null;
   ambientHumidity: number | null;
   environmentalNotes: string | null;
   result: CalibrationResult;
   technicalConclusion: string;
+  observations: string | null;
   validUntil: string;
+  issuedAt: string | null;
+  standards: CalibrationStandard[];
   status: DocumentStatus;
   visibleToClient: boolean;
   qrCodeToken: string;

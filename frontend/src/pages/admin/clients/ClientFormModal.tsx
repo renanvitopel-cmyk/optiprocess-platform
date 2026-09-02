@@ -3,7 +3,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Modal } from "../../../components/Modal";
-import { TextInput, SelectInput, TextareaInput } from "../../../components/form/Field";
+import { TextInput, SelectInput, TextareaInput, CheckboxInput } from "../../../components/form/Field";
+import { SERVICE_CATEGORY_OPTIONS } from "../../../lib/format";
 import { createClient, updateClient } from "../../../api/clients";
 import type { Client } from "../../../api/types";
 import { useToast } from "../../../components/Toast";
@@ -26,6 +27,20 @@ const schema = z.object({
   technicalContactName: z.string().optional(),
   commercialContactName: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "PROSPECT"]),
+  contractedServices: z
+    .array(
+      z.enum([
+        "ELECTRICAL_MAINTENANCE",
+        "PANEL_MAINTENANCE",
+        "MOTOR_MAINTENANCE",
+        "TECHNICAL_REPORT",
+        "CALIBRATION",
+        "TECHNICAL_ASSISTANCE",
+        "EV_CHARGER",
+        "OTHER",
+      ]),
+    )
+    .optional(),
   notes: z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
@@ -44,7 +59,10 @@ export function ClientFormModal({ open, onClose, onSaved, client }: ClientFormMo
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { status: "PROSPECT" } });
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { status: "PROSPECT", contractedServices: [] },
+  });
 
   useEffect(() => {
     if (open) {
@@ -67,9 +85,10 @@ export function ClientFormModal({ open, onClose, onSaved, client }: ClientFormMo
               technicalContactName: client.technicalContactName ?? "",
               commercialContactName: client.commercialContactName ?? "",
               status: client.status,
+              contractedServices: client.contractedServices ?? [],
               notes: client.notes ?? "",
             }
-          : { status: "PROSPECT" },
+          : { status: "PROSPECT", contractedServices: [] },
       );
     }
   }, [open, client, reset]);
@@ -132,6 +151,23 @@ export function ClientFormModal({ open, onClose, onSaved, client }: ClientFormMo
           <TextInput label="Responsavel tecnico" {...register("technicalContactName")} />
           <TextInput label="Responsavel comercial" {...register("commercialContactName")} />
         </div>
+        <div className="rounded-lg border border-gray-200 p-4">
+          <p className="field-label mb-2">Servicos contratados</p>
+          <p className="mb-3 text-xs text-graphite-500">
+            Marque as areas que este cliente contratou. Contratos com vigencia e valor sao cadastrados em Contratos.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {SERVICE_CATEGORY_OPTIONS.map((opt) => (
+              <CheckboxInput
+                key={opt.value}
+                label={opt.label}
+                value={opt.value}
+                {...register("contractedServices")}
+              />
+            ))}
+          </div>
+        </div>
+
         <TextareaInput label="Observacoes" rows={3} {...register("notes")} />
       </form>
     </Modal>

@@ -8,6 +8,8 @@ import { env } from "../config/env";
 export interface StorageProvider {
   upload(key: string, buffer: Buffer, contentType: string): Promise<void>;
   getSignedDownloadUrl(key: string, fileName: string, expiresInSeconds?: number): Promise<string>;
+  /** Le o arquivo de volta para a memoria (usado para embutir fotos no PDF do certificado). */
+  download(key: string): Promise<Buffer>;
   delete(key: string): Promise<void>;
 }
 
@@ -49,6 +51,14 @@ class S3StorageProvider implements StorageProvider {
     return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
   }
 
+  async download(key: string): Promise<Buffer> {
+    const res = await this.client.send(new GetObjectCommand({ Bucket: env.storage.s3Bucket, Key: key }));
+    const body = res.Body as unknown as AsyncIterable<Uint8Array>;
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of body) chunks.push(chunk);
+    return Buffer.concat(chunks);
+  }
+
   async delete(key: string): Promise<void> {
     await this.client.send(new DeleteObjectCommand({ Bucket: env.storage.s3Bucket, Key: key }));
   }
@@ -73,6 +83,10 @@ class LocalStorageProvider implements StorageProvider {
     const signature = signLocalKey(key, expiresAt);
     const query = new URLSearchParams({ exp: String(expiresAt), sig: signature, name: fileName });
     return `${env.publicUrl}/api/local-storage/${encodeURIComponent(key)}?${query.toString()}`;
+  }
+
+  async download(key: string): Promise<Buffer> {
+    return fs.readFile(path.join(LOCAL_ROOT, key));
   }
 
   async delete(key: string): Promise<void> {

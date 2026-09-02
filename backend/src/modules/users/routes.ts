@@ -8,6 +8,7 @@ import {
   updateUser,
   deleteUser,
   resetPassword,
+  setUserPassword,
   listRoleDefinitions,
 } from "./controller";
 
@@ -22,3 +23,4 @@ usersRouter.post("/", createUser);
 usersRouter.patch("/:id", updateUser);
 usersRouter.delete("/:id", deleteUser);
 usersRouter.post("/:id/reset-password", resetPassword);
+usersRouter.post("/:id/password", setUserPassword);

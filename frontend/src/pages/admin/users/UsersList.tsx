@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, KeyRound, Info } from "lucide-react";
+import { Plus, KeyRound, Info, RefreshCw } from "lucide-react";
 import { listUsers, resetUserPassword, updateUser } from "../../../api/users";
 import type { Role, UserAccount } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
@@ -9,6 +9,7 @@ import { StatusBadge } from "../../../components/StatusBadge";
 import { formatDateTime, formatRole } from "../../../lib/format";
 import { UserFormModal } from "./UserFormModal";
 import { RolesInfoModal } from "./RolesInfoModal";
+import { SetPasswordModal } from "./SetPasswordModal";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { Modal } from "../../../components/Modal";
@@ -28,6 +29,7 @@ export default function UsersList() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserAccount | undefined>();
+  const [passwordUser, setPasswordUser] = useState<UserAccount | undefined>();
   const [rolesOpen, setRolesOpen] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
 
@@ -103,15 +105,26 @@ export default function UsersList() {
             ),
           },
           {
-            header: "",
+            header: "Senha",
             accessor: (u) => (
-              <button
-                onClick={(e) => { e.stopPropagation(); handleResetPassword(u.id); }}
-                className="text-graphite-400 hover:text-navy-700"
-                aria-label="Redefinir senha"
-              >
-                <KeyRound className="h-4 w-4" />
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setPasswordUser(u); }}
+                  className="text-graphite-400 hover:text-navy-700"
+                  title="Definir uma senha"
+                  aria-label={`Definir senha de ${u.name}`}
+                >
+                  <KeyRound className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleResetPassword(u.id); }}
+                  className="text-graphite-400 hover:text-navy-700"
+                  title="Gerar senha temporaria aleatoria"
+                  aria-label={`Gerar senha temporaria para ${u.name}`}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </button>
+              </div>
             ),
           },
         ]}
@@ -135,6 +148,7 @@ export default function UsersList() {
         }}
       />
       <RolesInfoModal open={rolesOpen} onClose={() => setRolesOpen(false)} />
+      <SetPasswordModal user={passwordUser} onClose={() => setPasswordUser(undefined)} />
 
       <Modal open={!!tempPassword} onClose={() => setTempPassword(null)} title="Senha temporaria gerada" size="sm">
         <p className="text-sm text-graphite-600">

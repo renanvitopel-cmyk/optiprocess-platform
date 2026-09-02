@@ -14,3 +14,8 @@ export async function fetchMe(): Promise<AuthUser> {
   const { data } = await api.get<{ user: AuthUser }>("/auth/me");
   return data.user;
 }
+
+/** Troca da propria senha (exige a senha atual). */
+export async function changeOwnPassword(currentPassword: string, newPassword: string): Promise<void> {
+  await api.post("/auth/change-password", { currentPassword, newPassword });
+}

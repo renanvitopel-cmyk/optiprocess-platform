@@ -21,23 +21,45 @@ const pointSchema = z.object({
   result: z.enum(["PASS", "FAIL"]),
 });
 
+const standardSchema = z.object({
+  description: z.string().min(1, "Descreva o padrao."),
+  manufacturer: z.string().optional(),
+  model: z.string().optional(),
+  serialNumber: z.string().optional(),
+  certificateNumber: z.string().optional(),
+  certificateValidUntil: z.string().optional(),
+  laboratory: z.string().optional(),
+});
+
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
   instrumentId: z.string().uuid("Selecione o instrumento."),
   technicianId: z.string().uuid("Selecione o tecnico responsavel."),
   calibrationDate: z.string().min(1, "Informe a data."),
   location: z.string().min(1, "Informe o local."),
-  standardUsed: z.string().min(1, "Informe o padrao utilizado."),
-  traceability: z.string().min(1, "Informe a rastreabilidade."),
+  procedure: z.string().optional(),
+  coverageFactorK: z.coerce.number().optional(),
   ambientTemperature: z.coerce.number().optional(),
   ambientHumidity: z.coerce.number().optional(),
   environmentalNotes: z.string().optional(),
   result: z.enum(["APPROVED", "APPROVED_WITH_RESTRICTION", "REJECTED"]),
   technicalConclusion: z.string().min(1, "Informe a conclusao tecnica."),
+  observations: z.string().optional(),
   validUntil: z.string().min(1, "Informe a validade."),
   points: z.array(pointSchema).min(1, "Inclua ao menos um ponto calibrado."),
+  standards: z.array(standardSchema).min(1, "Informe ao menos um padrao utilizado."),
 });
 type FormValues = z.infer<typeof schema>;
+
+const EMPTY_STANDARD = {
+  description: "",
+  manufacturer: "",
+  model: "",
+  serialNumber: "",
+  certificateNumber: "",
+  certificateValidUntil: "",
+  laboratory: "",
+};
 
 export default function CalibrationForm() {
   const [searchParams] = useSearchParams();
@@ -56,11 +78,18 @@ export default function CalibrationForm() {
       clientId: searchParams.get("clientId") ?? "",
       instrumentId: searchParams.get("instrumentId") ?? "",
       result: "APPROVED",
+      coverageFactorK: 2,
       points: [{ standardValue: 0, indicatedValue: 0, error: 0, tolerance: 0, uncertainty: 0, result: "PASS" }],
+      standards: [{ ...EMPTY_STANDARD }],
     },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "points" });
+  const {
+    fields: standardFields,
+    append: appendStandard,
+    remove: removeStandard,
+  } = useFieldArray({ control, name: "standards" });
   const clientId = watch("clientId");
 
   async function onSubmit(values: FormValues) {
@@ -96,10 +125,82 @@ export default function CalibrationForm() {
         </div>
 
         <div className="card space-y-4 p-5">
-          <h2 className="font-semibold text-navy-900">Rastreabilidade e condicoes ambientais</h2>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-navy-900">Padroes utilizados e rastreabilidade</h2>
+              <p className="mt-1 text-xs text-graphite-500">
+                Informe o certificado de cada padrao usado. E o que garante a cadeia de rastreabilidade do documento.
+              </p>
+            </div>
+            <button type="button" className="btn-ghost btn-sm shrink-0" onClick={() => appendStandard({ ...EMPTY_STANDARD })}>
+              <Plus className="h-4 w-4" /> Adicionar padrao
+            </button>
+          </div>
+          {errors.standards?.message && <p className="field-error">{errors.standards.message}</p>}
+
+          <div className="space-y-4">
+            {standardFields.map((field, index) => (
+              <div key={field.id} className="rounded-lg border border-gray-200 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-graphite-400">
+                    Padrao {index + 1}
+                  </span>
+                  {standardFields.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeStandard(index)}
+                      className="text-graphite-400 hover:text-safety-red"
+                      aria-label={`Remover padrao ${index + 1}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <TextInput
+                    label="Descricao do padrao"
+                    required
+                    className="sm:col-span-2"
+                    placeholder="Ex.: Calibrador de temperatura de bloco seco"
+                    error={errors.standards?.[index]?.description?.message}
+                    {...register(`standards.${index}.description`)}
+                  />
+                  <TextInput label="Fabricante" {...register(`standards.${index}.manufacturer`)} />
+                  <TextInput label="Modelo" {...register(`standards.${index}.model`)} />
+                  <TextInput label="No de serie" {...register(`standards.${index}.serialNumber`)} />
+                  <TextInput label="No do certificado" {...register(`standards.${index}.certificateNumber`)} />
+                  <TextInput
+                    label="Validade do certificado"
+                    type="date"
+                    {...register(`standards.${index}.certificateValidUntil`)}
+                  />
+                  <TextInput
+                    label="Laboratorio emissor"
+                    className="sm:col-span-2"
+                    placeholder="Ex.: RBC / Rede Brasileira de Calibracao"
+                    {...register(`standards.${index}.laboratory`)}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card space-y-4 p-5">
+          <h2 className="font-semibold text-navy-900">Metodo e condicoes ambientais</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <TextInput label="Padrao utilizado" required error={errors.standardUsed?.message} {...register("standardUsed")} />
-            <TextInput label="Rastreabilidade" required error={errors.traceability?.message} {...register("traceability")} />
+            <TextInput
+              label="Metodo / procedimento"
+              placeholder="Ex.: IT-CAL-001 / comparacao direta"
+              {...register("procedure")}
+            />
+            <TextInput
+              label="Fator de abrangencia (k)"
+              type="number"
+              step="0.01"
+              hint="Padrao k=2, equivalente a ~95% de confianca."
+              {...register("coverageFactorK")}
+            />
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
             <TextInput label="Temperatura ambiente (°C)" type="number" step="0.1" {...register("ambientTemperature")} />
@@ -182,6 +283,12 @@ export default function CalibrationForm() {
             {...register("result")}
           />
           <TextareaInput label="Conclusao tecnica" required rows={4} error={errors.technicalConclusion?.message} {...register("technicalConclusion")} />
+          <TextareaInput
+            label="Observacoes (opcional)"
+            rows={3}
+            hint="Sai no certificado, abaixo da conclusao."
+            {...register("observations")}
+          />
         </div>
 
         <div className="flex justify-end gap-3">

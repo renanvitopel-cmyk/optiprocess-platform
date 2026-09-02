@@ -36,6 +36,12 @@ export function formatServiceCategory(value: string): string {
   return SERVICE_CATEGORY_LABELS[value] ?? value;
 }
 
+/** Opcoes de area de servico, usadas na ficha do cliente e nos filtros. */
+export const SERVICE_CATEGORY_OPTIONS = Object.entries(SERVICE_CATEGORY_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}));
+
 const TECHNICAL_REPORT_CATEGORY_LABELS: Record<string, string> = {
   ELECTRICAL_INSTALLATION: "Instalacoes eletricas",
   THERMOGRAPHY: "Termografia infravermelha",

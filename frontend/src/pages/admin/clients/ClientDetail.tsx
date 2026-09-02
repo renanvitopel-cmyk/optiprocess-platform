@@ -12,6 +12,7 @@ import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { useAuth } from "../../../auth/AuthContext";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
+import { formatServiceCategory } from "../../../lib/format";
 
 export default function ClientDetail() {
   const { id = "" } = useParams<{ id: string }>();
@@ -78,6 +79,24 @@ export default function ClientDetail() {
             <Info label="Responsavel tecnico" value={client.technicalContactName ?? "-"} />
             <Info label="Responsavel comercial" value={client.commercialContactName ?? "-"} />
           </dl>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-graphite-400">Servicos contratados</p>
+            {client.contractedServices && client.contractedServices.length > 0 ? (
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {client.contractedServices.map((s) => (
+                  <li
+                    key={s}
+                    className="rounded-full border border-navy-200 bg-navy-50 px-2.5 py-1 text-xs font-medium text-navy-700"
+                  >
+                    {formatServiceCategory(s)}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-sm text-graphite-500">Nenhum servico marcado.</p>
+            )}
+          </div>
+
           {client.notes && (
             <div>
               <p className="text-xs uppercase tracking-wide text-graphite-400">Observacoes</p>

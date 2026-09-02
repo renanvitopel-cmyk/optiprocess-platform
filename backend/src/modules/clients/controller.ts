@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { ClientStatus } from "@prisma/client";
+import { ClientStatus, ServiceCategory } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -9,11 +9,16 @@ import { writeAuditLog } from "../../utils/audit";
 
 export const listClients = asyncHandler(async (req: Request, res: Response) => {
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
-  const { status, search } = req.query as { status?: ClientStatus; search?: string };
+  const { status, search, service } = req.query as {
+    status?: ClientStatus;
+    search?: string;
+    service?: ServiceCategory;
+  };
 
   const where = {
     deletedAt: null,
     ...(status ? { status } : {}),
+    ...(service ? { contractedServices: { has: service } } : {}),
     ...(search
       ? {
           OR: [
@@ -82,6 +87,7 @@ const clientSchema = z.object({
   technicalContactName: z.string().nullish(),
   commercialContactName: z.string().nullish(),
   status: z.nativeEnum(ClientStatus).optional(),
+  contractedServices: z.array(z.nativeEnum(ServiceCategory)).optional(),
   notes: z.string().nullish(),
 });
 

@@ -55,8 +55,7 @@ export default function PortalCertificateDetail() {
               <Info label="Data da calibracao" value={formatDate(calibration.calibrationDate)} />
               <Info label="Validade" value={formatDate(calibration.validUntil)} />
               <Info label="Local" value={calibration.location} />
-              <Info label="Padrao utilizado" value={calibration.standardUsed} />
-              <Info label="Rastreabilidade" value={calibration.traceability} />
+              <Info label="Metodo / procedimento" value={calibration.procedure || "-"} />
               <Info label="Tecnico responsavel" value={calibration.technician?.name ?? "-"} />
             </dl>
             <div>
@@ -64,6 +63,36 @@ export default function PortalCertificateDetail() {
               <p className="mt-1 text-sm text-graphite-700">{calibration.technicalConclusion}</p>
             </div>
           </div>
+
+          {calibration.standards && calibration.standards.length > 0 && (
+            <div className="card p-5">
+              <h2 className="mb-3 font-semibold text-navy-900">Padroes utilizados e rastreabilidade</h2>
+              <div className="table-shell">
+                <table className="table-base">
+                  <thead>
+                    <tr>
+                      <th>Padrao</th>
+                      <th>N. de serie</th>
+                      <th>Certificado</th>
+                      <th>Validade</th>
+                      <th>Laboratorio</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {calibration.standards.map((s, i) => (
+                      <tr key={s.id ?? i}>
+                        <td className="font-medium text-navy-900">{s.description}</td>
+                        <td>{s.serialNumber || "-"}</td>
+                        <td>{s.certificateNumber || "-"}</td>
+                        <td>{formatDate(s.certificateValidUntil)}</td>
+                        <td>{s.laboratory || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <div className="card p-5">
             <h2 className="mb-3 font-semibold text-navy-900">Pontos calibrados</h2>

@@ -29,6 +29,7 @@ import { metersRouter } from "./modules/meters/routes";
 import { failureCodesRouter } from "./modules/failureCodes/routes";
 import { maintenancePlansRouter } from "./modules/maintenancePlans/routes";
 import { maintenanceWorkOrdersRouter } from "./modules/maintenanceWorkOrders/routes";
+import { sparePartsRouter } from "./modules/spareParts/routes";
 
 export function createApp() {
   const app = express();
@@ -71,6 +72,7 @@ export function createApp() {
   app.use("/api/failure-codes", failureCodesRouter);
   app.use("/api/maintenance-plans", maintenancePlansRouter);
   app.use("/api/maintenance-work-orders", maintenanceWorkOrdersRouter);
+  app.use("/api/spare-parts", sparePartsRouter);
 
   if (env.isProduction) {
     const frontendDist = path.resolve(__dirname, "../../frontend/dist");

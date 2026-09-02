@@ -17,13 +17,19 @@ function withDerivedStatus<T extends { status: InstrumentStatus; nextDueDate: Da
 export const listInstruments = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CALIBRATION"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
-  const { clientId, search, status } = req.query as { clientId?: string; search?: string; status?: InstrumentStatus };
+  const { clientId, search, status, parentId } = req.query as {
+    clientId?: string;
+    search?: string;
+    status?: InstrumentStatus;
+    parentId?: string;
+  };
 
   const where = {
     deletedAt: null,
     ...clientScopeFilter(req),
     ...(clientId ? { clientId } : {}),
     ...(status ? { status } : {}),
+    ...(parentId ? { parentId } : {}),
     ...(search
       ? {
           OR: [
@@ -49,12 +55,16 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
   res.json(buildPagedResult(items.map(withDerivedStatus), total, pageParams));
 });
 
+const instrumentRefSelect = { id: true, type: true, model: true, serialNumber: true, tag: true } as const;
+
 export const getInstrument = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CALIBRATION"]);
   const instrument = await prisma.instrument.findFirst({
     where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
     include: {
       client: { select: { id: true, companyName: true, tradeName: true } },
+      parent: { select: instrumentRefSelect },
+      children: { where: { deletedAt: null }, select: instrumentRefSelect, orderBy: { tag: "asc" } },
       calibrations: {
         where: { deletedAt: null },
         orderBy: { calibrationDate: "desc" },
@@ -93,7 +103,31 @@ const instrumentSchema = z.object({
   calibrationFrequencyMonths: z.coerce.number().int().min(1),
   lastCalibrationDate: z.coerce.date().nullish(),
   status: z.nativeEnum(InstrumentStatus).optional(),
+  // Arvore de ativos: um filho aponta para o ativo pai (mesmo cliente).
+  parentId: z.string().uuid().nullish(),
 });
+
+/** Ativo pai precisa existir, pertencer ao mesmo cliente e nao criar um ciclo na arvore. */
+async function assertValidParent(clientId: string, parentId: string, excludeId?: string): Promise<void> {
+  if (parentId === excludeId) throw new ValidationError("Um ativo nao pode ser pai de si mesmo.");
+
+  const parent = await prisma.instrument.findFirst({ where: { id: parentId, deletedAt: null } });
+  if (!parent) throw new NotFoundError("Ativo pai");
+  if (parent.clientId !== clientId) throw new ValidationError("O ativo pai precisa ser do mesmo cliente.");
+
+  if (excludeId) {
+    // Sobe a arvore a partir do pai escolhido: se chegar no proprio ativo, seria um ciclo.
+    let cursor: string | null = parent.parentId;
+    for (let i = 0; i < 50 && cursor; i++) {
+      if (cursor === excludeId) throw new ValidationError("Essa escolha criaria um ciclo na arvore de ativos.");
+      const next: { parentId: string | null } | null = await prisma.instrument.findUnique({
+        where: { id: cursor },
+        select: { parentId: true },
+      });
+      cursor = next?.parentId ?? null;
+    }
+  }
+}
 
 /** TAG e o identificador do ativo dentro da empresa cliente - nao pode repetir na mesma
  * empresa, senao duas listas de calibracoes/OS ficariam misturadas sob o mesmo codigo. */
@@ -122,6 +156,7 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
   }
   const clientId = data.clientId;
   await assertTagAvailable(clientId, data.tag);
+  if (data.parentId) await assertValidParent(clientId, data.parentId);
   const nextDueDate = data.lastCalibrationDate
     ? computeNextDueDate(data.lastCalibrationDate, data.calibrationFrequencyMonths)
     : null;
@@ -154,6 +189,9 @@ export const updateInstrument = asyncHandler(async (req: Request, res: Response)
 
   if (data.tag) {
     await assertTagAvailable(data.clientId ?? existing.clientId, data.tag, existing.id);
+  }
+  if (data.parentId) {
+    await assertValidParent(data.clientId ?? existing.clientId, data.parentId, existing.id);
   }
 
   const lastCalibrationDate = data.lastCalibrationDate ?? existing.lastCalibrationDate;
@@ -190,5 +228,57 @@ export const deleteInstrument = asyncHandler(async (req: Request, res: Response)
     description: `Instrumento ${existing.model} (${existing.serialNumber}) removido`,
   });
 
+  res.status(204).send();
+});
+
+// ---------------------------------------------------------------------------
+// BOM (lista de materiais): quais pecas do almoxarifado sao usadas neste ativo.
+// ---------------------------------------------------------------------------
+
+export const listAssetParts = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!instrument) throw new NotFoundError("Instrumento");
+
+  const parts = await prisma.assetPart.findMany({
+    where: { instrumentId: instrument.id },
+    include: { sparePart: true },
+    orderBy: { createdAt: "asc" },
+  });
+  res.json(parts);
+});
+
+const assetPartSchema = z.object({
+  sparePartId: z.string().uuid(),
+  notes: z.string().nullish(),
+});
+
+export const addAssetPart = asyncHandler(async (req: Request, res: Response) => {
+  const data = assetPartSchema.parse(req.body);
+  const instrument = await prisma.instrument.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  if (!instrument) throw new NotFoundError("Instrumento");
+
+  const existing = await prisma.assetPart.findFirst({
+    where: { instrumentId: instrument.id, sparePartId: data.sparePartId },
+  });
+  if (existing) throw new ValidationError("Esta peca ja esta vinculada a este ativo.");
+
+  const link = await prisma.assetPart.create({
+    data: { instrumentId: instrument.id, sparePartId: data.sparePartId, notes: data.notes },
+    include: { sparePart: true },
+  });
+  res.status(201).json(link);
+});
+
+export const removeAssetPart = asyncHandler(async (req: Request, res: Response) => {
+  const link = await prisma.assetPart.findFirst({
+    where: { id: req.params.linkId, instrumentId: req.params.id },
+  });
+  if (!link) throw new NotFoundError("Vinculo de peca");
+
+  await prisma.assetPart.delete({ where: { id: link.id } });
   res.status(204).send();
 });

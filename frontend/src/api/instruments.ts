@@ -1,12 +1,13 @@
 import { api } from "./client";
 import type { PagedResult } from "./client";
-import type { Instrument, InstrumentStatus } from "./types";
+import type { AssetPart, Instrument, InstrumentStatus } from "./types";
 
 export interface ListInstrumentsParams {
   page?: number;
   pageSize?: number;
   clientId?: string;
   status?: InstrumentStatus;
+  parentId?: string;
   search?: string;
 }
 
@@ -20,7 +21,9 @@ export async function getInstrument(id: string): Promise<Instrument> {
   return data;
 }
 
-export type InstrumentInput = Partial<Omit<Instrument, "id" | "status" | "derivedStatus" | "nextDueDate" | "calibrations" | "client">>;
+export type InstrumentInput = Partial<
+  Omit<Instrument, "id" | "status" | "derivedStatus" | "nextDueDate" | "calibrations" | "client" | "parent" | "children">
+>;
 
 export async function createInstrument(input: InstrumentInput): Promise<Instrument> {
   const { data } = await api.post<Instrument>("/instruments", input);
@@ -34,4 +37,22 @@ export async function updateInstrument(id: string, input: InstrumentInput): Prom
 
 export async function deleteInstrument(id: string): Promise<void> {
   await api.delete(`/instruments/${id}`);
+}
+
+// --------------------------------------------------------------------------
+// BOM (lista de materiais): pecas do almoxarifado usadas no ativo
+// --------------------------------------------------------------------------
+
+export async function listAssetParts(instrumentId: string): Promise<AssetPart[]> {
+  const { data } = await api.get<AssetPart[]>(`/instruments/${instrumentId}/parts`);
+  return data;
+}
+
+export async function addAssetPart(instrumentId: string, sparePartId: string, notes?: string): Promise<AssetPart> {
+  const { data } = await api.post<AssetPart>(`/instruments/${instrumentId}/parts`, { sparePartId, notes });
+  return data;
+}
+
+export async function removeAssetPart(instrumentId: string, linkId: string): Promise<void> {
+  await api.delete(`/instruments/${instrumentId}/parts/${linkId}`);
 }

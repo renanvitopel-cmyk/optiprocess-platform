@@ -407,6 +407,11 @@ model Instrument {
   lastCalibrationDate        DateTime?
   nextDueDate                DateTime?
   status                     InstrumentStatus  @default(VALID)
+  // Arvore de ativos: um filho e' um Ativo completo (TAG, calibracoes e planos proprios) que
+  // aponta para o pai - nao uma lista solta sem ficha propria.
+  parentId                   String?
+  parent                     Instrument?       @relation("InstrumentHierarchy", fields: [parentId], references: [id])
+  children                   Instrument[]      @relation("InstrumentHierarchy")
   createdById                String?
   createdAt                  DateTime          @default(now())
   updatedAt                  DateTime          @updatedAt
@@ -417,10 +422,12 @@ model Instrument {
   meters                Meter[]
   maintenancePlans      MaintenancePlan[]
   maintenanceWorkOrders MaintenanceWorkOrder[]
+  assetParts            AssetPart[]
 
   @@index([clientId])
   @@index([status])
   @@index([nextDueDate])
+  @@index([parentId])
   @@map("instruments")
 }
 
@@ -646,14 +653,10 @@ model InventoryMovement {
   quantity       Int
   reason         String?
   relatedOrderId String?
-  // Preenchido quando a baixa e' peca consumida numa ordem de manutencao (CMMS).
-  maintenanceWorkOrderId String?
-  maintenanceWorkOrder   MaintenanceWorkOrder? @relation(fields: [maintenanceWorkOrderId], references: [id])
   createdById    String?
   createdAt      DateTime              @default(now())
 
   @@index([productId])
-  @@index([maintenanceWorkOrderId])
   @@map("inventory_movements")
 }
 
@@ -888,7 +891,7 @@ model MaintenanceWorkOrder {
   deletedAt    DateTime?
 
   checklist MaintenanceWorkOrderChecklistItem[]
-  partsUsed InventoryMovement[]
+  partsUsed SparePartMovement[]
 
   @@unique([clientId, number])
   @@index([clientId])
@@ -909,6 +912,65 @@ model MaintenanceWorkOrderChecklistItem {
 
   @@index([workOrderId])
   @@map("maintenance_work_order_checklist_items")
+}
+
+// ---------------------------------------------------------------------------
+// Almoxarifado do CMMS - estoque tecnico interno, separado do catalogo comercial
+// (Product/InventoryMovement) usado para vender material eletrico aos clientes.
+// ---------------------------------------------------------------------------
+
+model SparePart {
+  id          String    @id @default(uuid())
+  name        String
+  code        String?   @unique
+  category    String?
+  unit        String    @default("un")
+  stockQty    Int       @default(0)
+  minStock    Int       @default(0)
+  active      Boolean   @default(true)
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  movements  SparePartMovement[]
+  assetLinks AssetPart[]
+
+  @@index([active])
+  @@map("spare_parts")
+}
+
+model SparePartMovement {
+  id                     String                @id @default(uuid())
+  sparePartId            String
+  sparePart              SparePart             @relation(fields: [sparePartId], references: [id])
+  type                   InventoryMovementType
+  quantity               Int
+  reason                 String?
+  maintenanceWorkOrderId String?
+  maintenanceWorkOrder   MaintenanceWorkOrder? @relation(fields: [maintenanceWorkOrderId], references: [id])
+  createdById            String?
+  createdAt              DateTime              @default(now())
+
+  @@index([sparePartId])
+  @@index([maintenanceWorkOrderId])
+  @@map("spare_part_movements")
+}
+
+// Lista de materiais (BOM): quais pecas do almoxarifado sao usadas em cada ativo.
+model AssetPart {
+  id           String     @id @default(uuid())
+  instrumentId String
+  instrument   Instrument @relation(fields: [instrumentId], references: [id])
+  sparePartId  String
+  sparePart    SparePart  @relation(fields: [sparePartId], references: [id])
+  notes        String?
+  createdAt    DateTime   @default(now())
+
+  @@unique([instrumentId, sparePartId])
+  @@index([instrumentId])
+  @@index([sparePartId])
+  @@map("asset_parts")
 }
 
 // ---------------------------------------------------------------------------

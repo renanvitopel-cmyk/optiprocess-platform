@@ -138,6 +138,10 @@ export interface Instrument {
   status: InstrumentStatus;
   derivedStatus?: InstrumentStatus;
   calibrations?: CalibrationSummary[];
+  // Arvore de ativos: um filho e' um Ativo completo apontando para o pai.
+  parentId?: string | null;
+  parent?: InstrumentRef | null;
+  children?: InstrumentRef[];
 }
 
 export type CalibrationResult = "APPROVED" | "APPROVED_WITH_RESTRICTION" | "REJECTED";
@@ -497,10 +501,47 @@ export interface MaintenanceWorkOrderChecklistItem {
 
 export interface MaintenancePartUsed {
   id: string;
-  productId: string;
-  product?: { id: string; name: string; sku: string };
+  sparePartId: string;
+  sparePart?: { id: string; name: string; code: string | null; unit: string };
   quantity: number;
   reason: string | null;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Almoxarifado (SparePart) - estoque tecnico interno do CMMS, separado do
+// catalogo comercial de Produtos.
+// ---------------------------------------------------------------------------
+
+export interface SparePartMovement {
+  id: string;
+  sparePartId: string;
+  type: "IN" | "OUT" | "ADJUSTMENT";
+  quantity: number;
+  reason: string | null;
+  maintenanceWorkOrderId: string | null;
+  createdAt: string;
+}
+
+export interface SparePart {
+  id: string;
+  name: string;
+  code: string | null;
+  category: string | null;
+  unit: string;
+  stockQty: number;
+  minStock: number;
+  active: boolean;
+  createdAt: string;
+  movements?: SparePartMovement[];
+}
+
+export interface AssetPart {
+  id: string;
+  instrumentId: string;
+  sparePartId: string;
+  sparePart?: SparePart;
+  notes: string | null;
   createdAt: string;
 }
 

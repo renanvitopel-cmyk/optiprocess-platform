@@ -8,13 +8,16 @@ interface InstrumentPickerProps {
   error?: string;
   required?: boolean;
   clientId?: string;
+  /** Exclui este ativo das opcoes - usado no seletor de "Ativo pai" para nao deixar
+   * um ativo apontar para si mesmo. */
+  excludeId?: string;
   name: string;
   onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   onBlur?: (e: React.FocusEvent<HTMLSelectElement>) => void;
 }
 
 export const InstrumentPicker = forwardRef<HTMLSelectElement, InstrumentPickerProps>(function InstrumentPicker(
-  { label = "Ativo", error, required, clientId, ...rest },
+  { label = "Ativo", error, required, clientId, excludeId, ...rest },
   ref,
 ) {
   const { data } = useQuery({
@@ -31,7 +34,9 @@ export const InstrumentPicker = forwardRef<HTMLSelectElement, InstrumentPickerPr
       error={error}
       placeholder={clientId ? "Selecione o ativo" : "Selecione o cliente primeiro"}
       disabled={!clientId}
-      options={(data?.items ?? []).map((i) => ({ value: i.id, label: `${i.type} - ${i.model} (${i.serialNumber})` }))}
+      options={(data?.items ?? [])
+        .filter((i) => i.id !== excludeId)
+        .map((i) => ({ value: i.id, label: `${i.tag ?? i.type} - ${i.model} (${i.serialNumber})` }))}
       {...rest}
     />
   );

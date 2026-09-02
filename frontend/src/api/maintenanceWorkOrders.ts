@@ -83,7 +83,7 @@ export async function updateChecklistItem(
 
 export async function addWorkOrderPart(
   workOrderId: string,
-  input: { productId: string; quantity: number; reason?: string },
+  input: { sparePartId: string; quantity: number; reason?: string },
 ): Promise<MaintenancePartUsed> {
   const { data } = await api.post<MaintenancePartUsed>(`/maintenance-work-orders/${workOrderId}/parts`, input);
   return data;

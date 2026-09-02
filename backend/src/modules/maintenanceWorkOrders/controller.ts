@@ -8,7 +8,7 @@ import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
 import { nextClientMaintenanceOrderNumber } from "../../utils/sequence";
-import { applyStockMovement } from "../../lib/inventory";
+import { applySparePartMovement } from "../../lib/inventory";
 import { getStorageProvider } from "../../lib/storage";
 
 const detailInclude = {
@@ -18,7 +18,7 @@ const detailInclude = {
   technician: { select: { id: true, name: true } },
   failureCode: true,
   checklist: { orderBy: { sortOrder: "asc" as const } },
-  partsUsed: { include: { product: { select: { id: true, name: true, sku: true } } } },
+  partsUsed: { include: { sparePart: { select: { id: true, name: true, code: true, unit: true } } } },
 };
 
 export const listMaintenanceWorkOrders = asyncHandler(async (req: Request, res: Response) => {
@@ -233,7 +233,7 @@ export const updateChecklistItem = asyncHandler(async (req: Request, res: Respon
 });
 
 const partSchema = z.object({
-  productId: z.string().uuid(),
+  sparePartId: z.string().uuid(),
   quantity: z.coerce.number().int().positive(),
   reason: z.string().nullish(),
 });
@@ -243,8 +243,8 @@ export const addWorkOrderPart = asyncHandler(async (req: Request, res: Response)
   const workOrder = await prisma.maintenanceWorkOrder.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!workOrder) throw new NotFoundError("Ordem de manutencao");
 
-  const movement = await applyStockMovement({
-    productId: data.productId,
+  const movement = await applySparePartMovement({
+    sparePartId: data.sparePartId,
     type: "OUT",
     quantity: data.quantity,
     reason: data.reason ?? `Consumido na OS ${workOrder.number}`,
@@ -256,19 +256,19 @@ export const addWorkOrderPart = asyncHandler(async (req: Request, res: Response)
 });
 
 export const removeWorkOrderPart = asyncHandler(async (req: Request, res: Response) => {
-  const movement = await prisma.inventoryMovement.findFirst({
+  const movement = await prisma.sparePartMovement.findFirst({
     where: { id: req.params.movementId, maintenanceWorkOrderId: req.params.id },
   });
   if (!movement) throw new NotFoundError("Movimentacao");
 
   // Estorna a baixa de estoque (devolve a quantidade) e remove o registro.
-  await applyStockMovement({
-    productId: movement.productId,
+  await applySparePartMovement({
+    sparePartId: movement.sparePartId,
     type: "IN",
     quantity: movement.quantity,
     reason: "Estorno de peca removida da OS",
   });
-  await prisma.inventoryMovement.delete({ where: { id: movement.id } });
+  await prisma.sparePartMovement.delete({ where: { id: movement.id } });
 
   res.status(204).send();
 });

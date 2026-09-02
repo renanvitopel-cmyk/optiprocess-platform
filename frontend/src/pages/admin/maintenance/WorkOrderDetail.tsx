@@ -11,7 +11,8 @@ import {
   addWorkOrderPart,
   removeWorkOrderPart,
 } from "../../../api/maintenanceWorkOrders";
-import { listProducts } from "../../../api/products";
+import { listSpareParts } from "../../../api/spareParts";
+import { listAssetParts } from "../../../api/instruments";
 import type { ChecklistItemResult } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
@@ -43,11 +44,21 @@ export default function WorkOrderDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [partProductId, setPartProductId] = useState("");
+  const [partSparePartId, setPartSparePartId] = useState("");
   const [partQty, setPartQty] = useState(1);
 
   const { data: workOrder, isLoading } = useQuery({ queryKey: ["maintenance-work-order", id], queryFn: () => getMaintenanceWorkOrder(id) });
-  const { data: products } = useQuery({ queryKey: ["products-picker"], queryFn: () => listProducts({ pageSize: 200 }) });
+  const { data: spareParts } = useQuery({ queryKey: ["spare-parts-picker"], queryFn: () => listSpareParts({ active: true, pageSize: 200 }) });
+  const { data: assetParts } = useQuery({
+    queryKey: ["instrument-asset-parts", workOrder?.instrumentId],
+    queryFn: () => listAssetParts(workOrder!.instrumentId),
+    enabled: !!workOrder?.instrumentId,
+  });
+
+  // Prioriza na lista as pecas ja cadastradas no BOM do ativo desta OS.
+  const bomIds = new Set((assetParts ?? []).map((a) => a.sparePartId));
+  const bomOptions = (spareParts?.items ?? []).filter((p) => bomIds.has(p.id));
+  const otherOptions = (spareParts?.items ?? []).filter((p) => !bomIds.has(p.id));
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["maintenance-work-order", id] });
@@ -102,12 +113,12 @@ export default function WorkOrderDetail() {
   }
 
   async function handleAddPart() {
-    if (!partProductId || partQty < 1) return;
+    if (!partSparePartId || partQty < 1) return;
     setBusy(true);
     try {
-      await addWorkOrderPart(id, { productId: partProductId, quantity: partQty });
+      await addWorkOrderPart(id, { sparePartId: partSparePartId, quantity: partQty });
       notify("success", "Peca registrada.");
-      setPartProductId("");
+      setPartSparePartId("");
       setPartQty(1);
       invalidate();
     } catch (error) {
@@ -230,14 +241,23 @@ export default function WorkOrderDetail() {
           </div>
 
           <div className="card space-y-3 p-5">
-            <h2 className="font-semibold text-navy-900">Pecas consumidas</h2>
+            <h2 className="font-semibold text-navy-900">Pecas consumidas (almoxarifado)</h2>
             {canManage && !isCompleted && (
               <div className="flex flex-wrap items-end gap-2">
-                <select className="input flex-1" value={partProductId} onChange={(e) => setPartProductId(e.target.value)}>
-                  <option value="">Selecione o produto</option>
-                  {(products?.items ?? []).map((p) => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.sku}) - estoque: {p.stockQty}</option>
-                  ))}
+                <select className="input flex-1" value={partSparePartId} onChange={(e) => setPartSparePartId(e.target.value)}>
+                  <option value="">Selecione a peca</option>
+                  {bomOptions.length > 0 && (
+                    <optgroup label="Pecas deste ativo (BOM)">
+                      {bomOptions.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name} - estoque: {p.stockQty} {p.unit}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="Todo o almoxarifado">
+                    {otherOptions.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name} - estoque: {p.stockQty} {p.unit}</option>
+                    ))}
+                  </optgroup>
                 </select>
                 <input
                   type="number"
@@ -246,7 +266,7 @@ export default function WorkOrderDetail() {
                   value={partQty}
                   onChange={(e) => setPartQty(Number(e.target.value))}
                 />
-                <button type="button" className="btn-outline" onClick={handleAddPart} disabled={busy || !partProductId}>
+                <button type="button" className="btn-outline" onClick={handleAddPart} disabled={busy || !partSparePartId}>
                   <Plus className="h-4 w-4" /> Adicionar
                 </button>
               </div>
@@ -257,7 +277,7 @@ export default function WorkOrderDetail() {
               <ul className="divide-y divide-gray-100">
                 {workOrder.partsUsed.map((part) => (
                   <li key={part.id} className="flex items-center justify-between py-2 text-sm">
-                    <span>{part.product?.name ?? "Produto"} - {part.quantity} un.</span>
+                    <span>{part.sparePart?.name ?? "Peca"} - {part.quantity} {part.sparePart?.unit ?? "un."}</span>
                     {canManage && !isCompleted && (
                       <button onClick={() => handleRemovePart(part.id)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover peca">
                         <X className="h-4 w-4" />

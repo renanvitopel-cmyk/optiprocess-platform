@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Trash2, Plus } from "lucide-react";
-import { deleteInstrument, getInstrument } from "../../../api/instruments";
+import { deleteInstrument, getInstrument, listAssetParts, addAssetPart, removeAssetPart } from "../../../api/instruments";
 import { listServiceOrders } from "../../../api/serviceOrders";
 import { listMeters, addMeterReading } from "../../../api/meters";
 import { listMaintenancePlans } from "../../../api/maintenancePlans";
 import { listMaintenanceWorkOrders } from "../../../api/maintenanceWorkOrders";
+import { listSpareParts } from "../../../api/spareParts";
 import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -28,9 +29,11 @@ export default function InstrumentDetail() {
   const canManage = user?.role === "ADMIN" || user?.role === "TECHNICIAN";
 
   const [editOpen, setEditOpen] = useState(false);
+  const [addChildOpen, setAddChildOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [meterModalOpen, setMeterModalOpen] = useState(false);
+  const [selectedSparePartId, setSelectedSparePartId] = useState("");
 
   const { data: instrument, isLoading } = useQuery({ queryKey: ["instrument", id], queryFn: () => getInstrument(id) });
   const { data: serviceOrders } = useQuery({
@@ -53,6 +56,12 @@ export default function InstrumentDetail() {
     queryFn: () => listMaintenanceWorkOrders({ instrumentId: id, pageSize: 10 }),
     enabled: !!id,
   });
+  const { data: assetParts } = useQuery({
+    queryKey: ["instrument-asset-parts", id],
+    queryFn: () => listAssetParts(id),
+    enabled: !!id,
+  });
+  const { data: spareParts } = useQuery({ queryKey: ["spare-parts-picker"], queryFn: () => listSpareParts({ active: true, pageSize: 200 }) });
 
   async function handleAddReading(meterId: string) {
     const value = window.prompt("Nova leitura do medidor:");
@@ -61,6 +70,27 @@ export default function InstrumentDetail() {
       await addMeterReading(meterId, Number(value));
       notify("success", "Leitura registrada.");
       queryClient.invalidateQueries({ queryKey: ["instrument-meters", id] });
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    }
+  }
+
+  async function handleAddAssetPart() {
+    if (!selectedSparePartId) return;
+    try {
+      await addAssetPart(id, selectedSparePartId);
+      notify("success", "Peca vinculada ao ativo.");
+      setSelectedSparePartId("");
+      queryClient.invalidateQueries({ queryKey: ["instrument-asset-parts", id] });
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    }
+  }
+
+  async function handleRemoveAssetPart(linkId: string) {
+    try {
+      await removeAssetPart(id, linkId);
+      queryClient.invalidateQueries({ queryKey: ["instrument-asset-parts", id] });
     } catch (error) {
       notify("error", getApiErrorMessage(error));
     }
@@ -100,6 +130,15 @@ export default function InstrumentDetail() {
           )
         }
       />
+
+      {instrument.parent && (
+        <p className="-mt-3 mb-4 text-sm text-graphite-500">
+          Componente de:{" "}
+          <Link to={`/gestao/instrumentos/${instrument.parent.id}`} className="font-medium text-navy-700 hover:underline">
+            TAG {instrument.parent.tag ?? instrument.parent.type}
+          </Link>
+        </p>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="card space-y-4 p-5 lg:col-span-2">
@@ -248,8 +287,77 @@ export default function InstrumentDetail() {
               </>
             )}
           </div>
+
+          <div className="card p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-semibold text-navy-900">Ativos filhos</h2>
+              {canManage && (
+                <button className="btn-ghost btn-sm" onClick={() => setAddChildOpen(true)}>
+                  <Plus className="h-4 w-4" /> Adicionar filho
+                </button>
+              )}
+            </div>
+            {!instrument.children || instrument.children.length === 0 ? (
+              <EmptyState title="Nenhum componente" description="Ex.: motor, valvula, painel - componentes deste ativo com ficha propria." />
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {instrument.children.map((c) => (
+                  <li key={c.id}>
+                    <Link to={`/gestao/instrumentos/${c.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
+                      <span className="font-medium text-graphite-800">TAG {c.tag ?? c.type}</span>
+                      <span className="text-xs text-graphite-400">{c.type}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="card p-5">
+            <h2 className="mb-3 font-semibold text-navy-900">Pecas compativeis (BOM)</h2>
+            {canManage && (
+              <div className="mb-3 flex gap-2">
+                <select className="input flex-1" value={selectedSparePartId} onChange={(e) => setSelectedSparePartId(e.target.value)}>
+                  <option value="">Selecione uma peca do almoxarifado</option>
+                  {(spareParts?.items ?? []).map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}{p.code ? ` (${p.code})` : ""}</option>
+                  ))}
+                </select>
+                <button type="button" className="btn-outline" onClick={handleAddAssetPart} disabled={!selectedSparePartId}>
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+            {!assetParts || assetParts.length === 0 ? (
+              <EmptyState title="Nenhuma peca vinculada" description="Vincule as pecas do almoxarifado usadas neste ativo." />
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {assetParts.map((link) => (
+                  <li key={link.id} className="flex items-center justify-between py-2.5 text-sm">
+                    <span className="text-graphite-800">{link.sparePart?.name}</span>
+                    {canManage && (
+                      <button onClick={() => handleRemoveAssetPart(link.id)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover vinculo">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
+
+      <InstrumentFormModal
+        open={addChildOpen}
+        onClose={() => setAddChildOpen(false)}
+        initialParentId={instrument.id}
+        initialClientId={instrument.clientId}
+        onSaved={() => {
+          setAddChildOpen(false);
+          queryClient.invalidateQueries({ queryKey: ["instrument", id] });
+        }}
+      />
 
       <MeterFormModal
         open={meterModalOpen}

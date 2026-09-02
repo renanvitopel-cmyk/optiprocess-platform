@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Modal } from "../../../components/Modal";
 import { TextInput, SelectInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
+import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { createInstrument, updateInstrument } from "../../../api/instruments";
 import type { Instrument } from "../../../api/types";
 import { useToast } from "../../../components/Toast";
@@ -24,6 +25,7 @@ const schema = z.object({
   calibrationFrequencyMonths: z.coerce.number().int().min(1, "Informe a periodicidade."),
   lastCalibrationDate: z.string().optional(),
   status: z.enum(["VALID", "DUE_SOON", "EXPIRED", "IN_MAINTENANCE"]).optional(),
+  parentId: z.string().uuid().optional().or(z.literal("")),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -32,14 +34,18 @@ interface Props {
   onClose: () => void;
   onSaved: (instrument: Instrument) => void;
   instrument?: Instrument;
+  /** Pre-preenche o ativo pai e o cliente quando aberto a partir de "Adicionar filho" na ficha do pai. */
+  initialParentId?: string;
+  initialClientId?: string;
 }
 
-export function InstrumentFormModal({ open, onClose, onSaved, instrument }: Props) {
+export function InstrumentFormModal({ open, onClose, onSaved, instrument, initialParentId, initialClientId }: Props) {
   const { notify } = useToast();
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { calibrationFrequencyMonths: 12 },
   });
+  const clientId = watch("clientId");
 
   useEffect(() => {
     if (open) {
@@ -59,15 +65,17 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument }: Prop
               calibrationFrequencyMonths: instrument.calibrationFrequencyMonths,
               lastCalibrationDate: instrument.lastCalibrationDate?.slice(0, 10) ?? "",
               status: instrument.status,
+              parentId: instrument.parentId ?? "",
             }
-          : { calibrationFrequencyMonths: 12 },
+          : { calibrationFrequencyMonths: 12, parentId: initialParentId ?? "", clientId: initialClientId ?? "" },
       );
     }
-  }, [open, instrument, reset]);
+  }, [open, instrument, initialParentId, initialClientId, reset]);
 
   async function onSubmit(values: FormValues) {
     try {
-      const saved = instrument ? await updateInstrument(instrument.id, values) : await createInstrument(values);
+      const payload = { ...values, parentId: values.parentId || null };
+      const saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
       notify("success", instrument ? "Ativo atualizado." : "Ativo cadastrado.");
       onSaved(saved);
     } catch (error) {
@@ -96,6 +104,13 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument }: Prop
           />
         </div>
         <TextInput label="Tipo de ativo" required error={errors.type?.message} {...register("type")} />
+        <InstrumentPicker
+          label="Ativo pai (opcional)"
+          clientId={clientId}
+          excludeId={instrument?.id}
+          error={errors.parentId?.message}
+          {...register("parentId")}
+        />
         <div className="grid gap-4 sm:grid-cols-3">
           <TextInput label="Fabricante" required error={errors.manufacturer?.message} {...register("manufacturer")} />
           <TextInput label="Modelo" required error={errors.model?.message} {...register("model")} />

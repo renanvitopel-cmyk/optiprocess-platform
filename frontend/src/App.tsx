@@ -62,6 +62,7 @@ const MaintenanceDashboard = lazy(() => import("./pages/admin/maintenance/Mainte
 const MaintenancePlansList = lazy(() => import("./pages/admin/maintenance/MaintenancePlansList"));
 const MaintenancePlanForm = lazy(() => import("./pages/admin/maintenance/MaintenancePlanForm"));
 const MaintenancePlanDetail = lazy(() => import("./pages/admin/maintenance/MaintenancePlanDetail"));
+const MaintenancePlanTemplatesList = lazy(() => import("./pages/admin/maintenance/MaintenancePlanTemplatesList"));
 const WorkOrdersList = lazy(() => import("./pages/admin/maintenance/WorkOrdersList"));
 const KanbanBoard = lazy(() => import("./pages/admin/maintenance/KanbanBoard"));
 const RcaList = lazy(() => import("./pages/admin/maintenance/RcaList"));
@@ -151,6 +152,7 @@ export default function App() {
                 <Route path="manutencao/planos/novo" element={<MaintenancePlanForm />} />
                 <Route path="manutencao/planos/:id/editar" element={<MaintenancePlanForm />} />
                 <Route path="manutencao/planos/:id" element={<MaintenancePlanDetail />} />
+                <Route path="manutencao/modelos-de-plano" element={<MaintenancePlanTemplatesList />} />
                 <Route path="manutencao/ordens" element={<WorkOrdersList />} />
                 <Route path="manutencao/kanban" element={<KanbanBoard />} />
                 <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
@@ -207,6 +209,7 @@ export default function App() {
                 <Route path="manutencao/planos/novo" element={<MaintenancePlanForm />} />
                 <Route path="manutencao/planos/:id/editar" element={<MaintenancePlanForm />} />
                 <Route path="manutencao/planos/:id" element={<MaintenancePlanDetail />} />
+                <Route path="manutencao/modelos-de-plano" element={<MaintenancePlanTemplatesList />} />
                 <Route path="manutencao/ordens" element={<WorkOrdersList />} />
                 <Route path="manutencao/kanban" element={<KanbanBoard />} />
                 <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />

@@ -588,6 +588,13 @@ export interface MaintenancePlanChecklistItem {
   sortOrder?: number;
 }
 
+export interface MaintenancePlanPart {
+  id?: string;
+  sparePartId: string;
+  sparePart?: { id: string; name: string; code: string | null; unit: string; stockQty: number; reservedQty: number };
+  quantity: number;
+}
+
 export interface MaintenancePlan {
   id: string;
   clientId: string;
@@ -608,9 +615,39 @@ export interface MaintenancePlan {
   responsibleId: string | null;
   responsible?: { id: string; name: string } | null;
   derivedStatus?: DerivedDueStatus;
+  toleranceDaysBefore: number | null;
+  toleranceDaysAfter: number | null;
+  procedure: string | null;
+  estimatedLaborHours: number | null;
+  templateId: string | null;
+  template?: { id: string; name: string } | null;
   checklistTemplate: MaintenancePlanChecklistItem[];
+  parts?: MaintenancePlanPart[];
   workOrders?: { id: string; number: string; status: MaintenanceOrderStatus; completedAt: string | null }[];
   createdAt: string;
+}
+
+export interface MaintenancePlanTemplateChecklistItem {
+  id?: string;
+  description: string;
+  sortOrder?: number;
+}
+
+export interface MaintenancePlanTemplate {
+  id: string;
+  clientId: string | null;
+  name: string;
+  applicableAssetFamily: string | null;
+  triggerType: MaintenanceTriggerType;
+  frequencyDays: number | null;
+  meterInterval: number | null;
+  toleranceDaysBefore: number | null;
+  toleranceDaysAfter: number | null;
+  procedure: string | null;
+  estimatedLaborHours: number | null;
+  active: boolean;
+  createdAt: string;
+  checklistItems: MaintenancePlanTemplateChecklistItem[];
 }
 
 export interface MaintenanceWorkOrderChecklistItem {

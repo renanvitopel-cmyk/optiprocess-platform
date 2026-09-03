@@ -95,7 +95,22 @@ export default function MaintenancePlanDetail() {
             <Info label="Proximo vencimento" value={plan.triggerType === "TIME" ? formatDate(plan.nextDueDate) : "-"} />
             <Info label="Ultima geracao" value={formatDate(plan.lastGeneratedAt)} />
             <Info label="Responsavel" value={plan.responsible?.name ?? "-"} />
+            <Info
+              label="Tolerancia"
+              value={plan.toleranceDaysBefore == null && plan.toleranceDaysAfter == null ? "-" : `${plan.toleranceDaysBefore ?? 0} dias antes / ${plan.toleranceDaysAfter ?? 0} dias depois`}
+            />
+            <Info label="HH prevista" value={plan.estimatedLaborHours != null ? `${plan.estimatedLaborHours}h` : "-"} />
+            {plan.template && (
+              <Info label="Modelo de origem" value={plan.template.name} />
+            )}
           </dl>
+
+          {plan.procedure && (
+            <div>
+              <p className="mb-2 text-xs uppercase tracking-wide text-graphite-400">Procedimento</p>
+              <p className="whitespace-pre-line text-sm text-graphite-700">{plan.procedure}</p>
+            </div>
+          )}
 
           <div>
             <p className="mb-2 text-xs uppercase tracking-wide text-graphite-400">Checklist padrao</p>
@@ -105,6 +120,22 @@ export default function MaintenancePlanDetail() {
               <ul className="list-disc space-y-1 pl-5 text-sm text-graphite-700">
                 {plan.checklistTemplate.map((c, i) => (
                   <li key={c.id ?? i}>{c.description}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs uppercase tracking-wide text-graphite-400">Materiais previstos</p>
+            {!plan.parts || plan.parts.length === 0 ? (
+              <p className="text-sm text-graphite-500">Nenhum material previsto.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100 text-sm">
+                {plan.parts.map((p, i) => (
+                  <li key={p.id ?? i} className="flex items-center justify-between py-1.5">
+                    <span className="text-graphite-700">{p.sparePart?.name ?? "-"}{p.sparePart?.code ? ` (${p.sparePart.code})` : ""}</span>
+                    <span className="font-medium text-navy-900">{p.quantity} {p.sparePart?.unit ?? "un"}</span>
+                  </li>
                 ))}
               </ul>
             )}

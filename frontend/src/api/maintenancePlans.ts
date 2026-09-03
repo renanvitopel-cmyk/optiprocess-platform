@@ -32,6 +32,12 @@ export interface MaintenancePlanInput {
   active?: boolean;
   responsibleId?: string | null;
   checklistTemplate?: { description: string }[];
+  toleranceDaysBefore?: number | null;
+  toleranceDaysAfter?: number | null;
+  procedure?: string | null;
+  estimatedLaborHours?: number | null;
+  templateId?: string | null;
+  parts?: { sparePartId: string; quantity: number }[];
 }
 
 export async function createMaintenancePlan(input: MaintenancePlanInput): Promise<MaintenancePlan> {

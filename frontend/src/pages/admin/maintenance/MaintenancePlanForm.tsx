@@ -12,6 +12,7 @@ import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
 import { listMeters } from "../../../api/meters";
 import { createMaintenancePlan, getMaintenancePlan, updateMaintenancePlan } from "../../../api/maintenancePlans";
+import { listSpareParts } from "../../../api/spareParts";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { FullPageSpinner } from "../../../components/Spinner";
@@ -29,6 +30,11 @@ const schema = z.object({
   responsibleId: z.string().uuid().optional().or(z.literal("")),
   active: z.boolean().optional(),
   checklistTemplate: z.array(z.object({ description: z.string().min(1, "Descreva o item.") })),
+  toleranceDaysBefore: z.coerce.number().int().nonnegative().optional(),
+  toleranceDaysAfter: z.coerce.number().int().nonnegative().optional(),
+  procedure: z.string().optional(),
+  estimatedLaborHours: z.coerce.number().nonnegative().optional(),
+  parts: z.array(z.object({ sparePartId: z.string(), quantity: z.coerce.number().int().positive() })),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -54,9 +60,11 @@ export default function MaintenancePlanForm() {
       triggerType: "TIME",
       active: true,
       checklistTemplate: [{ description: "" }],
+      parts: [],
     },
   });
   const { fields, append, remove } = useFieldArray({ control, name: "checklistTemplate" });
+  const { fields: partFields, append: appendPart, remove: removePart } = useFieldArray({ control, name: "parts" });
   const clientId = watch("clientId");
   const instrumentId = watch("instrumentId");
   const triggerType = watch("triggerType");
@@ -65,6 +73,12 @@ export default function MaintenancePlanForm() {
     queryKey: ["meters-picker", instrumentId],
     queryFn: () => listMeters({ instrumentId }),
     enabled: !!instrumentId && triggerType === "METER",
+  });
+
+  const { data: spareParts } = useQuery({
+    queryKey: ["spare-parts-picker", clientId],
+    queryFn: () => listSpareParts({ clientId, active: true, pageSize: 200 }),
+    enabled: !!clientId,
   });
 
   useEffect(() => {
@@ -81,6 +95,11 @@ export default function MaintenancePlanForm() {
         responsibleId: existing.responsibleId ?? "",
         active: existing.active,
         checklistTemplate: existing.checklistTemplate.length ? existing.checklistTemplate : [{ description: "" }],
+        toleranceDaysBefore: existing.toleranceDaysBefore ?? undefined,
+        toleranceDaysAfter: existing.toleranceDaysAfter ?? undefined,
+        procedure: existing.procedure ?? "",
+        estimatedLaborHours: existing.estimatedLaborHours ?? undefined,
+        parts: (existing.parts ?? []).map((p) => ({ sparePartId: p.sparePartId, quantity: p.quantity })),
       });
     }
   }, [existing, reset]);
@@ -92,6 +111,11 @@ export default function MaintenancePlanForm() {
         meterId: values.meterId || null,
         responsibleId: values.responsibleId || null,
         checklistTemplate: values.checklistTemplate.filter((c) => c.description.trim()),
+        toleranceDaysBefore: values.toleranceDaysBefore ?? null,
+        toleranceDaysAfter: values.toleranceDaysAfter ?? null,
+        procedure: values.procedure || null,
+        estimatedLaborHours: values.estimatedLaborHours ?? null,
+        parts: values.parts.filter((p) => p.sparePartId),
       };
       const saved = isEdit ? await updateMaintenancePlan(id!, payload) : await createMaintenancePlan(payload);
       notify("success", isEdit ? "Plano atualizado." : "Plano criado.");
@@ -172,6 +196,73 @@ export default function MaintenancePlanForm() {
                 error={errors.meterInterval?.message}
                 {...register("meterInterval")}
               />
+            </div>
+          )}
+        </div>
+
+        <div className="card space-y-4 p-5">
+          <h2 className="font-semibold text-navy-900">Tolerancia e execucao</h2>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <TextInput
+              label="Tolerancia antes do vencimento (dias, opcional)"
+              type="number"
+              hint="Pode antecipar a execucao ate X dias antes."
+              error={errors.toleranceDaysBefore?.message}
+              {...register("toleranceDaysBefore")}
+            />
+            <TextInput
+              label="Tolerancia apos o vencimento (dias, opcional)"
+              type="number"
+              hint="Pode atrasar a execucao ate X dias depois."
+              error={errors.toleranceDaysAfter?.message}
+              {...register("toleranceDaysAfter")}
+            />
+            <TextInput
+              label="HH prevista (opcional)"
+              type="number"
+              step="any"
+              hint="Copiada para a OS gerada."
+              error={errors.estimatedLaborHours?.message}
+              {...register("estimatedLaborHours")}
+            />
+          </div>
+          <TextareaInput label="Procedimento padrao (opcional)" rows={3} hint="Como executar o servico - diferente do checklist, que sao itens marcaveis." {...register("procedure")} />
+        </div>
+
+        <div className="card space-y-4 p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-navy-900">Materiais previstos</h2>
+            <button type="button" className="btn-ghost btn-sm" onClick={() => appendPart({ sparePartId: "", quantity: 1 })} disabled={!clientId}>
+              <Plus className="h-4 w-4" /> Adicionar material
+            </button>
+          </div>
+          <p className="text-xs text-graphite-500">Ao gerar a OS, o sistema tenta reservar essas pecas no almoxarifado (melhor esforco - sem saldo, a OS e' gerada sem reservar).</p>
+          {!clientId ? (
+            <p className="text-sm text-graphite-500">Selecione o cliente para escolher materiais do almoxarifado.</p>
+          ) : (
+            <div className="space-y-2">
+              {partFields.map((field, index) => (
+                <div key={field.id} className="flex items-center gap-2">
+                  <SelectInput
+                    className="flex-1"
+                    placeholder="Selecione a peca"
+                    options={(spareParts?.items ?? []).map((s) => ({ value: s.id, label: `${s.name}${s.code ? ` (${s.code})` : ""} - ${s.stockQty} ${s.unit} em estoque` }))}
+                    error={errors.parts?.[index]?.sparePartId?.message}
+                    {...register(`parts.${index}.sparePartId`)}
+                  />
+                  <TextInput
+                    className="w-28"
+                    type="number"
+                    placeholder="Qtd."
+                    error={errors.parts?.[index]?.quantity?.message}
+                    {...register(`parts.${index}.quantity`)}
+                  />
+                  <button type="button" onClick={() => removePart(index)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover material">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              {partFields.length === 0 && <p className="text-sm text-graphite-500">Nenhum material previsto.</p>}
             </div>
           )}
         </div>

@@ -15,6 +15,14 @@ import {
   removeWorkOrderPart,
   addWorkOrderLabor,
   removeWorkOrderLabor,
+  addWorkOrderThirdPartyService,
+  removeWorkOrderThirdPartyService,
+  addWorkOrderReservation,
+  releaseWorkOrderReservation,
+  consumeWorkOrderReservation,
+  addWorkOrderStoppage,
+  updateWorkOrderStoppage,
+  removeWorkOrderStoppage,
   listWorkOrderAttachmentsRoute,
   uploadWorkOrderAttachment,
   deleteWorkOrderAttachment,
@@ -42,6 +50,17 @@ maintenanceWorkOrdersRouter.delete("/:id/parts/:movementId", requireRole("ADMIN"
 
 maintenanceWorkOrdersRouter.post("/:id/labor", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addWorkOrderLabor);
 maintenanceWorkOrdersRouter.delete("/:id/labor/:entryId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), removeWorkOrderLabor);
+
+maintenanceWorkOrdersRouter.post("/:id/third-party-services", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addWorkOrderThirdPartyService);
+maintenanceWorkOrdersRouter.delete("/:id/third-party-services/:serviceId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), removeWorkOrderThirdPartyService);
+
+maintenanceWorkOrdersRouter.post("/:id/reservations", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addWorkOrderReservation);
+maintenanceWorkOrdersRouter.post("/:id/reservations/:reservationId/release", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), releaseWorkOrderReservation);
+maintenanceWorkOrdersRouter.post("/:id/reservations/:reservationId/consume", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), consumeWorkOrderReservation);
+
+maintenanceWorkOrdersRouter.post("/:id/stoppages", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addWorkOrderStoppage);
+maintenanceWorkOrdersRouter.patch("/:id/stoppages/:stoppageId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), updateWorkOrderStoppage);
+maintenanceWorkOrdersRouter.delete("/:id/stoppages/:stoppageId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), removeWorkOrderStoppage);
 
 maintenanceWorkOrdersRouter.get("/:id/attachments", listWorkOrderAttachmentsRoute);
 maintenanceWorkOrdersRouter.get("/:id/attachments/:attachmentId/url", getWorkOrderAttachmentUrl);

@@ -104,6 +104,18 @@ enum MaintenanceOrderStatus {
   CANCELED
 }
 
+enum LaborHourType {
+  NORMAL
+  OVERTIME
+  NIGHT
+}
+
+enum SparePartReservationStatus {
+  RESERVED
+  CONSUMED
+  RELEASED
+}
+
 // Fluxo da Solicitacao de Servico (SS) - porta de entrada simples pra quem opera reportar
 // necessidade de manutencao, antes de virar uma OS de verdade. Nao confundir com o status
 // da OS (MaintenanceOrderStatus) nem com ServiceOrder (OS externa da OptiProcess).
@@ -374,6 +386,7 @@ model Client {
   costCenters           CostCenter[]
   serviceRequests           ServiceRequest[]
   serviceRequestCategories  ServiceRequestCategory[]
+  stoppageReasons           StoppageReason[]
 
   @@index([status])
   @@map("clients")
@@ -945,12 +958,94 @@ model WorkOrderLabor {
   // Snapshot do valor/hora no momento do lancamento - preserva o custo historico correto
   // mesmo que o valor/hora do recurso mude depois.
   hourlyRateSnapshot Float?
+  // Inicio/fim opcionais (quando informados, a UI sugere "hours" a partir da diferenca -
+  // "hours" continua sendo o campo usado no calculo de custo, pra nao depender de todo
+  // lancamento antigo/futuro ter os dois preenchidos).
+  hourType        LaborHourType?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  notes           String?
   createdById     String?
   createdAt       DateTime             @default(now())
 
   @@index([workOrderId])
   @@index([laborResourceId])
   @@map("work_order_labor")
+}
+
+// Servico de terceiro contratado pontualmente pra uma OS (ex.: calibracao externa,
+// solda especializada) - custo entra na apuracao total da OS ao lado de pecas e mao de
+// obra propria.
+model WorkOrderThirdPartyService {
+  id            String               @id @default(uuid())
+  workOrderId   String
+  workOrder     MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id])
+  supplierName  String
+  description   String
+  cost          Float
+  invoiceNumber String?
+  notes         String?
+  createdById   String?
+  createdAt     DateTime             @default(now())
+
+  @@index([workOrderId])
+  @@map("work_order_third_party_services")
+}
+
+// Reserva de peca do almoxarifado pra uma OS, sem baixar o estoque ainda - so marca
+// como comprometido (SparePart.reservedQty), pra o planejamento garantir material sem
+// duas OS disputarem a mesma peca. Consumir a reserva vira uma baixa de verdade
+// (SparePartMovement OUT); liberar so cancela, sem mexer no estoque.
+model SparePartReservation {
+  id          String                      @id @default(uuid())
+  sparePartId String
+  sparePart   SparePart                   @relation(fields: [sparePartId], references: [id])
+  workOrderId String
+  workOrder   MaintenanceWorkOrder        @relation(fields: [workOrderId], references: [id])
+  quantity    Int
+  status      SparePartReservationStatus  @default(RESERVED)
+  createdById String?
+  createdAt   DateTime                    @default(now())
+  resolvedAt  DateTime?
+
+  @@index([sparePartId])
+  @@index([workOrderId])
+  @@map("spare_part_reservations")
+}
+
+// Catalogo de motivos de parada (ex.: falta de material, quebra, manutencao programada) -
+// mesmo padrao do FailureCode: global OptiProcess + por cliente.
+model StoppageReason {
+  id        String   @id @default(uuid())
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id])
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  stoppages WorkOrderStoppage[]
+
+  @@unique([clientId, name])
+  @@index([clientId])
+  @@map("stoppage_reasons")
+}
+
+// Evento de parada do ativo durante a OS - janela especifica de equipamento parado,
+// mais granular que o intervalo iniciada/concluida da OS inteira.
+model WorkOrderStoppage {
+  id          String               @id @default(uuid())
+  workOrderId String
+  workOrder   MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id])
+  reasonId    String?
+  reason      StoppageReason?      @relation(fields: [reasonId], references: [id])
+  startedAt   DateTime
+  endedAt     DateTime?
+  notes       String?
+  createdById String?
+  createdAt   DateTime             @default(now())
+
+  @@index([workOrderId])
+  @@map("work_order_stoppages")
 }
 
 model AssetType {
@@ -1227,6 +1322,9 @@ model MaintenanceWorkOrder {
   checklist MaintenanceWorkOrderChecklistItem[]
   partsUsed SparePartMovement[]
   laborEntries WorkOrderLabor[]
+  thirdPartyServices WorkOrderThirdPartyService[]
+  partReservations SparePartReservation[]
+  stoppages WorkOrderStoppage[]
   // SS que originou esta OS (quando veio de uma Solicitacao de Servico aprovada) - lado
   // inverso de ServiceRequest.workOrderId.
   serviceRequest ServiceRequest?
@@ -1269,6 +1367,9 @@ model SparePart {
   unit        String    @default("un")
   stockQty    Int       @default(0)
   minStock    Int       @default(0)
+  // Quanto do estoque atual ja esta comprometido com alguma OS (reservado, ainda nao
+  // baixado) - saldo disponivel pra nova reserva/consumo e' stockQty - reservedQty.
+  reservedQty Int       @default(0)
   // Custo unitario da ultima compra registrada (opcional) - alimenta o valor do estoque
   // e o custo de manutencao por ativo. Sem isso, o almoxarifado funciona igual a antes.
   unitCost    Float?
@@ -1278,8 +1379,9 @@ model SparePart {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  movements  SparePartMovement[]
-  assetLinks AssetPart[]
+  movements    SparePartMovement[]
+  assetLinks   AssetPart[]
+  reservations SparePartReservation[]
 
   @@index([clientId])
   @@index([active])

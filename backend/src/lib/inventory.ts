@@ -65,3 +65,66 @@ export async function applySparePartMovement(input: SparePartMovementInput) {
 
   return movement;
 }
+
+// ---------------------------------------------------------------------------
+// Reserva de material (planejamento reserva -> tecnico consome no apontamento).
+// Nao mexe no estoque ate a reserva ser consumida - so marca como comprometido
+// (SparePart.reservedQty), pra outra OS nao contar com a mesma peca.
+// ---------------------------------------------------------------------------
+
+interface ReserveSparePartInput {
+  sparePartId: string;
+  workOrderId: string;
+  quantity: number;
+  createdById?: string;
+}
+
+export async function reserveSparePart(input: ReserveSparePartInput) {
+  const sparePart = await prisma.sparePart.findFirst({ where: { id: input.sparePartId, deletedAt: null } });
+  if (!sparePart) throw new NotFoundError("Peca do almoxarifado");
+
+  const available = sparePart.stockQty - sparePart.reservedQty;
+  if (input.quantity > available) {
+    throw new ValidationError(
+      `Saldo disponivel insuficiente para reservar (${available} un. disponiveis - ${sparePart.stockQty} em estoque, ${sparePart.reservedQty} ja reservado).`,
+    );
+  }
+
+  const [reservation] = await prisma.$transaction([
+    prisma.sparePartReservation.create({ data: { ...input } }),
+    prisma.sparePart.update({ where: { id: sparePart.id }, data: { reservedQty: { increment: input.quantity } } }),
+  ]);
+  return reservation;
+}
+
+export async function releaseSparePartReservation(reservationId: string) {
+  const reservation = await prisma.sparePartReservation.findFirst({ where: { id: reservationId, status: "RESERVED" } });
+  if (!reservation) throw new NotFoundError("Reserva");
+
+  const [updated] = await prisma.$transaction([
+    prisma.sparePartReservation.update({ where: { id: reservation.id }, data: { status: "RELEASED", resolvedAt: new Date() } }),
+    prisma.sparePart.update({ where: { id: reservation.sparePartId }, data: { reservedQty: { decrement: reservation.quantity } } }),
+  ]);
+  return updated;
+}
+
+/** Consome a reserva: vira uma baixa de verdade no estoque (SparePartMovement OUT) e
+ * libera o saldo reservado. */
+export async function consumeSparePartReservation(reservationId: string, createdById?: string) {
+  const reservation = await prisma.sparePartReservation.findFirst({ where: { id: reservationId, status: "RESERVED" } });
+  if (!reservation) throw new NotFoundError("Reserva");
+
+  const movement = await applySparePartMovement({
+    sparePartId: reservation.sparePartId,
+    type: "OUT",
+    quantity: reservation.quantity,
+    maintenanceWorkOrderId: reservation.workOrderId,
+    reason: "Consumo de reserva",
+    createdById,
+  });
+  await prisma.$transaction([
+    prisma.sparePartReservation.update({ where: { id: reservation.id }, data: { status: "CONSUMED", resolvedAt: new Date() } }),
+    prisma.sparePart.update({ where: { id: reservation.sparePartId }, data: { reservedQty: { decrement: reservation.quantity } } }),
+  ]);
+  return movement;
+}

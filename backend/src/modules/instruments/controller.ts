@@ -437,7 +437,7 @@ export const getInstrumentCostSummary = asyncHandler(async (req: Request, res: R
   });
   if (!instrument) throw new NotFoundError("Instrumento");
 
-  const [partsMovements, laborEntries] = await Promise.all([
+  const [partsMovements, laborEntries, thirdPartyServices] = await Promise.all([
     prisma.sparePartMovement.findMany({
       where: { type: "OUT", maintenanceWorkOrder: { instrumentId: instrument.id, deletedAt: null } },
       select: { quantity: true, unitCost: true },
@@ -445,6 +445,10 @@ export const getInstrumentCostSummary = asyncHandler(async (req: Request, res: R
     prisma.workOrderLabor.findMany({
       where: { workOrder: { instrumentId: instrument.id, deletedAt: null } },
       select: { hours: true, hourlyRateSnapshot: true },
+    }),
+    prisma.workOrderThirdPartyService.findMany({
+      where: { workOrder: { instrumentId: instrument.id, deletedAt: null } },
+      select: { cost: true },
     }),
   ]);
 
@@ -468,10 +472,17 @@ export const getInstrumentCostSummary = asyncHandler(async (req: Request, res: R
     }
   }
 
+  const thirdPartyCost = thirdPartyServices.reduce((sum, s) => sum + s.cost, 0);
+  const thirdPartyCostKnown = thirdPartyServices.length > 0;
+
   res.json({
     partsCost: partsCostKnown ? partsCost : null,
     laborCost: laborCostKnown ? laborCost : null,
-    totalCost: partsCostKnown || laborCostKnown ? partsCost + laborCost : null,
+    thirdPartyCost: thirdPartyCostKnown ? thirdPartyCost : null,
+    totalCost:
+      partsCostKnown || laborCostKnown || thirdPartyCostKnown
+        ? partsCost + laborCost + thirdPartyCost
+        : null,
     totalLaborHours: totalHours,
   });
 });

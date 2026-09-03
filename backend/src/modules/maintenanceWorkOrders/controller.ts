@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { MaintenanceOrderType, MaintenancePriority, MaintenanceOrderStatus, ChecklistItemResult, AttachmentCategory } from "@prisma/client";
+import { MaintenanceOrderType, MaintenancePriority, MaintenanceOrderStatus, ChecklistItemResult, AttachmentCategory, LaborHourType } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -8,7 +8,7 @@ import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId } from "../../middleware/rbac";
 import { nextClientMaintenanceOrderNumber } from "../../utils/sequence";
-import { applySparePartMovement } from "../../lib/inventory";
+import { applySparePartMovement, reserveSparePart, releaseSparePartReservation, consumeSparePartReservation } from "../../lib/inventory";
 import { getStorageProvider } from "../../lib/storage";
 
 const detailInclude = {
@@ -20,6 +20,13 @@ const detailInclude = {
   checklist: { orderBy: { sortOrder: "asc" as const } },
   partsUsed: { include: { sparePart: { select: { id: true, name: true, code: true, unit: true } } } },
   laborEntries: { include: { laborResource: { select: { id: true, name: true, type: true } } }, orderBy: { createdAt: "asc" as const } },
+  thirdPartyServices: { orderBy: { createdAt: "asc" as const } },
+  partReservations: {
+    where: { status: "RESERVED" as const },
+    include: { sparePart: { select: { id: true, name: true, code: true, unit: true } } },
+    orderBy: { createdAt: "asc" as const },
+  },
+  stoppages: { include: { reason: { select: { id: true, name: true } } }, orderBy: { startedAt: "asc" as const } },
 };
 
 export const listMaintenanceWorkOrders = asyncHandler(async (req: Request, res: Response) => {
@@ -339,6 +346,10 @@ export const removeWorkOrderPart = asyncHandler(async (req: Request, res: Respon
 const laborEntrySchema = z.object({
   laborResourceId: z.string().uuid(),
   hours: z.coerce.number().positive(),
+  hourType: z.nativeEnum(LaborHourType).nullish(),
+  startedAt: z.coerce.date().nullish(),
+  endedAt: z.coerce.date().nullish(),
+  notes: z.string().nullish(),
 });
 
 export const addWorkOrderLabor = asyncHandler(async (req: Request, res: Response) => {
@@ -360,6 +371,10 @@ export const addWorkOrderLabor = asyncHandler(async (req: Request, res: Response
       workOrderId: workOrder.id,
       laborResourceId: laborResource.id,
       hours: data.hours,
+      hourType: data.hourType,
+      startedAt: data.startedAt,
+      endedAt: data.endedAt,
+      notes: data.notes,
       // Snapshot do valor/hora vigente agora - preserva o custo historico mesmo que o
       // recurso mude de valor/hora depois.
       hourlyRateSnapshot: laborResource.hourlyRate,
@@ -383,6 +398,185 @@ export const removeWorkOrderLabor = asyncHandler(async (req: Request, res: Respo
   if (!entry) throw new NotFoundError("Lancamento de mao de obra");
 
   await prisma.workOrderLabor.delete({ where: { id: entry.id } });
+  res.status(204).send();
+});
+
+// ---------------------------------------------------------------------------
+// Servicos de terceiros (custo de fornecedor externo contratado pontualmente pra OS).
+// ---------------------------------------------------------------------------
+
+const thirdPartyServiceSchema = z.object({
+  supplierName: z.string().min(2, "Informe o fornecedor."),
+  description: z.string().min(2, "Descreva o servico."),
+  cost: z.coerce.number().nonnegative(),
+  invoiceNumber: z.string().nullish(),
+  notes: z.string().nullish(),
+});
+
+export const addWorkOrderThirdPartyService = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const data = thirdPartyServiceSchema.parse(req.body);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
+  const service = await prisma.workOrderThirdPartyService.create({
+    data: { ...data, workOrderId: workOrder.id, createdById: req.user?.sub },
+  });
+  res.status(201).json(service);
+});
+
+export const removeWorkOrderThirdPartyService = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
+  const service = await prisma.workOrderThirdPartyService.findFirst({ where: { id: req.params.serviceId, workOrderId: workOrder.id } });
+  if (!service) throw new NotFoundError("Servico de terceiro");
+
+  await prisma.workOrderThirdPartyService.delete({ where: { id: service.id } });
+  res.status(204).send();
+});
+
+// ---------------------------------------------------------------------------
+// Reserva de material (planejamento reserva -> tecnico consome no apontamento).
+// ---------------------------------------------------------------------------
+
+const reservationSchema = z.object({
+  sparePartId: z.string().uuid(),
+  quantity: z.coerce.number().int().positive(),
+});
+
+export const addWorkOrderReservation = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const data = reservationSchema.parse(req.body);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
+  const sparePart = await prisma.sparePart.findFirst({ where: { id: data.sparePartId, deletedAt: null } });
+  if (!sparePart) throw new NotFoundError("Peca do almoxarifado");
+  if (sparePart.clientId !== workOrder.clientId) {
+    throw new ValidationError("Essa peca e' do almoxarifado de outra empresa.");
+  }
+
+  const reservation = await reserveSparePart({
+    sparePartId: data.sparePartId,
+    workOrderId: workOrder.id,
+    quantity: data.quantity,
+    createdById: req.user?.sub,
+  });
+  res.status(201).json(reservation);
+});
+
+export const releaseWorkOrderReservation = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
+  const reservation = await prisma.sparePartReservation.findFirst({ where: { id: req.params.reservationId, workOrderId: workOrder.id } });
+  if (!reservation) throw new NotFoundError("Reserva");
+
+  const released = await releaseSparePartReservation(reservation.id);
+  res.json(released);
+});
+
+export const consumeWorkOrderReservation = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
+  const reservation = await prisma.sparePartReservation.findFirst({ where: { id: req.params.reservationId, workOrderId: workOrder.id } });
+  if (!reservation) throw new NotFoundError("Reserva");
+
+  const movement = await consumeSparePartReservation(reservation.id, req.user?.sub);
+  res.status(201).json(movement);
+});
+
+// ---------------------------------------------------------------------------
+// Paradas (janela de ativo parado durante a OS).
+// ---------------------------------------------------------------------------
+
+const stoppageSchema = z.object({
+  reasonId: z.string().uuid().nullish(),
+  startedAt: z.coerce.date(),
+  endedAt: z.coerce.date().nullish(),
+  notes: z.string().nullish(),
+});
+
+async function assertStoppageReasonUsable(reasonId: string | null | undefined, clientId: string) {
+  if (!reasonId) return;
+  const reason = await prisma.stoppageReason.findFirst({ where: { id: reasonId }, select: { clientId: true } });
+  if (!reason) throw new NotFoundError("Motivo de parada");
+  if (reason.clientId && reason.clientId !== clientId) {
+    throw new ValidationError("Esse motivo de parada e' de outra empresa.");
+  }
+}
+
+export const addWorkOrderStoppage = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const data = stoppageSchema.parse(req.body);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+  await assertStoppageReasonUsable(data.reasonId, workOrder.clientId);
+
+  const stoppage = await prisma.workOrderStoppage.create({
+    data: { ...data, workOrderId: workOrder.id, createdById: req.user?.sub },
+    include: { reason: { select: { id: true, name: true } } },
+  });
+  res.status(201).json(stoppage);
+});
+
+const stoppageUpdateSchema = z.object({ endedAt: z.coerce.date().nullish(), notes: z.string().nullish() });
+
+/** Encerra uma parada em aberto (registra o fim da janela) - a maioria das paradas
+ * comeca sem saber quando vai terminar. */
+export const updateWorkOrderStoppage = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const data = stoppageUpdateSchema.parse(req.body);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
+  const existing = await prisma.workOrderStoppage.findFirst({ where: { id: req.params.stoppageId, workOrderId: workOrder.id } });
+  if (!existing) throw new NotFoundError("Parada");
+
+  const stoppage = await prisma.workOrderStoppage.update({
+    where: { id: existing.id },
+    data,
+    include: { reason: { select: { id: true, name: true } } },
+  });
+  res.json(stoppage);
+});
+
+export const removeWorkOrderStoppage = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
+  const existing = await prisma.workOrderStoppage.findFirst({ where: { id: req.params.stoppageId, workOrderId: workOrder.id } });
+  if (!existing) throw new NotFoundError("Parada");
+
+  await prisma.workOrderStoppage.delete({ where: { id: existing.id } });
   res.status(204).send();
 });
 

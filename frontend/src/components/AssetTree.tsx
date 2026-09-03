@@ -89,7 +89,10 @@ function TreeRow({ node, linkBase, depth, defaultOpen = false }: { node: TreeNod
         )}
         <span className="font-medium text-navy-900">TAG {instrument.tag ?? "-"}</span>
         <span className="text-xs text-graphite-400">{instrument.type} - {instrument.model}</span>
-        <span className="ml-auto shrink-0">
+        <span className="ml-auto flex shrink-0 gap-1.5">
+          {(instrument.criticality === "CRITICAL" || instrument.criticality === "HIGH") && (
+            <StatusBadge status={instrument.criticality} />
+          )}
           <StatusBadge status={instrument.derivedStatus ?? instrument.status} />
         </span>
         {hasChildren && (

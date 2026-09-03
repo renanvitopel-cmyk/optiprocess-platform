@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Modal } from "../../components/Modal";
-import { TextInput } from "../../components/form/Field";
+import { TextInput, SelectInput } from "../../components/form/Field";
 import { InstrumentPicker } from "../../components/InstrumentPicker";
 import { createInstrument, updateInstrument } from "../../api/instruments";
 import type { Instrument } from "../../api/types";
@@ -18,6 +18,7 @@ const schema = z.object({
   serialNumber: z.string().min(1, "Informe o numero de serie."),
   installationLocation: z.string().optional(),
   calibrationFrequencyMonths: z.coerce.number().int().min(1).optional().or(z.literal("")),
+  criticality: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   parentId: z.string().uuid().optional().or(z.literal("")),
 });
 type FormValues = z.infer<typeof schema>;
@@ -51,9 +52,10 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
               serialNumber: instrument.serialNumber,
               installationLocation: instrument.installationLocation ?? "",
               calibrationFrequencyMonths: instrument.calibrationFrequencyMonths ?? undefined,
+              criticality: instrument.criticality,
               parentId: instrument.parentId ?? "",
             }
-          : { parentId: initialParentId ?? "" },
+          : { criticality: "MEDIUM", parentId: initialParentId ?? "" },
       );
     }
   }, [open, instrument, initialParentId, reset]);
@@ -93,7 +95,20 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
             {...register("tag")}
           />
         </div>
-        <TextInput label="Tipo de ativo" required error={errors.type?.message} {...register("type")} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextInput label="Tipo de ativo" required error={errors.type?.message} {...register("type")} />
+          <SelectInput
+            label="Criticidade"
+            hint="Quanto uma parada deste ativo pesa pra sua operacao."
+            options={[
+              { value: "LOW", label: "Baixa" },
+              { value: "MEDIUM", label: "Media" },
+              { value: "HIGH", label: "Alta" },
+              { value: "CRITICAL", label: "Critica" },
+            ]}
+            {...register("criticality")}
+          />
+        </div>
         <InstrumentPicker
           label="Ativo pai (opcional)"
           hint="Use para montar a arvore de ativos: o motor e' filho do compressor, a bomba e' filha da linha."

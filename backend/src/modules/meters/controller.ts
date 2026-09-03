@@ -122,7 +122,7 @@ export const addMeterReading = asyncHandler(async (req: Request, res: Response) 
   const data = readingSchema.parse(req.body);
   const meter = await prisma.meter.findFirst({
     where: { id: req.params.id, deletedAt: null, ...instrumentClientFilter(req) },
-    include: { instrument: { select: { id: true, clientId: true, tag: true, type: true } } },
+    include: { instrument: { select: { id: true, clientId: true, tag: true, type: true, criticality: true } } },
   });
   if (!meter) throw new NotFoundError("Medidor");
 
@@ -145,7 +145,9 @@ export const addMeterReading = asyncHandler(async (req: Request, res: Response) 
           clientId: meter.instrument.clientId,
           instrumentId: meter.instrument.id,
           type: "PREDICTIVE",
-          priority: "HIGH",
+          // Prioridade da OS automatica segue a criticidade real do ativo - uma leitura
+          // fora da faixa num ativo CRITICAL pesa muito mais que no mesmo alerta num LOW.
+          priority: meter.instrument.criticality,
           status: "OPEN",
           description: `Leitura de "${meter.name}" (${data.value} ${meter.unit}) ficou ${direction} (${limit} ${meter.unit}). OS aberta automaticamente para inspecao.`,
           triggeredByMeterId: meter.id,

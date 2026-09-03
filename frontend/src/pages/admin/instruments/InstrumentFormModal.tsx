@@ -25,6 +25,7 @@ const schema = z.object({
   calibrationFrequencyMonths: z.coerce.number().int().min(1).optional().or(z.literal("")),
   lastCalibrationDate: z.string().optional(),
   status: z.enum(["VALID", "DUE_SOON", "EXPIRED", "IN_MAINTENANCE"]).optional(),
+  criticality: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   parentId: z.string().uuid().optional().or(z.literal("")),
 });
 type FormValues = z.infer<typeof schema>;
@@ -64,9 +65,10 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               calibrationFrequencyMonths: instrument.calibrationFrequencyMonths ?? undefined,
               lastCalibrationDate: instrument.lastCalibrationDate?.slice(0, 10) ?? "",
               status: instrument.status,
+              criticality: instrument.criticality,
               parentId: instrument.parentId ?? "",
             }
-          : { parentId: initialParentId ?? "", clientId: initialClientId ?? "" },
+          : { criticality: "MEDIUM", parentId: initialParentId ?? "", clientId: initialClientId ?? "" },
       );
     }
   }, [open, instrument, initialParentId, initialClientId, reset]);
@@ -102,7 +104,20 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
             {...register("tag")}
           />
         </div>
-        <TextInput label="Tipo de ativo" required error={errors.type?.message} {...register("type")} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextInput label="Tipo de ativo" required error={errors.type?.message} {...register("type")} />
+          <SelectInput
+            label="Criticidade"
+            hint="Quanto uma parada deste ativo pesa pra empresa - guia prioridade de OS e estoque de pecas."
+            options={[
+              { value: "LOW", label: "Baixa" },
+              { value: "MEDIUM", label: "Media" },
+              { value: "HIGH", label: "Alta" },
+              { value: "CRITICAL", label: "Critica" },
+            ]}
+            {...register("criticality")}
+          />
+        </div>
         <InstrumentPicker
           label="Ativo pai (opcional)"
           clientId={clientId}

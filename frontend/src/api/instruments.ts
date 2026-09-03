@@ -1,6 +1,6 @@
 import { api } from "./client";
 import type { PagedResult } from "./client";
-import type { AssetPart, AssetPartHistoryEntry, Instrument, InstrumentStatus } from "./types";
+import type { AssetPart, AssetPartHistoryEntry, Instrument, InstrumentStatus, MaintenancePriority } from "./types";
 
 export interface ListInstrumentsParams {
   page?: number;
@@ -8,6 +8,7 @@ export interface ListInstrumentsParams {
   clientId?: string;
   status?: InstrumentStatus;
   parentId?: string;
+  criticality?: MaintenancePriority;
   search?: string;
 }
 

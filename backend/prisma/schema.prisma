@@ -411,6 +411,9 @@ model Instrument {
   lastCalibrationDate        DateTime?
   nextDueDate                DateTime?
   status                     InstrumentStatus  @default(VALID)
+  // Quanto uma parada deste ativo pesa pra empresa - guia prioridade de OS, politica de
+  // estoque de pecas e o que merece analise de causa. Mesma escala da prioridade da OS.
+  criticality                MaintenancePriority @default(MEDIUM)
   // Arvore de ativos: um filho e' um Ativo completo (TAG, calibracoes e planos proprios) que
   // aponta para o pai - nao uma lista solta sem ficha propria.
   parentId                   String?

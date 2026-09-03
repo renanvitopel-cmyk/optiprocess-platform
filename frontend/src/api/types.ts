@@ -137,6 +137,8 @@ export interface Instrument {
   nextDueDate: string | null;
   status: InstrumentStatus;
   derivedStatus?: InstrumentStatus;
+  // Quanto uma parada deste ativo pesa pra empresa - guia prioridade de OS e estoque.
+  criticality: MaintenancePriority;
   calibrations?: CalibrationSummary[];
   // Arvore de ativos: um filho e' um Ativo completo apontando para o pai.
   parentId?: string | null;

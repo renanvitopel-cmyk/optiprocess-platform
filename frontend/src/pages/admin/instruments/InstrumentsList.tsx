@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, GitBranch } from "lucide-react";
 import { listInstruments } from "../../../api/instruments";
-import type { InstrumentStatus } from "../../../api/types";
+import type { InstrumentStatus, MaintenancePriority } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { DataTable } from "../../../components/DataTable";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -21,12 +21,13 @@ export default function InstrumentsList() {
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<InstrumentStatus | "">("");
+  const [criticality, setCriticality] = useState<MaintenancePriority | "">("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["instruments", search, status, page, clientId],
-    queryFn: () => listInstruments({ search: search || undefined, status: status || undefined, page, pageSize: 15, clientId }),
+    queryKey: ["instruments", search, status, criticality, page, clientId],
+    queryFn: () => listInstruments({ search: search || undefined, status: status || undefined, criticality: criticality || undefined, page, pageSize: 15, clientId }),
   });
 
   return (
@@ -70,6 +71,13 @@ export default function InstrumentsList() {
           <option value="EXPIRED">Vencido</option>
           <option value="IN_MAINTENANCE">Em manutencao</option>
         </select>
+        <select className="input sm:w-56" value={criticality} onChange={(e) => { setCriticality(e.target.value as MaintenancePriority | ""); setPage(1); }}>
+          <option value="">Todas as criticidades</option>
+          <option value="CRITICAL">Critica</option>
+          <option value="HIGH">Alta</option>
+          <option value="MEDIUM">Media</option>
+          <option value="LOW">Baixa</option>
+        </select>
       </div>
 
       <DataTable
@@ -94,6 +102,7 @@ export default function InstrumentsList() {
           { header: "Equipamento", accessor: (i) => <span className="font-medium text-navy-900">{i.type} - {i.model}</span> },
           { header: "Componente de", accessor: (i) => (i.parent ? `TAG ${i.parent.tag ?? i.parent.type}` : "-") },
           { header: "Cliente", accessor: (i) => clientDisplayName(i.client) },
+          { header: "Criticidade", accessor: (i) => <StatusBadge status={i.criticality} /> },
           { header: "Proxima calibracao", accessor: (i) => formatDate(i.nextDueDate) },
           { header: "Status", accessor: (i) => <StatusBadge status={i.derivedStatus ?? i.status} /> },
         ]}

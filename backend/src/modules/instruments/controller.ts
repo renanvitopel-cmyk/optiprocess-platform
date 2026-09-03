@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { InstrumentStatus } from "@prisma/client";
+import { InstrumentStatus, MaintenancePriority } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -17,11 +17,12 @@ function withDerivedStatus<T extends { status: InstrumentStatus; nextDueDate: Da
 export const listInstruments = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
-  const { clientId, search, status, parentId } = req.query as {
+  const { clientId, search, status, parentId, criticality } = req.query as {
     clientId?: string;
     search?: string;
     status?: InstrumentStatus;
     parentId?: string;
+    criticality?: MaintenancePriority;
   };
 
   const where = {
@@ -30,6 +31,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
     ...(clientId ? { clientId } : {}),
     ...(status ? { status } : {}),
     ...(parentId ? { parentId } : {}),
+    ...(criticality ? { criticality } : {}),
     ...(search
       ? {
           OR: [
@@ -106,6 +108,8 @@ const instrumentSchema = z.object({
   calibrationFrequencyMonths: z.coerce.number().int().min(1).nullish(),
   lastCalibrationDate: z.coerce.date().nullish(),
   status: z.nativeEnum(InstrumentStatus).optional(),
+  // Quanto uma parada deste ativo pesa pra empresa - guia prioridade de OS e estoque.
+  criticality: z.nativeEnum(MaintenancePriority).optional(),
   // Arvore de ativos: um filho aponta para o ativo pai (mesmo cliente).
   parentId: z.string().uuid().nullish(),
 });

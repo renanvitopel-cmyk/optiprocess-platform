@@ -19,6 +19,8 @@ import { useAuth } from "../../auth/AuthContext";
 import { useToast } from "../../components/Toast";
 import { getApiErrorMessage } from "../../api/client";
 
+const PRIORITY_LABELS: Record<string, string> = { LOW: "Baixa", MEDIUM: "Media", HIGH: "Alta", CRITICAL: "Critica" };
+
 export default function PortalInstrumentDetail() {
   const { id = "" } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -130,7 +132,10 @@ export default function PortalInstrumentDetail() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="card space-y-4 p-5 lg:col-span-2">
-          <StatusBadge status={instrument.derivedStatus ?? instrument.status} />
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={instrument.derivedStatus ?? instrument.status} />
+            <StatusBadge status={instrument.criticality} label={`Criticidade: ${PRIORITY_LABELS[instrument.criticality]}`} />
+          </div>
           <dl className="grid gap-4 sm:grid-cols-3">
             <Info label="Fabricante" value={instrument.manufacturer} />
             <Info label="Numero de serie" value={instrument.serialNumber} />

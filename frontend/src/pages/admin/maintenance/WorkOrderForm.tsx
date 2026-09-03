@@ -11,6 +11,7 @@ import { ClientPicker } from "../../../components/ClientPicker";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
 import { listFailureCodes } from "../../../api/failureCodes";
+import { getInstrument } from "../../../api/instruments";
 import { createMaintenanceWorkOrder, getMaintenanceWorkOrder, updateMaintenanceWorkOrder } from "../../../api/maintenanceWorkOrders";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
@@ -48,7 +49,7 @@ export default function WorkOrderForm() {
 
   const { data: failureCodes } = useQuery({ queryKey: ["failure-codes-picker"], queryFn: () => listFailureCodes({ active: true }) });
 
-  const { register, control, handleSubmit, watch, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, control, handleSubmit, watch, reset, setValue, formState: { errors, isSubmitting, dirtyFields } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       clientId: ownClientId ?? searchParams.get("clientId") ?? "",
@@ -61,6 +62,20 @@ export default function WorkOrderForm() {
   const { fields, append, remove } = useFieldArray({ control, name: "checklist" });
   const clientId = watch("clientId");
   const type = watch("type");
+  const instrumentId = watch("instrumentId");
+
+  // Sugere a prioridade a partir da criticidade do ativo escolhido - o tecnico ainda
+  // pode trocar (por isso so sobrescreve enquanto o campo nao foi tocado a mao).
+  const { data: selectedInstrument } = useQuery({
+    queryKey: ["instrument-for-priority", instrumentId],
+    queryFn: () => getInstrument(instrumentId),
+    enabled: !isEdit && !!instrumentId,
+  });
+  useEffect(() => {
+    if (selectedInstrument && !dirtyFields.priority) {
+      setValue("priority", selectedInstrument.criticality);
+    }
+  }, [selectedInstrument, dirtyFields.priority, setValue]);
 
   useEffect(() => {
     if (existing) {

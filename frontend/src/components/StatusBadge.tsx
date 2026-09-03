@@ -44,6 +44,11 @@ const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   // pontos de calibracao
   PASS: { label: "Aprovado", tone: "green" },
   FAIL: { label: "Reprovado", tone: "red" },
+  // criticidade do ativo / prioridade da OS (mesma escala nos dois)
+  LOW: { label: "Baixa", tone: "graphite" },
+  MEDIUM: { label: "Media", tone: "navy" },
+  HIGH: { label: "Alta", tone: "yellow" },
+  CRITICAL: { label: "Critica", tone: "red" },
 };
 
 export function StatusBadge({ status, label }: { status: string; label?: string }) {

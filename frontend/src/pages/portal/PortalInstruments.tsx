@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, GitBranch } from "lucide-react";
 import { listInstruments } from "../../api/instruments";
+import type { MaintenancePriority } from "../../api/types";
 import { PageHeader } from "../../components/PageHeader";
 import { DataTable } from "../../components/DataTable";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -13,11 +14,12 @@ export default function PortalInstruments() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
+  const [criticality, setCriticality] = useState<MaintenancePriority | "">("");
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["portal-instruments", page],
-    queryFn: () => listInstruments({ page, pageSize: 15 }),
+    queryKey: ["portal-instruments", page, criticality],
+    queryFn: () => listInstruments({ page, pageSize: 15, criticality: criticality || undefined }),
   });
 
   return (
@@ -36,6 +38,20 @@ export default function PortalInstruments() {
           </>
         }
       />
+
+      <div className="mb-4">
+        <select
+          className="input sm:w-56"
+          value={criticality}
+          onChange={(e) => { setCriticality(e.target.value as MaintenancePriority | ""); setPage(1); }}
+        >
+          <option value="">Todas as criticidades</option>
+          <option value="CRITICAL">Critica</option>
+          <option value="HIGH">Alta</option>
+          <option value="MEDIUM">Media</option>
+          <option value="LOW">Baixa</option>
+        </select>
+      </div>
 
       <DataTable
         loading={isLoading}
@@ -59,6 +75,7 @@ export default function PortalInstruments() {
           { header: "Equipamento", accessor: (i) => <span className="font-medium text-navy-900">{i.type} - {i.model}</span> },
           { header: "Componente de", accessor: (i) => (i.parent ? `TAG ${i.parent.tag ?? i.parent.type}` : "-") },
           { header: "Numero de serie", accessor: (i) => i.serialNumber },
+          { header: "Criticidade", accessor: (i) => <StatusBadge status={i.criticality} /> },
           { header: "Proxima calibracao", accessor: (i) => formatDate(i.nextDueDate) },
           { header: "Status", accessor: (i) => <StatusBadge status={i.derivedStatus ?? i.status} /> },
         ]}

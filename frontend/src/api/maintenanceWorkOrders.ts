@@ -12,6 +12,7 @@ import type {
   MaintenancePartUsed,
   MaintenancePriority,
   MaintenanceWorkOrder,
+  MaintenanceWorkOrderChecklistItem,
   SparePartMovement,
   SparePartReservation,
   WorkOrderLaborEntry,
@@ -79,12 +80,19 @@ export async function completeMaintenanceWorkOrder(id: string, meterReadingAtExe
   return data;
 }
 
+export interface UpdateChecklistItemResult {
+  item: MaintenanceWorkOrderChecklistItem;
+  // Preenchido quando o item foi marcado "Nao OK" e uma OS corretiva foi aberta
+  // automaticamente (ou ja existia uma de uma marcacao anterior).
+  spawnedWorkOrder: { id: string; number: string } | null;
+}
+
 export async function updateChecklistItem(
   workOrderId: string,
   itemId: string,
   input: { result?: ChecklistItemResult; notes?: string | null },
-) {
-  const { data } = await api.patch(`/maintenance-work-orders/${workOrderId}/checklist/${itemId}`, input);
+): Promise<UpdateChecklistItemResult> {
+  const { data } = await api.patch<UpdateChecklistItemResult>(`/maintenance-work-orders/${workOrderId}/checklist/${itemId}`, input);
   return data;
 }
 

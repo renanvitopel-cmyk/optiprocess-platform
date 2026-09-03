@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Trash2, PlayCircle, CheckCircle2, Plus, X, Square } from "lucide-react";
 import {
@@ -157,7 +157,10 @@ export default function WorkOrderDetail() {
 
   async function handleChecklistResult(itemId: string, result: ChecklistItemResult) {
     try {
-      await updateChecklistItem(id, itemId, { result });
+      const { spawnedWorkOrder } = await updateChecklistItem(id, itemId, { result });
+      if (spawnedWorkOrder) {
+        notify("success", `Anomalia registrada - OS corretiva ${spawnedWorkOrder.number} aberta automaticamente.`);
+      }
       invalidate();
     } catch (error) {
       notify("error", getApiErrorMessage(error));
@@ -354,6 +357,7 @@ export default function WorkOrderDetail() {
   if (isLoading || !workOrder) return <FullPageSpinner />;
 
   const isCompleted = workOrder.status === "COMPLETED";
+  const hasTraceability = !!workOrder.serviceRequest || !!workOrder.originWorkOrder || (workOrder.spawnedWorkOrders?.length ?? 0) > 0;
 
   // Custo desta OS - mesmo criterio do resumo por ativo (so soma o que tem custo
   // informado; "Nao rastreado" quando nada foi preenchido, nunca aparenta zero).
@@ -454,6 +458,39 @@ export default function WorkOrderDetail() {
               </div>
             )}
           </div>
+
+          {hasTraceability && (
+            <div className="card space-y-3 p-5">
+              <h2 className="font-semibold text-navy-900">Rastreabilidade</h2>
+              {workOrder.serviceRequest && (
+                <Link to={`${base}/solicitacoes/${workOrder.serviceRequest.id}`} className="flex items-center justify-between text-sm text-navy-700 hover:underline">
+                  <span>Originada da solicitacao de servico <span className="font-medium">{workOrder.serviceRequest.number}</span></span>
+                  <StatusBadge status={workOrder.serviceRequest.status} />
+                </Link>
+              )}
+              {workOrder.originWorkOrder && (
+                <Link to={`${base}/ordens/${workOrder.originWorkOrder.id}`} className="block text-sm text-navy-700 hover:underline">
+                  Anomalia identificada na inspecao da OS <span className="font-medium">{workOrder.originWorkOrder.number}</span>
+                  {workOrder.originChecklistItem && <span className="text-graphite-500"> - item: "{workOrder.originChecklistItem.description}"</span>}
+                </Link>
+              )}
+              {(workOrder.spawnedWorkOrders?.length ?? 0) > 0 && (
+                <div>
+                  <p className="mb-1.5 text-xs uppercase tracking-wide text-graphite-400">Corretivas abertas por anomalia nesta OS</p>
+                  <ul className="divide-y divide-gray-100">
+                    {workOrder.spawnedWorkOrders!.map((w) => (
+                      <li key={w.id}>
+                        <Link to={`${base}/ordens/${w.id}`} className="flex items-center justify-between py-1.5 text-sm text-navy-700 hover:underline">
+                          <span className="font-medium">{w.number}</span>
+                          <StatusBadge status={w.status} />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="card space-y-3 p-5">
             <h2 className="font-semibold text-navy-900">Checklist de execucao</h2>

@@ -1479,6 +1479,15 @@ model MaintenanceWorkOrder {
   // e' o que torna "Preditiva" uma manutencao de verdade, nao so uma opcao no formulario.
   triggeredByMeterId String?
   triggeredByMeter    Meter?              @relation(fields: [triggeredByMeterId], references: [id])
+  // Rastreabilidade preventiva -> corretiva: preenchido quando esta OS (corretiva) foi
+  // aberta automaticamente porque um item do checklist de outra OS (a preventiva/preditiva)
+  // foi marcado "Nao OK". originChecklistItemId e' unico - no maximo uma corretiva por
+  // anomalia encontrada.
+  originWorkOrderId String?
+  originWorkOrder    MaintenanceWorkOrder?  @relation("WorkOrderOrigin", fields: [originWorkOrderId], references: [id])
+  spawnedWorkOrders  MaintenanceWorkOrder[] @relation("WorkOrderOrigin")
+  originChecklistItemId String?                            @unique
+  originChecklistItem    MaintenanceWorkOrderChecklistItem? @relation("ChecklistItemOrigin", fields: [originChecklistItemId], references: [id])
   createdById  String?
   createdAt    DateTime               @default(now())
   updatedAt    DateTime               @updatedAt
@@ -1500,6 +1509,7 @@ model MaintenanceWorkOrder {
   @@index([instrumentId])
   @@index([planId])
   @@index([status])
+  @@index([originWorkOrderId])
   @@map("maintenance_work_orders")
 }
 
@@ -1511,6 +1521,9 @@ model MaintenanceWorkOrderChecklistItem {
   result      ChecklistItemResult  @default(PENDING)
   notes       String?
   sortOrder   Int                  @default(0)
+  // Corretiva aberta automaticamente quando este item foi marcado "Nao OK" - lado inverso
+  // de MaintenanceWorkOrder.originChecklistItemId.
+  spawnedCorrectiveOrder MaintenanceWorkOrder? @relation("ChecklistItemOrigin")
 
   @@index([workOrderId])
   @@map("maintenance_work_order_checklist_items")

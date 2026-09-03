@@ -18,6 +18,13 @@ const detailInclude = {
   technician: { select: { id: true, name: true } },
   failureCode: true,
   checklist: { orderBy: { sortOrder: "asc" as const } },
+  // Rastreabilidade fim-a-fim: de onde esta OS veio (SS que a originou, ou OS preventiva
+  // + item de checklist que revelou a anomalia) e o que ela gerou (corretivas abertas
+  // automaticamente por anomalias encontradas no proprio checklist).
+  serviceRequest: { select: { id: true, number: true, status: true } },
+  originWorkOrder: { select: { id: true, number: true, type: true } },
+  originChecklistItem: { select: { id: true, description: true } },
+  spawnedWorkOrders: { select: { id: true, number: true, status: true, type: true }, orderBy: { createdAt: "asc" as const } },
   partsUsed: { include: { sparePart: { select: { id: true, name: true, code: true, unit: true } } } },
   laborEntries: { include: { laborResource: { select: { id: true, name: true, type: true } } }, orderBy: { createdAt: "asc" as const } },
   thirdPartyServices: { orderBy: { createdAt: "asc" as const } },
@@ -272,7 +279,7 @@ export const updateChecklistItem = asyncHandler(async (req: Request, res: Respon
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const workOrder = await prisma.maintenanceWorkOrder.findFirst({
     where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
-    select: { id: true },
+    select: { id: true, number: true, clientId: true, instrumentId: true, createdById: true },
   });
   if (!workOrder) throw new NotFoundError("Ordem de manutencao");
 
@@ -283,7 +290,49 @@ export const updateChecklistItem = asyncHandler(async (req: Request, res: Respon
   if (!item) throw new NotFoundError("Item do checklist");
 
   const updated = await prisma.maintenanceWorkOrderChecklistItem.update({ where: { id: item.id }, data });
-  res.json(updated);
+
+  // Anomalia encontrada na inspecao: abre corretiva automaticamente, vinculada a OS e ao
+  // item que revelou o problema - melhor esforco, no maximo uma corretiva por item (a
+  // unique constraint em originChecklistItemId garante isso mesmo marcando NOT_OK de novo).
+  let spawnedWorkOrder: { id: string; number: string } | null = null;
+  if (updated.result === "NOT_OK") {
+    const alreadySpawned = await prisma.maintenanceWorkOrder.findFirst({
+      where: { originChecklistItemId: item.id },
+      select: { id: true, number: true },
+    });
+    if (alreadySpawned) {
+      spawnedWorkOrder = alreadySpawned;
+    } else {
+      const number = await nextClientMaintenanceOrderNumber(workOrder.clientId);
+      const description = `Anomalia identificada na inspecao da OS ${workOrder.number}: "${updated.description}"${updated.notes ? ` - ${updated.notes}` : ""}`;
+      const corrective = await prisma.maintenanceWorkOrder.create({
+        data: {
+          number,
+          clientId: workOrder.clientId,
+          instrumentId: workOrder.instrumentId,
+          type: "CORRECTIVE",
+          status: "OPEN",
+          priority: "HIGH",
+          description,
+          originWorkOrderId: workOrder.id,
+          originChecklistItemId: item.id,
+          createdById: req.user?.sub,
+        },
+        select: { id: true, number: true },
+      });
+      spawnedWorkOrder = corrective;
+
+      await writeAuditLog({
+        userId: req.user?.sub,
+        action: "CREATE",
+        entityType: "MaintenanceWorkOrder",
+        entityId: corrective.id,
+        description: `OS ${corrective.number} aberta automaticamente por anomalia no checklist da OS ${workOrder.number}`,
+      });
+    }
+  }
+
+  res.json({ item: updated, spawnedWorkOrder });
 });
 
 const partSchema = z.object({

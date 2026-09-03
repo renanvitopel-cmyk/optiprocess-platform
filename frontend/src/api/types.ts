@@ -859,6 +859,14 @@ export interface MaintenanceWorkOrder {
   thirdPartyServices?: WorkOrderThirdPartyService[];
   partReservations?: SparePartReservation[];
   stoppages?: WorkOrderStoppage[];
+  // Rastreabilidade: de onde esta OS veio (SS que a originou, ou OS + item de checklist
+  // que revelou a anomalia) e o que ela gerou (corretivas abertas automaticamente).
+  serviceRequest?: { id: string; number: string; status: string } | null;
+  originWorkOrderId: string | null;
+  originWorkOrder?: { id: string; number: string; type: MaintenanceOrderType } | null;
+  originChecklistItemId: string | null;
+  originChecklistItem?: { id: string; description: string } | null;
+  spawnedWorkOrders?: { id: string; number: string; status: MaintenanceOrderStatus; type: MaintenanceOrderType }[];
   createdAt: string;
 }
 

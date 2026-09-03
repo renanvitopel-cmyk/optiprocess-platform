@@ -12,7 +12,6 @@ const NAV_LINKS = [
   { to: "/servicos", label: "Serviços" },
   { to: "/servicos/rlp-maintenance-cmms", label: "Software de Manutenção" },
   { to: "/produtos", label: "Produtos" },
-  { to: "/validar-certificado", label: "Validar certificado" },
   { to: "/contato", label: "Contato" },
 ];
 

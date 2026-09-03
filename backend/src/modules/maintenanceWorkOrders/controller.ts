@@ -800,3 +800,83 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
     },
   });
 });
+
+/**
+ * Pareto de falhas: agrupa as OS corretivas do periodo por codigo de falha, ativo e area,
+ * somando ocorrencias, tempo parado e custo (pecas + mao de obra + terceiros) - pra
+ * responder "quais falhas mais pesam" de tres angulos diferentes sem precisar de SQL
+ * agregado (volume pequeno o bastante pra fazer em memoria, mesmo padrao do dashboard).
+ */
+export const getFailureAnalysis = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const { clientId, dateFrom, dateTo } = req.query as { clientId?: string; dateFrom?: string; dateTo?: string };
+
+  const periodStart = dateFrom ? new Date(dateFrom) : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const periodEnd = dateTo ? new Date(dateTo) : new Date();
+
+  const orders = await prisma.maintenanceWorkOrder.findMany({
+    where: {
+      deletedAt: null,
+      type: "CORRECTIVE",
+      ...clientScopeFilter(req),
+      ...(clientId ? { clientId } : {}),
+      createdAt: { gte: periodStart, lte: periodEnd },
+    },
+    select: {
+      id: true,
+      priority: true,
+      startedAt: true,
+      completedAt: true,
+      failureCodeId: true,
+      failureCode: { select: { id: true, code: true, description: true } },
+      instrumentId: true,
+      instrument: { select: { id: true, tag: true, type: true, areaId: true, area: { select: { id: true, name: true } } } },
+      partsUsed: { select: { quantity: true, unitCost: true } },
+      laborEntries: { select: { hours: true, hourlyRateSnapshot: true } },
+      thirdPartyServices: { select: { cost: true } },
+    },
+  });
+
+  function costOf(o: (typeof orders)[number]): number {
+    const parts = o.partsUsed.reduce((s, p) => s + (p.unitCost ?? 0) * p.quantity, 0);
+    const labor = o.laborEntries.reduce((s, l) => s + (l.hourlyRateSnapshot ?? 0) * l.hours, 0);
+    const thirdParty = o.thirdPartyServices.reduce((s, t) => s + t.cost, 0);
+    return parts + labor + thirdParty;
+  }
+  function downtimeHoursOf(o: (typeof orders)[number]): number {
+    if (!o.startedAt || !o.completedAt) return 0;
+    return (o.completedAt.getTime() - o.startedAt.getTime()) / 3600000;
+  }
+
+  type Bucket = { key: string; label: string; count: number; downtimeHours: number; cost: number };
+  function aggregate(getKey: (o: (typeof orders)[number]) => { key: string; label: string } | null): Bucket[] {
+    const map = new Map<string, Bucket>();
+    for (const o of orders) {
+      const k = getKey(o);
+      if (!k) continue;
+      const bucket = map.get(k.key) ?? { key: k.key, label: k.label, count: 0, downtimeHours: 0, cost: 0 };
+      bucket.count += 1;
+      bucket.downtimeHours += downtimeHoursOf(o);
+      bucket.cost += costOf(o);
+      map.set(k.key, bucket);
+    }
+    return Array.from(map.values())
+      .map((b) => ({ ...b, downtimeHours: Number(b.downtimeHours.toFixed(1)), cost: Number(b.cost.toFixed(2)) }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  const byFailureCode = aggregate((o) => (o.failureCode ? { key: o.failureCode.id, label: `${o.failureCode.code} - ${o.failureCode.description}` } : null));
+  const byInstrument = aggregate((o) => (o.instrument ? { key: o.instrument.id, label: `TAG ${o.instrument.tag ?? o.instrument.type}` } : null));
+  const byArea = aggregate((o) => (o.instrument?.area ? { key: o.instrument.area.id, label: o.instrument.area.name } : null));
+
+  res.json({
+    period: { from: periodStart.toISOString(), to: periodEnd.toISOString() },
+    totalCorrective: orders.length,
+    emergency: orders.filter((o) => o.priority === "CRITICAL").length,
+    withoutFailureCode: orders.filter((o) => !o.failureCodeId).length,
+    recurringFailureCodes: byFailureCode.filter((b) => b.count > 1).length,
+    byFailureCode,
+    byInstrument,
+    byArea,
+  });
+});

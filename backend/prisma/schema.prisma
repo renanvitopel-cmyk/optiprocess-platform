@@ -110,6 +110,14 @@ enum LaborHourType {
   NIGHT
 }
 
+// Fluxo da RCA: Aberta (falha critica/recorrente disparou a analise) -> Em andamento
+// (plano de acao em execucao) -> Encerrada (eficacia verificada).
+enum RcaStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
 enum SparePartReservationStatus {
   RESERVED
   CONSUMED
@@ -252,6 +260,7 @@ enum AttachmentEntityType {
   MAINTENANCE_WORK_ORDER
   INSTRUMENT
   SERVICE_REQUEST
+  ROOT_CAUSE_ANALYSIS
 }
 
 // Classifica o registro fotografico feito pelo tecnico em campo. As fotos entram
@@ -291,6 +300,7 @@ model User {
   maintenanceWorkOrdersAsTechnician  MaintenanceWorkOrder[]  @relation("MaintenanceWorkOrderTechnician")
   serviceRequestsAsRequester    ServiceRequest[]        @relation("ServiceRequestRequester")
   serviceRequestsAsTriage       ServiceRequest[]        @relation("ServiceRequestTriage")
+  rcaAsResponsible              RootCauseAnalysis[]     @relation("RcaResponsible")
   auditLogs                     AuditLog[]
   notifications                 Notification[]
 
@@ -387,6 +397,7 @@ model Client {
   serviceRequests           ServiceRequest[]
   serviceRequestCategories  ServiceRequestCategory[]
   stoppageReasons           StoppageReason[]
+  rootCauseAnalyses         RootCauseAnalysis[]
 
   @@index([status])
   @@map("clients")
@@ -518,6 +529,7 @@ model Instrument {
   maintenanceWorkOrders MaintenanceWorkOrder[]
   assetParts            AssetPart[]
   serviceRequests       ServiceRequest[]
+  rootCauseAnalyses     RootCauseAnalysis[]
 
   @@index([clientId])
   @@index([status])
@@ -1159,6 +1171,21 @@ model FailureCode {
   code        String
   description String
   category    String?
+  // Taxonomia de falha (tudo opcional - codigo+descricao continuam bastando pro uso
+  // basico, quem quiser detalhar preenche mais). Sintoma = o que se observa; Modo = como
+  // a falha se manifesta; Mecanismo = o processo fisico por tras (ex.: corrosao, fadiga);
+  // Causa = a raiz apontada; Acao corretiva = o reparo padrao recomendado (o que
+  // realmente foi feito numa OS especifica fica em MaintenanceWorkOrder.observations).
+  symptom              String?
+  mode                 String?
+  mechanism            String?
+  cause                String?
+  correctiveAction     String?
+  // Familia de equipamento a que esse codigo se aplica (ex.: "Motores eletricos",
+  // "Bombas centrifugas") - texto livre, nao amarrado ao catalogo AssetType (que hoje
+  // representa nivel na arvore, nao tipo de equipamento).
+  applicableAssetFamily String?
+  severity             MaintenancePriority?
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
 
@@ -1167,6 +1194,45 @@ model FailureCode {
   @@unique([clientId, code])
   @@index([clientId])
   @@map("failure_codes")
+}
+
+// RCA (analise de causa raiz / 5 Porquues) para falha critica ou recorrente. Fluxo:
+// falha dispara a abertura -> plano de acao -> execucao -> verificacao de eficacia ->
+// encerramento. Participantes fica como texto livre (nomes) - nao amarra a um multi-
+// select de usuarios so pra um campo informativo.
+model RootCauseAnalysis {
+  id           String    @id @default(uuid())
+  clientId     String
+  client       Client    @relation(fields: [clientId], references: [id])
+  instrumentId String?
+  instrument   Instrument? @relation(fields: [instrumentId], references: [id])
+  workOrderId  String?
+  workOrder    MaintenanceWorkOrder? @relation(fields: [workOrderId], references: [id])
+  problem      String
+  participants String?
+  why1         String?
+  why2         String?
+  why3         String?
+  why4         String?
+  why5         String?
+  rootCause    String?
+  correctiveActions String?
+  preventiveActions String?
+  responsibleId String?
+  responsible  User?     @relation("RcaResponsible", fields: [responsibleId], references: [id])
+  dueDate      DateTime?
+  effectivenessVerifiedAt DateTime?
+  effectivenessNotes String?
+  status       RcaStatus @default(OPEN)
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  @@index([clientId])
+  @@index([instrumentId])
+  @@index([status])
+  @@map("root_cause_analyses")
 }
 
 // Catalogo de categorias de Solicitacao de Servico (ex.: Eletrica, Mecanica, Limpeza) -
@@ -1325,6 +1391,7 @@ model MaintenanceWorkOrder {
   thirdPartyServices WorkOrderThirdPartyService[]
   partReservations SparePartReservation[]
   stoppages WorkOrderStoppage[]
+  rootCauseAnalyses RootCauseAnalysis[]
   // SS que originou esta OS (quando veio de uma Solicitacao de Servico aprovada) - lado
   // inverso de ServiceRequest.workOrderId.
   serviceRequest ServiceRequest?

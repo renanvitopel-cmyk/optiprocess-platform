@@ -28,6 +28,7 @@ import {
   deleteWorkOrderAttachment,
   getWorkOrderAttachmentUrl,
   getMaintenanceDashboard,
+  getFailureAnalysis,
 } from "./controller";
 
 export const maintenanceWorkOrdersRouter = Router();
@@ -35,6 +36,7 @@ export const maintenanceWorkOrdersRouter = Router();
 maintenanceWorkOrdersRouter.use(requireAuth);
 
 maintenanceWorkOrdersRouter.get("/dashboard", getMaintenanceDashboard);
+maintenanceWorkOrdersRouter.get("/failure-analysis", getFailureAnalysis);
 maintenanceWorkOrdersRouter.get("/", listMaintenanceWorkOrders);
 maintenanceWorkOrdersRouter.get("/:id", getMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.post("/", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), createMaintenanceWorkOrder);

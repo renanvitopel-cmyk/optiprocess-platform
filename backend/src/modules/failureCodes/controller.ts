@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { MaintenancePriority } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/errors";
@@ -33,6 +34,13 @@ const failureCodeSchema = z.object({
   code: z.string().min(1, "Informe o codigo."),
   description: z.string().min(2, "Informe a descricao."),
   category: z.string().nullish(),
+  symptom: z.string().nullish(),
+  mode: z.string().nullish(),
+  mechanism: z.string().nullish(),
+  cause: z.string().nullish(),
+  correctiveAction: z.string().nullish(),
+  applicableAssetFamily: z.string().nullish(),
+  severity: z.nativeEnum(MaintenancePriority).nullish(),
   clientId: z.string().uuid().nullish(),
 });
 

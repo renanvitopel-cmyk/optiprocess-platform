@@ -40,6 +40,7 @@ import { costCentersRouter } from "./modules/costCenters/routes";
 import { serviceRequestsRouter } from "./modules/serviceRequests/routes";
 import { serviceRequestCategoriesRouter } from "./modules/serviceRequestCategories/routes";
 import { stoppageReasonsRouter } from "./modules/stoppageReasons/routes";
+import { rootCauseAnalysesRouter } from "./modules/rootCauseAnalyses/routes";
 
 export function createApp() {
   const app = express();
@@ -93,6 +94,7 @@ export function createApp() {
   app.use("/api/service-requests", serviceRequestsRouter);
   app.use("/api/service-request-categories", serviceRequestCategoriesRouter);
   app.use("/api/stoppage-reasons", stoppageReasonsRouter);
+  app.use("/api/root-cause-analyses", rootCauseAnalysesRouter);
 
   if (env.isProduction) {
     const frontendDist = path.resolve(__dirname, "../../frontend/dist");

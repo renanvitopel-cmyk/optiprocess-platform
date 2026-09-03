@@ -109,6 +109,23 @@ export default function ClientDetail() {
 
         <div className="space-y-6">
           <div className="card p-5">
+            <h2 className="mb-3 font-semibold text-navy-900">Plano</h2>
+            {!client.plan ? (
+              <p className="text-sm text-graphite-500">Sem plano atribuido - sem limite de usuarios ou ativos.</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-navy-900">{client.plan.name}</p>
+                {client.planUsage && (
+                  <>
+                    <UsageBar label="Usuarios" usage={client.planUsage.users} />
+                    <UsageBar label="Ativos" usage={client.planUsage.instruments} />
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="card p-5">
             <h2 className="mb-3 font-semibold text-navy-900">Resumo</h2>
             <div className="space-y-2 text-sm">
               <SummaryRow icon={Gauge} label="Ativos" value={client._count?.instruments ?? 0} to={`/gestao/instrumentos?clientId=${id}`} />
@@ -202,6 +219,31 @@ function Info({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="text-xs uppercase tracking-wide text-graphite-400">{label}</dt>
       <dd className="mt-0.5 text-sm font-medium text-graphite-800">{value}</dd>
+    </div>
+  );
+}
+
+function UsageBar({ label, usage }: { label: string; usage: { current: number; limit: number | null } }) {
+  if (usage.limit == null) {
+    return (
+      <p className="text-xs text-graphite-500">
+        {label}: {usage.current} (sem limite)
+      </p>
+    );
+  }
+  const pct = Math.min(100, Math.round((usage.current / usage.limit) * 100));
+  const atLimit = usage.current >= usage.limit;
+  return (
+    <div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-graphite-500">{label}</span>
+        <span className={`font-medium ${atLimit ? "text-safety-red" : "text-graphite-700"}`}>
+          {usage.current}/{usage.limit}
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 rounded-full bg-gray-100">
+        <div className={`h-1.5 rounded-full ${atLimit ? "bg-safety-red" : "bg-navy-500"}`} style={{ width: `${pct}%` }} />
+      </div>
     </div>
   );
 }

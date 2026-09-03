@@ -36,6 +36,24 @@ export interface ClientContact {
   isPrimary: boolean;
 }
 
+export interface Plan {
+  id: string;
+  name: string;
+  description: string | null;
+  priceMonthly: number | null;
+  maxUsers: number | null;
+  maxInstruments: number | null;
+  features: string[];
+  active: boolean;
+  createdAt: string;
+  _count?: { clients: number };
+}
+
+export interface PlanUsage {
+  current: number;
+  limit: number | null;
+}
+
 export interface Client {
   id: string;
   companyName: string;
@@ -56,6 +74,10 @@ export interface Client {
   commercialContactName: string | null;
   status: ClientStatus;
   contractedServices: ServiceCategory[];
+  planId: string | null;
+  plan?: Plan | { id: string; name: string } | null;
+  planStartedAt: string | null;
+  planUsage?: { users: PlanUsage; instruments: PlanUsage };
   notes: string | null;
   createdAt: string;
   contacts?: ClientContact[];

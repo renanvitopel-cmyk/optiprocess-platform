@@ -13,6 +13,7 @@ import {
   Users,
   History,
   Wrench,
+  Layers3,
 } from "lucide-react";
 import type { Role } from "../api/types";
 
@@ -37,4 +38,5 @@ export const ADMIN_NAV: NavItem[] = [
   { to: "/gestao/pedidos", label: "Pedidos", icon: ShoppingCart, roles: ["ADMIN", "COMMERCIAL"] },
   { to: "/gestao/usuarios", label: "Usuarios e perfis", icon: Users, roles: ["ADMIN"] },
   { to: "/gestao/auditoria", label: "Auditoria", icon: History, roles: ["ADMIN"] },
+  { to: "/gestao/plataforma", label: "Administracao da plataforma", icon: Layers3, roles: ["ADMIN"] },
 ];

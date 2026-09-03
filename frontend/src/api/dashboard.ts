@@ -34,3 +34,23 @@ export async function getClientDashboard(): Promise<ClientDashboard> {
   const { data } = await api.get<ClientDashboard>("/dashboard/client");
   return data;
 }
+
+export interface PlatformDashboard {
+  totalActiveClients: number;
+  clientsWithoutPlan: number;
+  mrr: number;
+  plans: { id: string; name: string; active: boolean; priceMonthly: number | null; clientCount: number }[];
+  nearLimitClients: {
+    clientId: string;
+    name: string;
+    planName: string;
+    users: { current: number; limit: number | null; pct: number | null };
+    instruments: { current: number; limit: number | null; pct: number | null };
+    worstPct: number;
+  }[];
+}
+
+export async function getPlatformDashboard(): Promise<PlatformDashboard> {
+  const { data } = await api.get<PlatformDashboard>("/dashboard/platform");
+  return data;
+}

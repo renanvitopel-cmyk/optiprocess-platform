@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Modal } from "../../../components/Modal";
 import { TextInput, SelectInput, TextareaInput, CheckboxInput } from "../../../components/form/Field";
 import { SERVICE_CATEGORY_OPTIONS } from "../../../lib/format";
 import { createClient, updateClient } from "../../../api/clients";
+import { listPlans } from "../../../api/plans";
 import type { Client } from "../../../api/types";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
@@ -42,6 +44,7 @@ const schema = z.object({
       ]),
     )
     .optional(),
+  planId: z.string().uuid().optional().or(z.literal("")),
   notes: z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
@@ -55,6 +58,7 @@ interface ClientFormModalProps {
 
 export function ClientFormModal({ open, onClose, onSaved, client }: ClientFormModalProps) {
   const { notify } = useToast();
+  const { data: plans } = useQuery({ queryKey: ["plans-picker"], queryFn: () => listPlans({ active: true }), enabled: open, staleTime: 60_000 });
   const {
     register,
     handleSubmit,
@@ -87,6 +91,7 @@ export function ClientFormModal({ open, onClose, onSaved, client }: ClientFormMo
               commercialContactName: client.commercialContactName ?? "",
               status: client.status,
               contractedServices: client.contractedServices ?? [],
+              planId: client.planId ?? "",
               notes: client.notes ?? "",
             }
           : { status: "PROSPECT", contractedServices: [] },
@@ -96,7 +101,8 @@ export function ClientFormModal({ open, onClose, onSaved, client }: ClientFormMo
 
   async function onSubmit(values: FormValues) {
     try {
-      const saved = client ? await updateClient(client.id, values) : await createClient(values);
+      const payload = { ...values, planId: values.planId || null };
+      const saved = client ? await updateClient(client.id, payload) : await createClient(payload);
       notify("success", client ? "Cliente atualizado." : "Cliente cadastrado.");
       onSaved(saved);
     } catch (error) {
@@ -131,6 +137,13 @@ export function ClientFormModal({ open, onClose, onSaved, client }: ClientFormMo
             {...register("status")}
           />
         </div>
+        <SelectInput
+          label="Plano de assinatura (opcional)"
+          hint="Define limites de usuarios e ativos. Sem plano, o cliente segue sem limite."
+          placeholder="Sem plano (sem limite)"
+          options={(plans ?? []).map((p) => ({ value: p.id, label: `${p.name}${p.maxUsers != null || p.maxInstruments != null ? ` (ate ${p.maxUsers ?? "∞"} usuarios, ${p.maxInstruments ?? "∞"} ativos)` : ""}` }))}
+          {...register("planId")}
+        />
 
         <div className="grid gap-4 sm:grid-cols-4">
           <TextInput label="Endereco" className="sm:col-span-2" {...register("addressStreet")} />

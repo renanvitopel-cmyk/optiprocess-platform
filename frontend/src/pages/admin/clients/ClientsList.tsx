@@ -110,6 +110,7 @@ export default function ClientsList() {
                 </div>
               ),
           },
+          { header: "Plano", accessor: (c) => (c.plan ? <span className="text-xs font-medium text-navy-700">{c.plan.name}</span> : <span className="text-graphite-400">-</span>) },
           { header: "Status", accessor: (c) => <StatusBadge status={c.status} /> },
         ]}
       />

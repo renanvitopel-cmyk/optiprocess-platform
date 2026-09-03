@@ -58,6 +58,8 @@ const OrdersList = lazy(() => import("./pages/admin/orders/OrdersList"));
 const OrderDetail = lazy(() => import("./pages/admin/orders/OrderDetail"));
 const UsersList = lazy(() => import("./pages/admin/users/UsersList"));
 const AuditLog = lazy(() => import("./pages/admin/audit/AuditLog"));
+const PlatformDashboard = lazy(() => import("./pages/admin/platform/PlatformDashboard"));
+const PlansList = lazy(() => import("./pages/admin/platform/PlansList"));
 const MaintenanceDashboard = lazy(() => import("./pages/admin/maintenance/MaintenanceDashboard"));
 const MaintenancePlansList = lazy(() => import("./pages/admin/maintenance/MaintenancePlansList"));
 const MaintenancePlanForm = lazy(() => import("./pages/admin/maintenance/MaintenancePlanForm"));
@@ -182,6 +184,8 @@ export default function App() {
                 <Route element={<ProtectedRoute roles={["ADMIN"]} />}>
                   <Route path="usuarios" element={<UsersList />} />
                   <Route path="auditoria" element={<AuditLog />} />
+                  <Route path="plataforma" element={<PlatformDashboard />} />
+                  <Route path="plataforma/planos" element={<PlansList />} />
                 </Route>
               </Route>
             </Route>

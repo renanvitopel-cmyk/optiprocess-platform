@@ -4,13 +4,18 @@ import type {
   AttachmentCategory,
   CalibrationAttachment,
   ChecklistItemResult,
+  LaborHourType,
   MaintenanceDashboardData,
   MaintenanceOrderStatus,
   MaintenanceOrderType,
   MaintenancePartUsed,
   MaintenancePriority,
   MaintenanceWorkOrder,
+  SparePartMovement,
+  SparePartReservation,
   WorkOrderLaborEntry,
+  WorkOrderStoppage,
+  WorkOrderThirdPartyService,
 } from "./types";
 
 export interface ListWorkOrdersParams {
@@ -96,7 +101,7 @@ export async function removeWorkOrderPart(workOrderId: string, movementId: strin
 
 export async function addWorkOrderLabor(
   workOrderId: string,
-  input: { laborResourceId: string; hours: number },
+  input: { laborResourceId: string; hours: number; hourType?: LaborHourType | null; startedAt?: string | null; endedAt?: string | null; notes?: string | null },
 ): Promise<WorkOrderLaborEntry> {
   const { data } = await api.post<WorkOrderLaborEntry>(`/maintenance-work-orders/${workOrderId}/labor`, input);
   return data;
@@ -104,6 +109,57 @@ export async function addWorkOrderLabor(
 
 export async function removeWorkOrderLabor(workOrderId: string, entryId: string): Promise<void> {
   await api.delete(`/maintenance-work-orders/${workOrderId}/labor/${entryId}`);
+}
+
+export async function addWorkOrderThirdPartyService(
+  workOrderId: string,
+  input: { supplierName: string; description: string; cost: number; invoiceNumber?: string | null; notes?: string | null },
+): Promise<WorkOrderThirdPartyService> {
+  const { data } = await api.post<WorkOrderThirdPartyService>(`/maintenance-work-orders/${workOrderId}/third-party-services`, input);
+  return data;
+}
+
+export async function removeWorkOrderThirdPartyService(workOrderId: string, serviceId: string): Promise<void> {
+  await api.delete(`/maintenance-work-orders/${workOrderId}/third-party-services/${serviceId}`);
+}
+
+export async function addWorkOrderReservation(
+  workOrderId: string,
+  input: { sparePartId: string; quantity: number },
+): Promise<SparePartReservation> {
+  const { data } = await api.post<SparePartReservation>(`/maintenance-work-orders/${workOrderId}/reservations`, input);
+  return data;
+}
+
+export async function releaseWorkOrderReservation(workOrderId: string, reservationId: string): Promise<SparePartReservation> {
+  const { data } = await api.post<SparePartReservation>(`/maintenance-work-orders/${workOrderId}/reservations/${reservationId}/release`);
+  return data;
+}
+
+export async function consumeWorkOrderReservation(workOrderId: string, reservationId: string): Promise<SparePartMovement> {
+  const { data } = await api.post<SparePartMovement>(`/maintenance-work-orders/${workOrderId}/reservations/${reservationId}/consume`);
+  return data;
+}
+
+export async function addWorkOrderStoppage(
+  workOrderId: string,
+  input: { reasonId?: string | null; startedAt: string; endedAt?: string | null; notes?: string | null },
+): Promise<WorkOrderStoppage> {
+  const { data } = await api.post<WorkOrderStoppage>(`/maintenance-work-orders/${workOrderId}/stoppages`, input);
+  return data;
+}
+
+export async function updateWorkOrderStoppage(
+  workOrderId: string,
+  stoppageId: string,
+  input: { endedAt?: string | null; notes?: string | null },
+): Promise<WorkOrderStoppage> {
+  const { data } = await api.patch<WorkOrderStoppage>(`/maintenance-work-orders/${workOrderId}/stoppages/${stoppageId}`, input);
+  return data;
+}
+
+export async function removeWorkOrderStoppage(workOrderId: string, stoppageId: string): Promise<void> {
+  await api.delete(`/maintenance-work-orders/${workOrderId}/stoppages/${stoppageId}`);
 }
 
 export async function listWorkOrderAttachments(id: string): Promise<CalibrationAttachment[]> {

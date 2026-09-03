@@ -159,6 +159,10 @@ export default function SparePartsList() {
               ),
             },
             {
+              header: "Reservado",
+              accessor: (p) => (p.reservedQty > 0 ? <span className="text-safety-yellow-dark">{p.reservedQty} {p.unit} <span className="text-xs text-graphite-400">(disp.: {p.stockQty - p.reservedQty})</span></span> : "-"),
+            },
+            {
               header: "Custo unit.",
               accessor: (p) => (p.unitCost != null ? formatCurrency(p.unitCost) : "-"),
             },

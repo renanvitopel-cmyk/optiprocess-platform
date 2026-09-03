@@ -352,15 +352,16 @@ export default function PortalInstrumentDetail() {
 
       {tab === "costs" && hasCmms && (
         <div className="space-y-6">
-          {costSummary && (costSummary.partsCost != null || costSummary.laborCost != null) ? (
+          {costSummary && (costSummary.partsCost != null || costSummary.laborCost != null || costSummary.thirdPartyCost != null) ? (
             <div className="card p-5">
               <h2 className="mb-3 font-semibold text-navy-900">Gastos deste ativo</h2>
-              <dl className="grid gap-4 sm:grid-cols-3">
+              <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Info label="Pecas" value={costSummary.partsCost != null ? formatCurrency(costSummary.partsCost) : "Nao rastreado"} />
                 <Info
                   label="Mao de obra"
                   value={costSummary.laborCost != null ? `${formatCurrency(costSummary.laborCost)} (${costSummary.totalLaborHours}h)` : `Nao rastreado (${costSummary.totalLaborHours}h)`}
                 />
+                <Info label="Terceiros" value={costSummary.thirdPartyCost != null ? formatCurrency(costSummary.thirdPartyCost) : "Nao rastreado"} />
                 <Info label="Total" value={costSummary.totalCost != null ? formatCurrency(costSummary.totalCost) : "-"} />
               </dl>
             </div>

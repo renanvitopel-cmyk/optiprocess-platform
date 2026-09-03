@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2, PlayCircle, CheckCircle2, Plus, X } from "lucide-react";
+import { Pencil, Trash2, PlayCircle, CheckCircle2, Plus, X, Square } from "lucide-react";
 import {
   getMaintenanceWorkOrder,
   deleteMaintenanceWorkOrder,
@@ -13,11 +13,20 @@ import {
   removeWorkOrderPart,
   addWorkOrderLabor,
   removeWorkOrderLabor,
+  addWorkOrderThirdPartyService,
+  removeWorkOrderThirdPartyService,
+  addWorkOrderReservation,
+  releaseWorkOrderReservation,
+  consumeWorkOrderReservation,
+  addWorkOrderStoppage,
+  updateWorkOrderStoppage,
+  removeWorkOrderStoppage,
 } from "../../../api/maintenanceWorkOrders";
 import { listSpareParts } from "../../../api/spareParts";
 import { listAssetParts } from "../../../api/instruments";
 import { listLaborResources } from "../../../api/laborResources";
-import type { ChecklistItemResult, MaintenanceOrderStatus } from "../../../api/types";
+import { listStoppageReasons } from "../../../api/stoppageReasons";
+import type { ChecklistItemResult, MaintenanceOrderStatus, LaborHourType } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -36,6 +45,7 @@ const RESULT_OPTIONS: { value: ChecklistItemResult; label: string; tone: string 
 
 const TYPE_LABELS: Record<string, string> = { PREVENTIVE: "Preventiva", CORRECTIVE: "Corretiva", PREDICTIVE: "Preditiva" };
 const PRIORITY_LABELS: Record<string, string> = { LOW: "Baixa", MEDIUM: "Media", HIGH: "Alta", CRITICAL: "Critica" };
+const HOUR_TYPE_LABELS: Record<LaborHourType, string> = { NORMAL: "Normal", OVERTIME: "Extra", NIGHT: "Noturna" };
 
 export default function WorkOrderDetail() {
   const { id = "" } = useParams<{ id: string }>();
@@ -51,6 +61,17 @@ export default function WorkOrderDetail() {
   const [partQty, setPartQty] = useState(1);
   const [laborResourceId, setLaborResourceId] = useState("");
   const [laborHours, setLaborHours] = useState(1);
+  const [laborHourType, setLaborHourType] = useState<LaborHourType | "">("");
+  const [laborStart, setLaborStart] = useState("");
+  const [laborEnd, setLaborEnd] = useState("");
+  const [supplierName, setSupplierName] = useState("");
+  const [serviceDescription, setServiceDescription] = useState("");
+  const [serviceCost, setServiceCost] = useState(0);
+  const [reservationSparePartId, setReservationSparePartId] = useState("");
+  const [reservationQty, setReservationQty] = useState(1);
+  const [stoppageReasonId, setStoppageReasonId] = useState("");
+  const [stoppageStart, setStoppageStart] = useState("");
+  const [stoppageNotes, setStoppageNotes] = useState("");
 
   const { data: workOrder, isLoading } = useQuery({ queryKey: ["maintenance-work-order", id], queryFn: () => getMaintenanceWorkOrder(id) });
   const { data: spareParts } = useQuery({
@@ -67,6 +88,10 @@ export default function WorkOrderDetail() {
     queryKey: ["labor-resources-picker", workOrder?.clientId],
     queryFn: () => listLaborResources({ clientId: workOrder!.clientId, active: true, pageSize: 200 }),
     enabled: !!workOrder?.clientId,
+  });
+  const { data: stoppageReasons } = useQuery({
+    queryKey: ["stoppage-reasons-picker"],
+    queryFn: () => listStoppageReasons({ active: true }),
   });
 
   // Prioriza na lista as pecas ja cadastradas no BOM do ativo desta OS.
@@ -172,10 +197,19 @@ export default function WorkOrderDetail() {
     if (!laborResourceId || laborHours <= 0) return;
     setBusy(true);
     try {
-      await addWorkOrderLabor(id, { laborResourceId, hours: laborHours });
+      await addWorkOrderLabor(id, {
+        laborResourceId,
+        hours: laborHours,
+        hourType: laborHourType || null,
+        startedAt: laborStart ? new Date(laborStart).toISOString() : null,
+        endedAt: laborEnd ? new Date(laborEnd).toISOString() : null,
+      });
       notify("success", "Mao de obra registrada.");
       setLaborResourceId("");
       setLaborHours(1);
+      setLaborHourType("");
+      setLaborStart("");
+      setLaborEnd("");
       invalidate();
     } catch (error) {
       notify("error", getApiErrorMessage(error));
@@ -197,9 +231,141 @@ export default function WorkOrderDetail() {
     }
   }
 
+  async function handleAddThirdPartyService() {
+    if (!supplierName.trim() || !serviceDescription.trim()) return;
+    setBusy(true);
+    try {
+      await addWorkOrderThirdPartyService(id, { supplierName, description: serviceDescription, cost: serviceCost });
+      notify("success", "Servico de terceiro registrado.");
+      setSupplierName("");
+      setServiceDescription("");
+      setServiceCost(0);
+      invalidate();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemoveThirdPartyService(serviceId: string) {
+    setBusy(true);
+    try {
+      await removeWorkOrderThirdPartyService(id, serviceId);
+      invalidate();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAddReservation() {
+    if (!reservationSparePartId || reservationQty < 1) return;
+    setBusy(true);
+    try {
+      await addWorkOrderReservation(id, { sparePartId: reservationSparePartId, quantity: reservationQty });
+      notify("success", "Peca reservada.");
+      setReservationSparePartId("");
+      setReservationQty(1);
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ["spare-parts-picker"] });
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleReleaseReservation(reservationId: string) {
+    setBusy(true);
+    try {
+      await releaseWorkOrderReservation(id, reservationId);
+      notify("success", "Reserva liberada.");
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ["spare-parts-picker"] });
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleConsumeReservation(reservationId: string) {
+    setBusy(true);
+    try {
+      await consumeWorkOrderReservation(id, reservationId);
+      notify("success", "Reserva consumida - baixa registrada no estoque.");
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ["spare-parts-picker"] });
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAddStoppage() {
+    if (!stoppageStart) return;
+    setBusy(true);
+    try {
+      await addWorkOrderStoppage(id, {
+        reasonId: stoppageReasonId || null,
+        startedAt: new Date(stoppageStart).toISOString(),
+        notes: stoppageNotes || null,
+      });
+      notify("success", "Parada registrada.");
+      setStoppageReasonId("");
+      setStoppageStart("");
+      setStoppageNotes("");
+      invalidate();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleEndStoppage(stoppageId: string) {
+    setBusy(true);
+    try {
+      await updateWorkOrderStoppage(id, stoppageId, { endedAt: new Date().toISOString() });
+      notify("success", "Parada encerrada.");
+      invalidate();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemoveStoppage(stoppageId: string) {
+    setBusy(true);
+    try {
+      await removeWorkOrderStoppage(id, stoppageId);
+      invalidate();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (isLoading || !workOrder) return <FullPageSpinner />;
 
   const isCompleted = workOrder.status === "COMPLETED";
+
+  // Custo desta OS - mesmo criterio do resumo por ativo (so soma o que tem custo
+  // informado; "Nao rastreado" quando nada foi preenchido, nunca aparenta zero).
+  const partsWithCost = (workOrder.partsUsed ?? []).filter((p) => p.unitCost != null);
+  const partsCost = partsWithCost.reduce((sum, p) => sum + p.unitCost! * p.quantity, 0);
+  const partsCostKnown = partsWithCost.length > 0;
+  const laborWithCost = (workOrder.laborEntries ?? []).filter((l) => l.hourlyRateSnapshot != null);
+  const laborCost = laborWithCost.reduce((sum, l) => sum + l.hourlyRateSnapshot! * l.hours, 0);
+  const laborCostKnown = laborWithCost.length > 0;
+  const thirdPartyCost = (workOrder.thirdPartyServices ?? []).reduce((sum, s) => sum + s.cost, 0);
+  const thirdPartyCostKnown = (workOrder.thirdPartyServices ?? []).length > 0;
+  const costSummaryKnown = partsCostKnown || laborCostKnown || thirdPartyCostKnown;
 
   return (
     <div>
@@ -371,26 +537,45 @@ export default function WorkOrderDetail() {
           <div className="card space-y-3 p-5">
             <h2 className="font-semibold text-navy-900">Mao de obra</h2>
             {canManage && !isCompleted && (
-              <div className="flex flex-wrap items-end gap-2">
-                <select className="input flex-1" value={laborResourceId} onChange={(e) => setLaborResourceId(e.target.value)}>
-                  <option value="">Selecione a mao de obra</option>
-                  {(laborResources?.items ?? []).map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} - {r.type}{r.hourlyRate != null ? ` (${formatCurrency(r.hourlyRate)}/h)` : ""}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  min={0.5}
-                  step={0.5}
-                  className="input w-24"
-                  value={laborHours}
-                  onChange={(e) => setLaborHours(Number(e.target.value))}
-                />
-                <button type="button" className="btn-outline" onClick={handleAddLabor} disabled={busy || !laborResourceId}>
-                  <Plus className="h-4 w-4" /> Adicionar
-                </button>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-end gap-2">
+                  <select className="input flex-1" value={laborResourceId} onChange={(e) => setLaborResourceId(e.target.value)}>
+                    <option value="">Selecione a mao de obra</option>
+                    {(laborResources?.items ?? []).map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} - {r.type}{r.hourlyRate != null ? ` (${formatCurrency(r.hourlyRate)}/h)` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min={0.5}
+                    step={0.5}
+                    className="input w-24"
+                    value={laborHours}
+                    onChange={(e) => setLaborHours(Number(e.target.value))}
+                    aria-label="Horas"
+                  />
+                  <select className="input w-36" value={laborHourType} onChange={(e) => setLaborHourType(e.target.value as LaborHourType | "")}>
+                    <option value="">Tipo de hora</option>
+                    <option value="NORMAL">Normal</option>
+                    <option value="OVERTIME">Extra</option>
+                    <option value="NIGHT">Noturna</option>
+                  </select>
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="flex-1 text-xs text-graphite-500">
+                    Inicio (opcional)
+                    <input type="datetime-local" className="input" value={laborStart} onChange={(e) => setLaborStart(e.target.value)} />
+                  </label>
+                  <label className="flex-1 text-xs text-graphite-500">
+                    Fim (opcional)
+                    <input type="datetime-local" className="input" value={laborEnd} onChange={(e) => setLaborEnd(e.target.value)} />
+                  </label>
+                  <button type="button" className="btn-outline" onClick={handleAddLabor} disabled={busy || !laborResourceId}>
+                    <Plus className="h-4 w-4" /> Adicionar
+                  </button>
+                </div>
               </div>
             )}
             {!workOrder.laborEntries || workOrder.laborEntries.length === 0 ? (
@@ -399,10 +584,17 @@ export default function WorkOrderDetail() {
               <ul className="divide-y divide-gray-100">
                 {workOrder.laborEntries.map((entry) => (
                   <li key={entry.id} className="flex items-center justify-between py-2 text-sm">
-                    <span>
-                      {entry.laborResource?.name ?? "Mao de obra"} - {entry.hours}h
-                      {entry.hourlyRateSnapshot != null && ` (${formatCurrency(entry.hourlyRateSnapshot * entry.hours)})`}
-                    </span>
+                    <div>
+                      <span>
+                        {entry.laborResource?.name ?? "Mao de obra"} - {entry.hours}h{entry.hourType ? ` (${HOUR_TYPE_LABELS[entry.hourType]})` : ""}
+                        {entry.hourlyRateSnapshot != null && ` - ${formatCurrency(entry.hourlyRateSnapshot * entry.hours)}`}
+                      </span>
+                      {(entry.startedAt || entry.endedAt) && (
+                        <p className="text-xs text-graphite-400">
+                          {entry.startedAt ? formatDateTime(entry.startedAt) : "-"} ate {entry.endedAt ? formatDateTime(entry.endedAt) : "-"}
+                        </p>
+                      )}
+                    </div>
                     {canManage && !isCompleted && (
                       <button onClick={() => handleRemoveLabor(entry.id)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover lancamento">
                         <X className="h-4 w-4" />
@@ -415,6 +607,156 @@ export default function WorkOrderDetail() {
           </div>
 
           <WorkOrderAttachments workOrderId={id} canEdit={!!canManage} />
+        </div>
+
+        <div className="space-y-6">
+          {costSummaryKnown && (
+            <div className="card space-y-2 p-5">
+              <h2 className="font-semibold text-navy-900">Custo desta OS</h2>
+              <dl className="space-y-1.5 text-sm">
+                <div className="flex justify-between"><dt className="text-graphite-500">Pecas</dt><dd className="font-medium text-graphite-800">{partsCostKnown ? formatCurrency(partsCost) : "Nao rastreado"}</dd></div>
+                <div className="flex justify-between"><dt className="text-graphite-500">Mao de obra</dt><dd className="font-medium text-graphite-800">{laborCostKnown ? formatCurrency(laborCost) : "Nao rastreado"}</dd></div>
+                <div className="flex justify-between"><dt className="text-graphite-500">Terceiros</dt><dd className="font-medium text-graphite-800">{thirdPartyCostKnown ? formatCurrency(thirdPartyCost) : "Nao rastreado"}</dd></div>
+                <div className="flex justify-between border-t border-gray-100 pt-1.5"><dt className="font-semibold text-navy-900">Total</dt><dd className="font-semibold text-navy-900">{formatCurrency(partsCost + laborCost + thirdPartyCost)}</dd></div>
+              </dl>
+            </div>
+          )}
+
+          <div className="card space-y-3 p-5">
+            <h2 className="font-semibold text-navy-900">Materiais reservados</h2>
+            {canManage && !isCompleted && (
+              <div className="flex flex-wrap items-end gap-2">
+                <select className="input flex-1" value={reservationSparePartId} onChange={(e) => setReservationSparePartId(e.target.value)}>
+                  <option value="">Selecione a peca</option>
+                  {(spareParts?.items ?? []).map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} - disponivel: {p.stockQty - p.reservedQty} {p.unit}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min={1}
+                  className="input w-20"
+                  value={reservationQty}
+                  onChange={(e) => setReservationQty(Number(e.target.value))}
+                />
+                <button type="button" className="btn-outline" onClick={handleAddReservation} disabled={busy || !reservationSparePartId}>
+                  <Plus className="h-4 w-4" /> Reservar
+                </button>
+              </div>
+            )}
+            {!workOrder.partReservations || workOrder.partReservations.length === 0 ? (
+              <p className="text-sm text-graphite-500">Nenhuma peca reservada.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {workOrder.partReservations.map((r) => (
+                  <li key={r.id} className="flex items-center justify-between py-2 text-sm">
+                    <span>{r.sparePart?.name ?? "Peca"} - {r.quantity} {r.sparePart?.unit ?? "un."}</span>
+                    {canManage && !isCompleted && (
+                      <div className="flex gap-2">
+                        <button onClick={() => handleConsumeReservation(r.id)} className="text-xs font-medium text-navy-700 hover:underline">Consumir</button>
+                        <button onClick={() => handleReleaseReservation(r.id)} className="text-graphite-400 hover:text-safety-red" aria-label="Liberar reserva">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="card space-y-3 p-5">
+            <h2 className="font-semibold text-navy-900">Servicos de terceiros</h2>
+            {canManage && !isCompleted && (
+              <div className="space-y-2">
+                <input className="input" placeholder="Fornecedor" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} />
+                <input className="input" placeholder="Descricao do servico" value={serviceDescription} onChange={(e) => setServiceDescription(e.target.value)} />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    className="input flex-1"
+                    placeholder="Custo"
+                    value={serviceCost || ""}
+                    onChange={(e) => setServiceCost(Number(e.target.value))}
+                  />
+                  <button type="button" className="btn-outline" onClick={handleAddThirdPartyService} disabled={busy || !supplierName || !serviceDescription}>
+                    <Plus className="h-4 w-4" /> Adicionar
+                  </button>
+                </div>
+              </div>
+            )}
+            {!workOrder.thirdPartyServices || workOrder.thirdPartyServices.length === 0 ? (
+              <p className="text-sm text-graphite-500">Nenhum servico de terceiro.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {workOrder.thirdPartyServices.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between py-2 text-sm">
+                    <div>
+                      <p className="text-graphite-800">{s.supplierName} - {formatCurrency(s.cost)}</p>
+                      <p className="text-xs text-graphite-400">{s.description}</p>
+                    </div>
+                    {canManage && !isCompleted && (
+                      <button onClick={() => handleRemoveThirdPartyService(s.id)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover servico">
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="card space-y-3 p-5">
+            <h2 className="font-semibold text-navy-900">Paradas</h2>
+            {canManage && !isCompleted && (
+              <div className="space-y-2">
+                <select className="input" value={stoppageReasonId} onChange={(e) => setStoppageReasonId(e.target.value)}>
+                  <option value="">Motivo (opcional)</option>
+                  {(stoppageReasons ?? []).map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+                <input type="datetime-local" className="input" value={stoppageStart} onChange={(e) => setStoppageStart(e.target.value)} />
+                <div className="flex items-center gap-2">
+                  <input className="input flex-1" placeholder="Observacao (opcional)" value={stoppageNotes} onChange={(e) => setStoppageNotes(e.target.value)} />
+                  <button type="button" className="btn-outline shrink-0" onClick={handleAddStoppage} disabled={busy || !stoppageStart}>
+                    <Plus className="h-4 w-4" /> Registrar
+                  </button>
+                </div>
+              </div>
+            )}
+            {!workOrder.stoppages || workOrder.stoppages.length === 0 ? (
+              <p className="text-sm text-graphite-500">Nenhuma parada registrada.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {workOrder.stoppages.map((s) => (
+                  <li key={s.id} className="py-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-graphite-800">{s.reason?.name ?? "Sem motivo"}</span>
+                      {canManage && (
+                        <div className="flex items-center gap-2">
+                          {!s.endedAt && (
+                            <button onClick={() => handleEndStoppage(s.id)} className="inline-flex items-center gap-1 text-xs font-medium text-navy-700 hover:underline">
+                              <Square className="h-3 w-3" /> Encerrar
+                            </button>
+                          )}
+                          <button onClick={() => handleRemoveStoppage(s.id)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover parada">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-graphite-400">
+                      {formatDateTime(s.startedAt)} ate {s.endedAt ? formatDateTime(s.endedAt) : "em aberto"}
+                    </p>
+                    {s.notes && <p className="text-xs text-graphite-500">{s.notes}</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
 

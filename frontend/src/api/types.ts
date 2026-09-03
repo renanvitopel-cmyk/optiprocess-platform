@@ -634,6 +634,8 @@ export interface LaborResource {
   createdAt: string;
 }
 
+export type LaborHourType = "NORMAL" | "OVERTIME" | "NIGHT";
+
 export interface WorkOrderLaborEntry {
   id: string;
   workOrderId: string;
@@ -641,12 +643,58 @@ export interface WorkOrderLaborEntry {
   laborResource?: { id: string; name: string; type: string };
   hours: number;
   hourlyRateSnapshot: number | null;
+  hourType: LaborHourType | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface WorkOrderThirdPartyService {
+  id: string;
+  workOrderId: string;
+  supplierName: string;
+  description: string;
+  cost: number;
+  invoiceNumber: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export type SparePartReservationStatus = "RESERVED" | "CONSUMED" | "RELEASED";
+
+export interface SparePartReservation {
+  id: string;
+  sparePartId: string;
+  sparePart?: { id: string; name: string; code: string | null; unit: string };
+  workOrderId: string;
+  quantity: number;
+  status: SparePartReservationStatus;
+  createdAt: string;
+}
+
+export interface StoppageReason {
+  id: string;
+  clientId: string | null;
+  name: string;
+  active: boolean;
+}
+
+export interface WorkOrderStoppage {
+  id: string;
+  workOrderId: string;
+  reasonId: string | null;
+  reason?: { id: string; name: string } | null;
+  startedAt: string;
+  endedAt: string | null;
+  notes: string | null;
   createdAt: string;
 }
 
 export interface InstrumentCostSummary {
   partsCost: number | null;
   laborCost: number | null;
+  thirdPartyCost: number | null;
   totalCost: number | null;
   totalLaborHours: number;
 }
@@ -656,6 +704,7 @@ export interface MaintenancePartUsed {
   sparePartId: string;
   sparePart?: { id: string; name: string; code: string | null; unit: string };
   quantity: number;
+  unitCost: number | null;
   reason: string | null;
   createdAt: string;
 }
@@ -686,6 +735,7 @@ export interface SparePart {
   unit: string;
   stockQty: number;
   minStock: number;
+  reservedQty: number;
   unitCost: number | null;
   active: boolean;
   createdAt: string;
@@ -740,6 +790,9 @@ export interface MaintenanceWorkOrder {
   checklist?: MaintenanceWorkOrderChecklistItem[];
   partsUsed?: MaintenancePartUsed[];
   laborEntries?: WorkOrderLaborEntry[];
+  thirdPartyServices?: WorkOrderThirdPartyService[];
+  partReservations?: SparePartReservation[];
+  stoppages?: WorkOrderStoppage[];
   createdAt: string;
 }
 

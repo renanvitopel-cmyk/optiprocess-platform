@@ -69,6 +69,7 @@ const ServiceRequestsList = lazy(() => import("./pages/admin/maintenance/Service
 const ServiceRequestForm = lazy(() => import("./pages/admin/maintenance/ServiceRequestForm"));
 const ServiceRequestDetail = lazy(() => import("./pages/admin/maintenance/ServiceRequestDetail"));
 const FailureCodesList = lazy(() => import("./pages/admin/maintenance/FailureCodesList"));
+const StoppageReasonsList = lazy(() => import("./pages/admin/maintenance/StoppageReasonsList"));
 const SparePartsList = lazy(() => import("./pages/admin/maintenance/SparePartsList"));
 const LaborResourcesList = lazy(() => import("./pages/admin/maintenance/LaborResourcesList"));
 
@@ -154,6 +155,7 @@ export default function App() {
                 <Route path="manutencao/solicitacoes/novo" element={<ServiceRequestForm />} />
                 <Route path="manutencao/solicitacoes/:id" element={<ServiceRequestDetail />} />
                 <Route path="manutencao/falhas" element={<FailureCodesList />} />
+                <Route path="manutencao/paradas" element={<StoppageReasonsList />} />
                 <Route path="manutencao/almoxarifado" element={<SparePartsList />} />
                 <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
 
@@ -204,6 +206,7 @@ export default function App() {
                 <Route path="manutencao/solicitacoes/novo" element={<ServiceRequestForm />} />
                 <Route path="manutencao/solicitacoes/:id" element={<ServiceRequestDetail />} />
                 <Route path="manutencao/falhas" element={<FailureCodesList />} />
+                <Route path="manutencao/paradas" element={<StoppageReasonsList />} />
                 <Route path="manutencao/arvore" element={<PortalInstrumentsTree />} />
                 <Route path="almoxarifado" element={<PortalSpareParts />} />
                 <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />

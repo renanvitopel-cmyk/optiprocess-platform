@@ -17,7 +17,7 @@ export default function Home() {
     <div>
       <section className="relative overflow-hidden bg-navy-950 text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(245,180,0,0.12),transparent_55%)]" />
-        <div className="container-page relative flex flex-col items-center gap-10 py-20 sm:py-28 lg:flex-row lg:items-center lg:justify-between lg:gap-12">
+        <div className="container-page relative flex flex-col items-center gap-10 py-12 sm:py-16 lg:flex-row lg:items-center lg:justify-between lg:gap-12">
           <div className="flex flex-col items-start gap-6 lg:max-w-xl">
             <span className="inline-flex items-center gap-2 rounded-full border border-safety-yellow/30 bg-safety-yellow/10 px-3 py-1 text-xs font-semibold text-safety-yellow">
               <ShieldCheck className="h-3.5 w-3.5" /> Seguranca e excelencia tecnica industrial
@@ -39,8 +39,8 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="shrink-0 rounded-2xl bg-white p-8 shadow-2xl sm:p-10">
-            <LogoFull variant="dark" className="h-36 w-auto sm:h-44" />
+          <div className="flex shrink-0 items-center justify-center rounded-2xl bg-white p-10 shadow-2xl sm:p-14 lg:h-80 lg:w-80">
+            <LogoFull variant="dark" className="h-40 w-auto sm:h-52" />
           </div>
         </div>
       </section>

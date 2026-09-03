@@ -35,6 +35,7 @@ const ClientDetail = lazy(() => import("./pages/admin/clients/ClientDetail"));
 const InstrumentsList = lazy(() => import("./pages/admin/instruments/InstrumentsList"));
 const InstrumentDetail = lazy(() => import("./pages/admin/instruments/InstrumentDetail"));
 const InstrumentsTree = lazy(() => import("./pages/admin/instruments/InstrumentsTree"));
+const AssetTypesList = lazy(() => import("./pages/admin/instruments/AssetTypesList"));
 const CalibrationsList = lazy(() => import("./pages/admin/calibrations/CalibrationsList"));
 const CalibrationForm = lazy(() => import("./pages/admin/calibrations/CalibrationForm"));
 const CalibrationDetail = lazy(() => import("./pages/admin/calibrations/CalibrationDetail"));
@@ -108,6 +109,7 @@ export default function App() {
                 <Route path="clientes/:id" element={<ClientDetail />} />
 
                 <Route path="instrumentos" element={<InstrumentsList />} />
+                <Route path="instrumentos/tipos" element={<AssetTypesList />} />
                 <Route path="instrumentos/:id" element={<InstrumentDetail />} />
                 <Route path="manutencao/arvore" element={<InstrumentsTree />} />
 
@@ -157,6 +159,7 @@ export default function App() {
               <Route path="/portal" element={<ClientPortalLayout />}>
                 <Route index element={<PortalDashboard />} />
                 <Route path="instrumentos" element={<PortalInstruments />} />
+                <Route path="instrumentos/tipos" element={<AssetTypesList />} />
                 <Route path="instrumentos/:id" element={<PortalInstrumentDetail />} />
                 <Route path="certificados" element={<PortalCertificates />} />
                 <Route path="certificados/:id" element={<PortalCertificateDetail />} />

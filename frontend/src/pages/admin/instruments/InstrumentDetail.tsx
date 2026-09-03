@@ -13,6 +13,7 @@ import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { InstrumentFormModal } from "./InstrumentFormModal";
 import { MeterFormModal } from "./MeterFormModal";
+import { InstrumentAttachments } from "../../../components/InstrumentAttachments";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { useAuth } from "../../../auth/AuthContext";
 import { useToast } from "../../../components/Toast";
@@ -157,22 +158,26 @@ export default function InstrumentDetail() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="card space-y-4 p-5 lg:col-span-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={instrument.derivedStatus ?? instrument.status} />
-            <StatusBadge status={instrument.criticality} label={`Criticidade: ${PRIORITY_LABELS[instrument.criticality]}`} />
+        <div className="space-y-6 lg:col-span-2">
+          <div className="card space-y-4 p-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={instrument.derivedStatus ?? instrument.status} />
+              <StatusBadge status={instrument.criticality} label={`Criticidade: ${PRIORITY_LABELS[instrument.criticality]}`} />
+            </div>
+            <dl className="grid gap-4 sm:grid-cols-3">
+              <Info label="Fabricante" value={instrument.manufacturer} />
+              <Info label="Numero de serie" value={instrument.serialNumber} />
+              <Info label="Faixa de medicao" value={instrument.measurementRange ?? "-"} />
+              <Info label="Resolucao" value={instrument.resolution ?? "-"} />
+              <Info label="Unidade" value={instrument.unit ?? "-"} />
+              <Info label="Local de instalacao" value={instrument.installationLocation ?? "-"} />
+              <Info label="Periodicidade" value={instrument.calibrationFrequencyMonths ? `${instrument.calibrationFrequencyMonths} meses` : "Nao rastreada"} />
+              <Info label="Ultima calibracao" value={formatDate(instrument.lastCalibrationDate)} />
+              <Info label="Proxima calibracao" value={formatDate(instrument.nextDueDate)} />
+            </dl>
           </div>
-          <dl className="grid gap-4 sm:grid-cols-3">
-            <Info label="Fabricante" value={instrument.manufacturer} />
-            <Info label="Numero de serie" value={instrument.serialNumber} />
-            <Info label="Faixa de medicao" value={instrument.measurementRange ?? "-"} />
-            <Info label="Resolucao" value={instrument.resolution ?? "-"} />
-            <Info label="Unidade" value={instrument.unit ?? "-"} />
-            <Info label="Local de instalacao" value={instrument.installationLocation ?? "-"} />
-            <Info label="Periodicidade" value={instrument.calibrationFrequencyMonths ? `${instrument.calibrationFrequencyMonths} meses` : "Nao rastreada"} />
-            <Info label="Ultima calibracao" value={formatDate(instrument.lastCalibrationDate)} />
-            <Info label="Proxima calibracao" value={formatDate(instrument.nextDueDate)} />
-          </dl>
+
+          <InstrumentAttachments instrumentId={instrument.id} canEdit={!!canManage} />
         </div>
 
         <div className="space-y-6">

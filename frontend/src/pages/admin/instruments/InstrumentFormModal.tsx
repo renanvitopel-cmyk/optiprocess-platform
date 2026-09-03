@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Modal } from "../../../components/Modal";
 import { TextInput, SelectInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
+import { AssetTypeInput } from "../../../components/AssetTypeInput";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { createInstrument, updateInstrument } from "../../../api/instruments";
 import type { Instrument } from "../../../api/types";
@@ -105,7 +106,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <TextInput label="Tipo de ativo" required error={errors.type?.message} {...register("type")} />
+          <AssetTypeInput required error={errors.type?.message} {...register("type")} />
           <SelectInput
             label="Criticidade"
             hint="Quanto uma parada deste ativo pesa pra empresa - guia prioridade de OS e estoque de pecas."

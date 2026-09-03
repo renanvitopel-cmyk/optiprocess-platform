@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, GitBranch } from "lucide-react";
+import { Plus, GitBranch, Tags } from "lucide-react";
 import { listInstruments } from "../../api/instruments";
 import type { MaintenancePriority } from "../../api/types";
 import { PageHeader } from "../../components/PageHeader";
@@ -31,6 +31,9 @@ export default function PortalInstruments() {
           <>
             <button className="btn-outline" onClick={() => navigate("/portal/manutencao/arvore")}>
               <GitBranch className="h-4 w-4" /> Ver arvore
+            </button>
+            <button className="btn-outline" onClick={() => navigate("/portal/instrumentos/tipos")}>
+              <Tags className="h-4 w-4" /> Tipos de ativo
             </button>
             <button className="btn-primary" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4" /> Novo ativo

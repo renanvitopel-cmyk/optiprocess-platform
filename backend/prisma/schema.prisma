@@ -191,6 +191,7 @@ enum AttachmentEntityType {
   PRODUCT
   CLIENT
   MAINTENANCE_WORK_ORDER
+  INSTRUMENT
 }
 
 // Classifica o registro fotografico feito pelo tecnico em campo. As fotos entram
@@ -314,6 +315,7 @@ model Client {
   maintenanceWorkOrders MaintenanceWorkOrder[]
   spareParts            SparePart[]
   failureCodes          FailureCode[]
+  assetTypes            AssetType[]
 
   @@index([status])
   @@map("clients")
@@ -813,6 +815,21 @@ model MeterReading {
 }
 
 // Catalogo de causas de falha usado nas ordens de manutencao corretivas.
+model AssetType {
+  id       String  @id @default(uuid())
+  // Sem clientId = catalogo padrao da OptiProcess (motor, compressor, extrusora...),
+  // visivel para todos. Com clientId = tipo que a propria empresa cadastrou.
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id])
+  name     String
+  active   Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([clientId, name])
+  @@index([clientId])
+  @@map("asset_types")
+}
+
 model FailureCode {
   id          String   @id @default(uuid())
   // Sem clientId = catalogo padrao da OptiProcess, visivel para todos. Com clientId =

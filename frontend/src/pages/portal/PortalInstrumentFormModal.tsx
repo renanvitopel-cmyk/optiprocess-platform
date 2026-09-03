@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Modal } from "../../components/Modal";
 import { TextInput, SelectInput } from "../../components/form/Field";
 import { InstrumentPicker } from "../../components/InstrumentPicker";
+import { AssetTypeInput } from "../../components/AssetTypeInput";
 import { createInstrument, updateInstrument } from "../../api/instruments";
 import type { Instrument } from "../../api/types";
 import { useToast } from "../../components/Toast";
@@ -96,7 +97,7 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <TextInput label="Tipo de ativo" required error={errors.type?.message} {...register("type")} />
+          <AssetTypeInput required error={errors.type?.message} {...register("type")} />
           <SelectInput
             label="Criticidade"
             hint="Quanto uma parada deste ativo pesa pra sua operacao."

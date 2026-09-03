@@ -1,6 +1,6 @@
 import { api } from "./client";
 import type { PagedResult } from "./client";
-import type { AssetPart, AssetPartHistoryEntry, Instrument, InstrumentStatus, MaintenancePriority } from "./types";
+import type { AssetPart, AssetPartHistoryEntry, AttachmentCategory, CalibrationAttachment, Instrument, InstrumentStatus, MaintenancePriority } from "./types";
 
 export interface ListInstrumentsParams {
   page?: number;
@@ -62,4 +62,36 @@ export async function removeAssetPart(instrumentId: string, linkId: string): Pro
 export async function getInstrumentPartsHistory(instrumentId: string): Promise<AssetPartHistoryEntry[]> {
   const { data } = await api.get<AssetPartHistoryEntry[]>(`/instruments/${instrumentId}/parts-history`);
   return data;
+}
+
+// --------------------------------------------------------------------------
+// Anexos do ativo: manual, foto do equipamento etc.
+// --------------------------------------------------------------------------
+
+export async function listInstrumentAttachments(instrumentId: string): Promise<CalibrationAttachment[]> {
+  const { data } = await api.get<CalibrationAttachment[]>(`/instruments/${instrumentId}/attachments`);
+  return data;
+}
+
+export async function uploadInstrumentAttachment(
+  instrumentId: string,
+  file: File,
+  category: AttachmentCategory,
+  caption?: string,
+): Promise<CalibrationAttachment> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("category", category);
+  if (caption) formData.append("caption", caption);
+  const { data } = await api.post<CalibrationAttachment>(`/instruments/${instrumentId}/attachments`, formData);
+  return data;
+}
+
+export async function deleteInstrumentAttachment(instrumentId: string, attachmentId: string): Promise<void> {
+  await api.delete(`/instruments/${instrumentId}/attachments/${attachmentId}`);
+}
+
+export async function getInstrumentAttachmentUrl(instrumentId: string, attachmentId: string): Promise<string> {
+  const { data } = await api.get<{ url: string }>(`/instruments/${instrumentId}/attachments/${attachmentId}/url`);
+  return data.url;
 }

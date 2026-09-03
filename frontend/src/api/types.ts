@@ -449,6 +449,13 @@ export interface Meter {
   readings?: MeterReading[];
 }
 
+export interface AssetType {
+  id: string;
+  clientId: string | null;
+  name: string;
+  active: boolean;
+}
+
 export interface FailureCode {
   id: string;
   clientId: string | null;

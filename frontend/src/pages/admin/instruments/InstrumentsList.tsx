@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, GitBranch } from "lucide-react";
+import { Plus, Search, GitBranch, Tags } from "lucide-react";
 import { listInstruments } from "../../../api/instruments";
 import type { InstrumentStatus, MaintenancePriority } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
@@ -42,6 +42,9 @@ export default function InstrumentsList() {
                 <GitBranch className="h-4 w-4" /> Ver arvore
               </button>
             )}
+            <button className="btn-outline" onClick={() => navigate("/gestao/instrumentos/tipos")}>
+              <Tags className="h-4 w-4" /> Tipos de ativo
+            </button>
             {canManage && (
               <button className="btn-primary" onClick={() => setCreateOpen(true)}>
                 <Plus className="h-4 w-4" /> Novo ativo

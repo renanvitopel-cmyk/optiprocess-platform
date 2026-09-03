@@ -8,6 +8,8 @@ import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/erro
 import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
 import { deriveDueStatus, computeNextDueDate } from "../../utils/status";
+import { getStorageProvider } from "../../lib/storage";
+import type { AttachmentCategory } from "@prisma/client";
 
 function withDerivedStatus<T extends { status: InstrumentStatus; nextDueDate: Date | null }>(instrument: T) {
   const derived = instrument.status === "IN_MAINTENANCE" ? "IN_MAINTENANCE" : deriveDueStatus(instrument.nextDueDate);
@@ -345,4 +347,87 @@ export const getInstrumentPartsHistory = asyncHandler(async (req: Request, res: 
   }
 
   res.json([...byPart.values()].sort((a, b) => b.totalQuantity - a.totalQuantity));
+});
+
+// ---------------------------------------------------------------------------
+// Anexos do ativo: manual, foto do equipamento, etc.
+// ---------------------------------------------------------------------------
+
+async function listInstrumentAttachments(instrumentId: string) {
+  return prisma.attachment.findMany({
+    where: { entityType: "INSTRUMENT", entityId: instrumentId },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+}
+
+export const listInstrumentAttachmentsRoute = asyncHandler(async (req: Request, res: Response) => {
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!instrument) throw new NotFoundError("Ativo");
+  res.json(await listInstrumentAttachments(instrument.id));
+});
+
+export const uploadInstrumentAttachment = asyncHandler(async (req: Request, res: Response) => {
+  const existing = await prisma.instrument.findFirst({ where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) } });
+  if (!existing) throw new NotFoundError("Ativo");
+
+  const file = req.file;
+  if (!file) throw new ValidationError("Selecione um arquivo.");
+
+  const { category, caption } = req.body as { category?: AttachmentCategory; caption?: string };
+
+  const key = `instruments/${existing.id}/${Date.now()}-${file.originalname}`;
+  await getStorageProvider().upload(key, file.buffer, file.mimetype);
+
+  const attachment = await prisma.attachment.create({
+    data: {
+      entityType: "INSTRUMENT",
+      entityId: existing.id,
+      category: category && ["LOCATION", "INSTRUMENT", "STANDARD", "MEASUREMENT", "DOCUMENT", "OTHER"].includes(category) ? category : "OTHER",
+      caption: caption || null,
+      fileKey: key,
+      fileName: file.originalname,
+      mimeType: file.mimetype,
+      sizeBytes: file.size,
+      uploadedById: req.user?.sub,
+    },
+  });
+
+  res.status(201).json(attachment);
+});
+
+export const deleteInstrumentAttachment = asyncHandler(async (req: Request, res: Response) => {
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!instrument) throw new NotFoundError("Ativo");
+
+  const attachment = await prisma.attachment.findFirst({
+    where: { id: req.params.attachmentId, entityType: "INSTRUMENT", entityId: instrument.id },
+  });
+  if (!attachment) throw new NotFoundError("Anexo");
+
+  await getStorageProvider().delete(attachment.fileKey);
+  await prisma.attachment.delete({ where: { id: attachment.id } });
+
+  res.status(204).send();
+});
+
+export const getInstrumentAttachmentUrl = asyncHandler(async (req: Request, res: Response) => {
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!instrument) throw new NotFoundError("Ativo");
+
+  const attachment = await prisma.attachment.findFirst({
+    where: { id: req.params.attachmentId, entityType: "INSTRUMENT", entityId: instrument.id },
+  });
+  if (!attachment) throw new NotFoundError("Anexo");
+
+  const url = await getStorageProvider().getSignedDownloadUrl(attachment.fileKey, attachment.fileName);
+  res.json({ url });
 });

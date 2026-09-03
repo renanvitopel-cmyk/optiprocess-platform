@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
 import { requireRole } from "../../middleware/rbac";
+import { uploadAny } from "../../middleware/upload";
 import {
   listInstruments,
   getInstrument,
@@ -11,6 +12,10 @@ import {
   addAssetPart,
   removeAssetPart,
   getInstrumentPartsHistory,
+  listInstrumentAttachmentsRoute,
+  uploadInstrumentAttachment,
+  deleteInstrumentAttachment,
+  getInstrumentAttachmentUrl,
 } from "./controller";
 
 export const instrumentsRouter = Router();
@@ -33,3 +38,9 @@ instrumentsRouter.post("/:id/parts", requireRole("ADMIN", "TECHNICIAN", "CLIENT"
 instrumentsRouter.delete("/:id/parts/:linkId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), removeAssetPart);
 // Historico real de consumo (o que ja foi baixado do almoxarifado nas OS deste ativo).
 instrumentsRouter.get("/:id/parts-history", getInstrumentPartsHistory);
+
+// Anexos do ativo (manual, foto do equipamento etc.) - mesmo padrao ja usado nas OS.
+instrumentsRouter.get("/:id/attachments", listInstrumentAttachmentsRoute);
+instrumentsRouter.get("/:id/attachments/:attachmentId/url", getInstrumentAttachmentUrl);
+instrumentsRouter.post("/:id/attachments", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), uploadAny.single("file"), uploadInstrumentAttachment);
+instrumentsRouter.delete("/:id/attachments/:attachmentId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), deleteInstrumentAttachment);

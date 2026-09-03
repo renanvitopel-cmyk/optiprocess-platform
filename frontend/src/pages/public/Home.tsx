@@ -5,6 +5,7 @@ import { company, differentials, serviceLines } from "../../lib/companyInfo";
 import { listProducts } from "../../api/products";
 import { formatCurrency } from "../../lib/format";
 import { InlineSpinner } from "../../components/Spinner";
+import { LogoFull } from "../../components/Logo";
 
 export default function Home() {
   const { data: featured, isLoading } = useQuery({
@@ -16,24 +17,30 @@ export default function Home() {
     <div>
       <section className="relative overflow-hidden bg-navy-950 text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(245,180,0,0.12),transparent_55%)]" />
-        <div className="container-page relative flex flex-col items-start gap-6 py-20 sm:py-28">
-          <span className="inline-flex items-center gap-2 rounded-full border border-safety-yellow/30 bg-safety-yellow/10 px-3 py-1 text-xs font-semibold text-safety-yellow">
-            <ShieldCheck className="h-3.5 w-3.5" /> Seguranca e excelencia tecnica industrial
-          </span>
-          <h1 className="max-w-2xl text-4xl font-extrabold leading-tight text-white sm:text-5xl">
-            Eletrica, instrumentacao e calibracao com a confianca que a sua operacao precisa
-          </h1>
-          <p className="max-w-xl text-lg text-navy-200">
-            {company.fullName}. Manutencao eletrica predial e industrial, calibracao rastreavel, laudos tecnicos e
-            assistencia especializada para manter sua planta segura e em pleno funcionamento.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Link to="/orcamento" className="btn-primary">
-              Solicitar orcamento <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link to="/servicos" className="btn-outline border-white/30 bg-transparent text-white hover:bg-white/10">
-              Conhecer servicos
-            </Link>
+        <div className="container-page relative flex flex-col items-center gap-10 py-20 sm:py-28 lg:flex-row lg:items-center lg:justify-between lg:gap-12">
+          <div className="flex flex-col items-start gap-6 lg:max-w-xl">
+            <span className="inline-flex items-center gap-2 rounded-full border border-safety-yellow/30 bg-safety-yellow/10 px-3 py-1 text-xs font-semibold text-safety-yellow">
+              <ShieldCheck className="h-3.5 w-3.5" /> Seguranca e excelencia tecnica industrial
+            </span>
+            <h1 className="max-w-2xl text-4xl font-extrabold leading-tight text-white sm:text-5xl">
+              Eletrica, instrumentacao e calibracao com a confianca que a sua operacao precisa
+            </h1>
+            <p className="max-w-xl text-lg text-navy-200">
+              {company.fullName}. Manutencao eletrica predial e industrial, calibracao rastreavel, laudos tecnicos e
+              assistencia especializada para manter sua planta segura e em pleno funcionamento.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link to="/orcamento" className="btn-primary">
+                Solicitar orcamento <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link to="/servicos" className="btn-outline border-white/30 bg-transparent text-white hover:bg-white/10">
+                Conhecer servicos
+              </Link>
+            </div>
+          </div>
+
+          <div className="shrink-0 rounded-2xl bg-white p-8 shadow-2xl sm:p-10">
+            <LogoFull variant="dark" className="h-36 w-auto sm:h-44" />
           </div>
         </div>
       </section>

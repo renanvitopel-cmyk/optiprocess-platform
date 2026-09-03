@@ -9,6 +9,7 @@ import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId } from "../../middleware/rbac";
 import { deriveDueStatus, computeNextDueDateFromDays } from "../../utils/status";
 import { nextClientMaintenanceOrderNumber } from "../../utils/sequence";
+import { reserveSparePart } from "../../lib/inventory";
 
 const detailInclude = {
   client: { select: { id: true, companyName: true, tradeName: true } },
@@ -16,6 +17,8 @@ const detailInclude = {
   meter: { select: { id: true, name: true, unit: true, currentValue: true } },
   responsible: { select: { id: true, name: true } },
   checklistTemplate: { orderBy: { sortOrder: "asc" as const } },
+  template: { select: { id: true, name: true } },
+  parts: { include: { sparePart: { select: { id: true, name: true, code: true, unit: true, stockQty: true, reservedQty: true } } } },
 };
 
 /** Status derivado do plano: TIME usa a mesma janela de vencimento de calibracao/contrato;
@@ -85,6 +88,7 @@ export const getMaintenancePlan = asyncHandler(async (req: Request, res: Respons
 });
 
 const checklistItemSchema = z.object({ description: z.string().min(1) });
+const planPartSchema = z.object({ sparePartId: z.string().uuid(), quantity: z.coerce.number().int().positive() });
 
 const planSchema = z.object({
   clientId: z.string().uuid().optional(),
@@ -98,7 +102,22 @@ const planSchema = z.object({
   active: z.boolean().optional(),
   responsibleId: z.string().uuid().nullish(),
   checklistTemplate: z.array(checklistItemSchema).optional(),
+  // Tolerancia informativa (nao reescreve deriveDueStatus, so exibida na tela do plano);
+  // procedimento/HH prevista/materiais previstos alimentam o backlog do PCM e a OS gerada.
+  toleranceDaysBefore: z.coerce.number().int().nonnegative().nullish(),
+  toleranceDaysAfter: z.coerce.number().int().nonnegative().nullish(),
+  procedure: z.string().nullish(),
+  estimatedLaborHours: z.coerce.number().nonnegative().nullish(),
+  templateId: z.string().uuid().nullish(),
+  parts: z.array(planPartSchema).optional(),
 });
+
+async function assertPartsBelongToClient(parts: { sparePartId: string }[], clientId: string) {
+  const ids = [...new Set(parts.map((p) => p.sparePartId))];
+  const found = await prisma.sparePart.findMany({ where: { id: { in: ids }, deletedAt: null }, select: { id: true, clientId: true } });
+  if (found.length !== ids.length) throw new ValidationError("Uma das pecas informadas nao existe.");
+  if (found.some((p) => p.clientId !== clientId)) throw new ValidationError("Uma das pecas informadas pertence a outra empresa.");
+}
 
 export const createMaintenancePlan = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
@@ -115,7 +134,9 @@ export const createMaintenancePlan = asyncHandler(async (req: Request, res: Resp
   if (!instrument) throw new NotFoundError("Ativo");
   if (instrument.clientId !== clientId) throw new ValidationError("Esse ativo pertence a outra empresa.");
 
-  const { checklistTemplate, ...planData } = data;
+  if (data.parts?.length) await assertPartsBelongToClient(data.parts, clientId);
+
+  const { checklistTemplate, parts, ...planData } = data;
   const nextDueDate = data.triggerType === "TIME" ? computeNextDueDateFromDays(new Date(), data.frequencyDays!) : null;
 
   const plan = await prisma.maintenancePlan.create({
@@ -125,6 +146,7 @@ export const createMaintenancePlan = asyncHandler(async (req: Request, res: Resp
       nextDueDate,
       createdById: req.user?.sub,
       checklistTemplate: { create: (checklistTemplate ?? []).map((c, i) => ({ description: c.description, sortOrder: i })) },
+      parts: { create: (parts ?? []).map((p) => ({ sparePartId: p.sparePartId, quantity: p.quantity })) },
     },
     include: detailInclude,
   });
@@ -147,7 +169,9 @@ export const updateMaintenancePlan = asyncHandler(async (req: Request, res: Resp
   if (!existing) throw new NotFoundError("Plano de manutencao");
   assertOwnClient(req, existing.clientId);
 
-  const { checklistTemplate, ...planData } = data;
+  if (data.parts) await assertPartsBelongToClient(data.parts, existing.clientId);
+
+  const { checklistTemplate, parts, ...planData } = data;
   if (req.user?.role === "CLIENT") delete planData.clientId;
   const frequencyDays = data.frequencyDays ?? existing.frequencyDays;
   const triggerType = data.triggerType ?? existing.triggerType;
@@ -164,6 +188,14 @@ export const updateMaintenancePlan = asyncHandler(async (req: Request, res: Resp
             checklistTemplate: {
               deleteMany: {},
               create: checklistTemplate.map((c, i) => ({ description: c.description, sortOrder: i })),
+            },
+          }
+        : {}),
+      ...(parts
+        ? {
+            parts: {
+              deleteMany: {},
+              create: parts.map((p) => ({ sparePartId: p.sparePartId, quantity: p.quantity })),
             },
           }
         : {}),
@@ -208,7 +240,7 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const plan = await prisma.maintenancePlan.findFirst({
     where: { id: req.params.id, deletedAt: null },
-    include: { checklistTemplate: { orderBy: { sortOrder: "asc" } }, meter: true },
+    include: { checklistTemplate: { orderBy: { sortOrder: "asc" } }, meter: true, parts: true },
   });
   if (!plan) throw new NotFoundError("Plano de manutencao");
   assertOwnClient(req, plan.clientId);
@@ -227,6 +259,7 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
       description: plan.name,
       technicianId: plan.responsibleId,
       meterReadingAtExecution: plan.meter?.currentValue,
+      laborHours: plan.estimatedLaborHours,
       createdById: req.user?.sub,
       checklist: { create: plan.checklistTemplate.map((c, i) => ({ description: c.description, sortOrder: i })) },
     },
@@ -240,6 +273,16 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
       nextDueDate: plan.triggerType === "TIME" && plan.frequencyDays ? computeNextDueDateFromDays(new Date(), plan.frequencyDays) : plan.nextDueDate,
     },
   });
+
+  // Reserva melhor-esforco dos materiais previstos no plano: falta de saldo nao impede a
+  // OS de ser criada, so deixa aquele item sem reserva (o tecnico ve isso na tela da OS).
+  for (const part of plan.parts) {
+    try {
+      await reserveSparePart({ sparePartId: part.sparePartId, workOrderId: workOrder.id, quantity: part.quantity, createdById: req.user?.sub });
+    } catch {
+      // saldo insuficiente - segue sem reservar este item
+    }
+  }
 
   await writeAuditLog({
     userId: req.user?.sub,

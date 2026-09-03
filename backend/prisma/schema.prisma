@@ -398,6 +398,7 @@ model Client {
   serviceRequestCategories  ServiceRequestCategory[]
   stoppageReasons           StoppageReason[]
   rootCauseAnalyses         RootCauseAnalysis[]
+  maintenancePlanTemplates  MaintenancePlanTemplate[]
 
   @@index([status])
   @@map("clients")
@@ -1324,6 +1325,19 @@ model MaintenancePlan {
   active        Boolean                @default(true)
   responsibleId String?
   responsible   User?                  @relation("MaintenancePlanResponsible", fields: [responsibleId], references: [id])
+  // Tolerancia (dias) pra antecipar ou atrasar sem quebrar o padrao - so informativo por
+  // enquanto (nao reescreve deriveDueStatus, que e' compartilhado com calibracao/contrato).
+  toleranceDaysBefore Int?
+  toleranceDaysAfter  Int?
+  // Procedimento padrao (texto livre/rich) - diferente do checklist, que sao itens curtos
+  // marcaveis; isso e' a descricao de como executar o servico.
+  procedure           String?
+  // HH prevista - copiada pra MaintenanceWorkOrder.laborHours quando a OS e' gerada
+  // (mesmo campo usado no "HH prevista x realizada" do painel PCM).
+  estimatedLaborHours Float?
+  // Plano criado a partir de um template reutilizavel (opcional, so rastreabilidade).
+  templateId          String?
+  template            MaintenancePlanTemplate? @relation(fields: [templateId], references: [id])
   createdById   String?
   createdAt     DateTime               @default(now())
   updatedAt     DateTime               @updatedAt
@@ -1331,11 +1345,67 @@ model MaintenancePlan {
 
   checklistTemplate MaintenancePlanChecklistItem[]
   workOrders        MaintenanceWorkOrder[]
+  parts             MaintenancePlanPart[]
 
   @@index([clientId])
   @@index([instrumentId])
   @@index([nextDueDate])
   @@map("maintenance_plans")
+}
+
+// Materiais previstos do plano (lista de materiais esperada) - ao gerar a OS, o sistema
+// tenta reservar essas pecas automaticamente (melhor esforco: falta de saldo nao impede
+// a OS de ser criada, so deixa de reservar aquele item).
+model MaintenancePlanPart {
+  id          String          @id @default(uuid())
+  planId      String
+  plan        MaintenancePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  sparePartId String
+  sparePart   SparePart       @relation(fields: [sparePartId], references: [id])
+  quantity    Int
+
+  @@index([planId])
+  @@index([sparePartId])
+  @@map("maintenance_plan_parts")
+}
+
+// Modelo reutilizavel de plano por familia de ativo (ex.: "Lubrificacao trimestral -
+// motores eletricos") - aplicar o template num ativo especifico cria um MaintenancePlan
+// de verdade, copiando os campos e o checklist. Mesmo padrao global OptiProcess + por
+// cliente do FailureCode/AssetType.
+model MaintenancePlanTemplate {
+  id                     String                 @id @default(uuid())
+  clientId               String?
+  client                 Client?                @relation(fields: [clientId], references: [id])
+  name                   String
+  applicableAssetFamily  String?
+  triggerType            MaintenanceTriggerType
+  frequencyDays          Int?
+  meterInterval          Float?
+  toleranceDaysBefore    Int?
+  toleranceDaysAfter     Int?
+  procedure              String?
+  estimatedLaborHours    Float?
+  active                 Boolean                @default(true)
+  createdAt              DateTime               @default(now())
+
+  checklistItems MaintenancePlanTemplateChecklistItem[]
+  plans          MaintenancePlan[]
+
+  @@unique([clientId, name])
+  @@index([clientId])
+  @@map("maintenance_plan_templates")
+}
+
+model MaintenancePlanTemplateChecklistItem {
+  id          String                  @id @default(uuid())
+  templateId  String
+  template    MaintenancePlanTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  description String
+  sortOrder   Int                     @default(0)
+
+  @@index([templateId])
+  @@map("maintenance_plan_template_checklist_items")
 }
 
 model MaintenancePlanChecklistItem {
@@ -1449,6 +1519,7 @@ model SparePart {
   movements    SparePartMovement[]
   assetLinks   AssetPart[]
   reservations SparePartReservation[]
+  planParts    MaintenancePlanPart[]
 
   @@index([clientId])
   @@index([active])

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
-    "start": "prisma migrate deploy && BOOTSTRAP_ADMIN_EMAIL=renanvitopel@gmail.com BOOTSTRAP_ADMIN_NAME=Renan tsx prisma/bootstrapAdmin.ts; node dist/server.js",
+    "start": "prisma migrate deploy && node dist/server.js",
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { BadgeCheck, AlertTriangle, ShieldX, FileWarning, FileSignature, ShoppingCart, Gauge, TimerReset, Activity, Wrench, Boxes, ShieldCheck, ClipboardList, ListChecks } from "lucide-react";
+import { BadgeCheck, AlertTriangle, ShieldX, FileWarning, FileSignature, ShoppingCart, Gauge, TimerReset, Activity, Wrench, Boxes, ShieldCheck, ClipboardList, ListChecks, GitBranch, Radar } from "lucide-react";
 import { getClientDashboard } from "../../api/dashboard";
 import { listMaintenanceWorkOrders, getMaintenanceDashboard } from "../../api/maintenanceWorkOrders";
 import { useAuth } from "../../auth/AuthContext";
@@ -40,11 +40,17 @@ export default function PortalDashboard() {
           <Link to="/portal/instrumentos" className="btn-outline">
             <Gauge className="h-4 w-4" /> Meus ativos
           </Link>
+          <Link to="/portal/manutencao/arvore" className="btn-outline">
+            <GitBranch className="h-4 w-4" /> Arvore de ativos
+          </Link>
+          <Link to="/portal/manutencao/ordens" className="btn-outline">
+            <ClipboardList className="h-4 w-4" /> Ordem de manutencao
+          </Link>
           <Link to="/portal/manutencao/planos" className="btn-outline">
             <ShieldCheck className="h-4 w-4" /> Planos de manutencao
           </Link>
-          <Link to="/portal/manutencao/ordens" className="btn-outline">
-            <ClipboardList className="h-4 w-4" /> Ordens de manutencao
+          <Link to="/portal/manutencao/ordens?type=PREDICTIVE" className="btn-outline">
+            <Radar className="h-4 w-4" /> Manutencao preditiva
           </Link>
           <Link to="/portal/manutencao/falhas" className="btn-outline">
             <ListChecks className="h-4 w-4" /> Codigos de falha

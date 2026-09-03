@@ -132,7 +132,7 @@ export interface Instrument {
   resolution: string | null;
   unit: string | null;
   installationLocation: string | null;
-  calibrationFrequencyMonths: number;
+  calibrationFrequencyMonths: number | null;
   lastCalibrationDate: string | null;
   nextDueDate: string | null;
   status: InstrumentStatus;

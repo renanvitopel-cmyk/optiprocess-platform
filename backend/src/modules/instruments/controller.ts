@@ -103,7 +103,7 @@ const instrumentSchema = z.object({
   resolution: z.string().nullish(),
   unit: z.string().nullish(),
   installationLocation: z.string().nullish(),
-  calibrationFrequencyMonths: z.coerce.number().int().min(1),
+  calibrationFrequencyMonths: z.coerce.number().int().min(1).nullish(),
   lastCalibrationDate: z.coerce.date().nullish(),
   status: z.nativeEnum(InstrumentStatus).optional(),
   // Arvore de ativos: um filho aponta para o ativo pai (mesmo cliente).
@@ -160,7 +160,7 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
   const clientId = data.clientId;
   await assertTagAvailable(clientId, data.tag);
   if (data.parentId) await assertValidParent(clientId, data.parentId);
-  const nextDueDate = data.lastCalibrationDate
+  const nextDueDate = data.lastCalibrationDate && data.calibrationFrequencyMonths
     ? computeNextDueDate(data.lastCalibrationDate, data.calibrationFrequencyMonths)
     : null;
 
@@ -199,7 +199,8 @@ export const updateInstrument = asyncHandler(async (req: Request, res: Response)
 
   const lastCalibrationDate = data.lastCalibrationDate ?? existing.lastCalibrationDate;
   const frequency = data.calibrationFrequencyMonths ?? existing.calibrationFrequencyMonths;
-  const nextDueDate = lastCalibrationDate ? computeNextDueDate(lastCalibrationDate, frequency) : existing.nextDueDate;
+  const nextDueDate =
+    lastCalibrationDate && frequency ? computeNextDueDate(lastCalibrationDate, frequency) : existing.nextDueDate;
 
   const instrument = await prisma.instrument.update({
     where: { id: req.params.id },

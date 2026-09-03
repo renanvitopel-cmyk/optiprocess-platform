@@ -22,7 +22,7 @@ const schema = z.object({
   resolution: z.string().optional(),
   unit: z.string().optional(),
   installationLocation: z.string().optional(),
-  calibrationFrequencyMonths: z.coerce.number().int().min(1, "Informe a periodicidade."),
+  calibrationFrequencyMonths: z.coerce.number().int().min(1).optional().or(z.literal("")),
   lastCalibrationDate: z.string().optional(),
   status: z.enum(["VALID", "DUE_SOON", "EXPIRED", "IN_MAINTENANCE"]).optional(),
   parentId: z.string().uuid().optional().or(z.literal("")),
@@ -43,7 +43,6 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
   const { notify } = useToast();
   const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { calibrationFrequencyMonths: 12 },
   });
   const clientId = watch("clientId");
 
@@ -62,19 +61,19 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               resolution: instrument.resolution ?? "",
               unit: instrument.unit ?? "",
               installationLocation: instrument.installationLocation ?? "",
-              calibrationFrequencyMonths: instrument.calibrationFrequencyMonths,
+              calibrationFrequencyMonths: instrument.calibrationFrequencyMonths ?? undefined,
               lastCalibrationDate: instrument.lastCalibrationDate?.slice(0, 10) ?? "",
               status: instrument.status,
               parentId: instrument.parentId ?? "",
             }
-          : { calibrationFrequencyMonths: 12, parentId: initialParentId ?? "", clientId: initialClientId ?? "" },
+          : { parentId: initialParentId ?? "", clientId: initialClientId ?? "" },
       );
     }
   }, [open, instrument, initialParentId, initialClientId, reset]);
 
   async function onSubmit(values: FormValues) {
     try {
-      const payload = { ...values, parentId: values.parentId || null };
+      const payload = { ...values, parentId: values.parentId || null, calibrationFrequencyMonths: values.calibrationFrequencyMonths || null };
       const saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
       notify("success", instrument ? "Ativo atualizado." : "Ativo cadastrado.");
       onSaved(saved);
@@ -124,9 +123,9 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
         <TextInput label="Local de instalacao" {...register("installationLocation")} />
         <div className="grid gap-4 sm:grid-cols-3">
           <TextInput
-            label="Periodicidade (meses)"
+            label="Periodicidade de calibracao (meses)"
             type="number"
-            required
+            hint="Deixe em branco se este ativo nao tem calibracao periodica rastreada (ex.: um ativo so de manutencao/CMMS)."
             error={errors.calibrationFrequencyMonths?.message}
             {...register("calibrationFrequencyMonths")}
           />

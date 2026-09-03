@@ -25,11 +25,15 @@ export default function WorkOrdersList() {
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<MaintenanceOrderStatus | "">("");
+  // Preditiva chega pre-filtrada via link do menu ("Manutencao preditiva"), mas continua
+  // um filtro comum - o usuario pode trocar para outro tipo ou limpar normalmente.
+  const [type, setType] = useState<MaintenanceOrderType | "">((searchParams.get("type") as MaintenanceOrderType) || "");
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["maintenance-work-orders", search, status, page, clientId, instrumentId],
-    queryFn: () => listMaintenanceWorkOrders({ search: search || undefined, status: status || undefined, page, pageSize: 15, clientId, instrumentId }),
+    queryKey: ["maintenance-work-orders", search, status, type, page, clientId, instrumentId],
+    queryFn: () =>
+      listMaintenanceWorkOrders({ search: search || undefined, status: status || undefined, type: type || undefined, page, pageSize: 15, clientId, instrumentId }),
   });
 
   return (
@@ -63,6 +67,12 @@ export default function WorkOrdersList() {
           <option value="IN_PROGRESS">Em andamento</option>
           <option value="COMPLETED">Concluida</option>
           <option value="CANCELED">Cancelada</option>
+        </select>
+        <select className="input sm:w-56" value={type} onChange={(e) => { setType(e.target.value as MaintenanceOrderType | ""); setPage(1); }}>
+          <option value="">Todos os tipos</option>
+          <option value="PREVENTIVE">Preventiva</option>
+          <option value="CORRECTIVE">Corretiva</option>
+          <option value="PREDICTIVE">Preditiva</option>
         </select>
       </div>
 

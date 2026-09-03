@@ -18,7 +18,7 @@ export default function PortalServiceOrders() {
 
   return (
     <div>
-      <PageHeader title="Minhas ordens de servico" description="Historico de atendimentos tecnicos" />
+      <PageHeader title="Minhas ordens de servico externas" description="Atendimentos tecnicos feitos pela equipe da OptiProcess (diferente das ordens do seu CMMS)" />
 
       <DataTable
         loading={isLoading}

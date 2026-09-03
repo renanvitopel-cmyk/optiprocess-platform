@@ -34,6 +34,7 @@ const ClientsList = lazy(() => import("./pages/admin/clients/ClientsList"));
 const ClientDetail = lazy(() => import("./pages/admin/clients/ClientDetail"));
 const InstrumentsList = lazy(() => import("./pages/admin/instruments/InstrumentsList"));
 const InstrumentDetail = lazy(() => import("./pages/admin/instruments/InstrumentDetail"));
+const InstrumentsTree = lazy(() => import("./pages/admin/instruments/InstrumentsTree"));
 const CalibrationsList = lazy(() => import("./pages/admin/calibrations/CalibrationsList"));
 const CalibrationForm = lazy(() => import("./pages/admin/calibrations/CalibrationForm"));
 const CalibrationDetail = lazy(() => import("./pages/admin/calibrations/CalibrationDetail"));
@@ -73,6 +74,7 @@ const PortalContracts = lazy(() => import("./pages/portal/PortalContracts"));
 const PortalOrders = lazy(() => import("./pages/portal/PortalOrders"));
 const PortalProfile = lazy(() => import("./pages/portal/PortalProfile"));
 const PortalSpareParts = lazy(() => import("./pages/portal/PortalSpareParts"));
+const PortalInstrumentsTree = lazy(() => import("./pages/portal/PortalInstrumentsTree"));
 
 export default function App() {
   return (
@@ -107,6 +109,7 @@ export default function App() {
 
                 <Route path="instrumentos" element={<InstrumentsList />} />
                 <Route path="instrumentos/:id" element={<InstrumentDetail />} />
+                <Route path="manutencao/arvore" element={<InstrumentsTree />} />
 
                 <Route path="calibracoes" element={<CalibrationsList />} />
                 <Route path="calibracoes/novo" element={<CalibrationForm />} />
@@ -172,6 +175,7 @@ export default function App() {
                 <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
                 <Route path="manutencao/ordens/:id" element={<WorkOrderDetail />} />
                 <Route path="manutencao/falhas" element={<FailureCodesList />} />
+                <Route path="manutencao/arvore" element={<PortalInstrumentsTree />} />
                 <Route path="almoxarifado" element={<PortalSpareParts />} />
                 <Route path="perfil" element={<PortalProfile />} />
               </Route>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Wrench, Gauge, ClipboardList, ShieldCheck, Activity, TimerReset, ListChecks, Boxes } from "lucide-react";
+import { Wrench, Gauge, ClipboardList, ShieldCheck, Activity, TimerReset, ListChecks, Boxes, GitBranch, Radar } from "lucide-react";
 import { getMaintenanceDashboard } from "../../../api/maintenanceWorkOrders";
 import { listClients } from "../../../api/clients";
 import { PageHeader } from "../../../components/PageHeader";
@@ -43,11 +43,17 @@ export default function MaintenanceDashboard() {
         <Link to={`${assetsBase}${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <Gauge className="h-4 w-4" /> Ativos
         </Link>
-        <Link to={`${base}/planos${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
-          <ShieldCheck className="h-4 w-4" /> Planos de manutencao
+        <Link to={`${base}/arvore${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+          <GitBranch className="h-4 w-4" /> Arvore de ativos
         </Link>
         <Link to={`${base}/ordens${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <ClipboardList className="h-4 w-4" /> Ordens de manutencao
+        </Link>
+        <Link to={`${base}/planos${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+          <ShieldCheck className="h-4 w-4" /> Planos de manutencao
+        </Link>
+        <Link to={`${base}/ordens?type=PREDICTIVE${clientId ? `&clientId=${clientId}` : ""}`} className="btn-outline">
+          <Radar className="h-4 w-4" /> Manutencao preditiva
         </Link>
         <Link to={`${base}/falhas`} className="btn-outline">
           <ListChecks className="h-4 w-4" /> Codigos de falha

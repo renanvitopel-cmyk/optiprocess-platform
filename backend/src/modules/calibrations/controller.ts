@@ -307,7 +307,11 @@ export const issueCalibration = asyncHandler(async (req: Request, res: Response)
   const pdfAttachment = await generateAndStoreCertificate(existing.id, issuedAt, req.user?.sub);
 
   const instrument = await prisma.instrument.findUniqueOrThrow({ where: { id: existing.instrumentId } });
-  const nextDueDate = computeNextDueDate(existing.calibrationDate, instrument.calibrationFrequencyMonths);
+  // Sem periodicidade cadastrada (ativo so de CMMS, sem calibracao recorrente), o certificado
+  // ainda pode ser emitido - so nao ha proxima data derivada automaticamente.
+  const nextDueDate = instrument.calibrationFrequencyMonths
+    ? computeNextDueDate(existing.calibrationDate, instrument.calibrationFrequencyMonths)
+    : null;
 
   const [calibration] = await prisma.$transaction([
     prisma.calibration.update({

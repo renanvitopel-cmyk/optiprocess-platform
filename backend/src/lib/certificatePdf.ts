@@ -293,7 +293,7 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
         { label: "Data de emissão", value: fmtDate(cal.issuedAt ?? new Date()) },
         { label: "Validade", value: fmtDate(cal.validUntil) },
         { label: "Local da calibração", value: cal.location },
-        { label: "Periodicidade", value: `${instrument.calibrationFrequencyMonths} meses` },
+        { label: "Periodicidade", value: instrument.calibrationFrequencyMonths ? `${instrument.calibrationFrequencyMonths} meses` : "Nao aplicavel" },
         { label: "Responsável técnico", value: cal.technician.name },
         { label: "Temperatura ambiente", value: cal.ambientTemperature != null ? `${num(cal.ambientTemperature, 1)} °C` : "-" },
         { label: "Umidade relativa", value: cal.ambientHumidity != null ? `${num(cal.ambientHumidity, 1)} %` : "-" },

@@ -405,7 +405,9 @@ model Instrument {
   resolution                 String?
   unit                       String?
   installationLocation       String?
-  calibrationFrequencyMonths Int
+  // Opcional: so faz sentido para ativos com calibracao periodica rastreada. Uma empresa
+  // que contratou so o CMMS (sem Calibracao) cadastra o ativo sem preencher isso.
+  calibrationFrequencyMonths Int?
   lastCalibrationDate        DateTime?
   nextDueDate                DateTime?
   status                     InstrumentStatus  @default(VALID)

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, GitBranch } from "lucide-react";
 import { listInstruments } from "../../api/instruments";
 import { PageHeader } from "../../components/PageHeader";
 import { DataTable } from "../../components/DataTable";
@@ -26,9 +26,14 @@ export default function PortalInstruments() {
         title="Meus ativos"
         description="Equipamentos cadastrados sob sua responsabilidade"
         actions={
-          <button className="btn-primary" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" /> Novo ativo
-          </button>
+          <>
+            <button className="btn-outline" onClick={() => navigate("/portal/manutencao/arvore")}>
+              <GitBranch className="h-4 w-4" /> Ver arvore
+            </button>
+            <button className="btn-primary" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" /> Novo ativo
+            </button>
+          </>
         }
       />
 

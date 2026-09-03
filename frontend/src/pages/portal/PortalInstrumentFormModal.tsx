@@ -17,7 +17,7 @@ const schema = z.object({
   model: z.string().min(1, "Informe o modelo."),
   serialNumber: z.string().min(1, "Informe o numero de serie."),
   installationLocation: z.string().optional(),
-  calibrationFrequencyMonths: z.coerce.number().int().min(1, "Informe a periodicidade."),
+  calibrationFrequencyMonths: z.coerce.number().int().min(1).optional().or(z.literal("")),
   parentId: z.string().uuid().optional().or(z.literal("")),
 });
 type FormValues = z.infer<typeof schema>;
@@ -37,7 +37,6 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
   const { notify } = useToast();
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { calibrationFrequencyMonths: 12 },
   });
 
   useEffect(() => {
@@ -51,17 +50,17 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
               model: instrument.model,
               serialNumber: instrument.serialNumber,
               installationLocation: instrument.installationLocation ?? "",
-              calibrationFrequencyMonths: instrument.calibrationFrequencyMonths,
+              calibrationFrequencyMonths: instrument.calibrationFrequencyMonths ?? undefined,
               parentId: instrument.parentId ?? "",
             }
-          : { calibrationFrequencyMonths: 12, parentId: initialParentId ?? "" },
+          : { parentId: initialParentId ?? "" },
       );
     }
   }, [open, instrument, initialParentId, reset]);
 
   async function onSubmit(values: FormValues) {
     try {
-      const payload = { ...values, parentId: values.parentId || null };
+      const payload = { ...values, parentId: values.parentId || null, calibrationFrequencyMonths: values.calibrationFrequencyMonths || null };
       const saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
       notify("success", instrument ? "Ativo atualizado." : "Ativo cadastrado.");
       onSaved(saved);
@@ -111,7 +110,7 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
         <TextInput
           label="Periodicidade de calibracao (meses)"
           type="number"
-          required
+          hint="Deixe em branco se este ativo nao precisa de calibracao periodica."
           error={errors.calibrationFrequencyMonths?.message}
           {...register("calibrationFrequencyMonths")}
         />

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, GitBranch } from "lucide-react";
 import { listInstruments } from "../../../api/instruments";
 import type { InstrumentStatus } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
@@ -35,11 +35,18 @@ export default function InstrumentsList() {
         title="Ativos"
         description="Equipamentos dos clientes sujeitos a calibracao"
         actions={
-          canManage && (
-            <button className="btn-primary" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" /> Novo ativo
-            </button>
-          )
+          <>
+            {clientId && (
+              <button className="btn-outline" onClick={() => navigate(`/gestao/manutencao/arvore?clientId=${clientId}`)}>
+                <GitBranch className="h-4 w-4" /> Ver arvore
+              </button>
+            )}
+            {canManage && (
+              <button className="btn-primary" onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4" /> Novo ativo
+              </button>
+            )}
+          </>
         }
       />
 

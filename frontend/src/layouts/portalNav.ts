@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Gauge, BadgeCheck, FileWarning, ClipboardList, FileSignature, ShoppingCart, User, Wrench, ShieldCheck, ListChecks, Boxes, Radar } from "lucide-react";
+import { LayoutDashboard, Gauge, BadgeCheck, FileWarning, ClipboardList, FileSignature, ShoppingCart, User, Wrench, ShieldCheck, ListChecks, Boxes, Radar, HardHat } from "lucide-react";
 import type { ServiceCategory } from "../api/types";
 
 export interface PortalNavItem {
@@ -42,6 +42,7 @@ const PORTAL_NAV_ITEMS: PortalNavItem[] = [
   { to: "/portal/manutencao/ordens?type=PREDICTIVE", label: "Manutencao preditiva", icon: Radar, requires: ["CMMS_MAINTENANCE"] },
   { to: "/portal/manutencao/falhas", label: "Codigos de falha", icon: ListChecks, requires: ["CMMS_MAINTENANCE"] },
   { to: "/portal/almoxarifado", label: "Meu almoxarifado", icon: Boxes, requires: ["CMMS_MAINTENANCE"] },
+  { to: "/portal/manutencao/mao-de-obra", label: "Mao de obra", icon: HardHat, requires: ["CMMS_MAINTENANCE"] },
   { to: "/portal/certificados", label: "Meus certificados", icon: BadgeCheck, requires: ["CALIBRATION"] },
   { to: "/portal/laudos", label: "Meus laudos", icon: FileWarning, requires: ["TECHNICAL_REPORT"] },
   { to: "/portal/contratos", label: "Meus contratos", icon: FileSignature, requires: ["ELECTRICAL_MAINTENANCE", "PANEL_MAINTENANCE", "MOTOR_MAINTENANCE", "TECHNICAL_REPORT", "CALIBRATION", "TECHNICAL_ASSISTANCE", "EV_CHARGER", "CMMS_MAINTENANCE", "OTHER"] },

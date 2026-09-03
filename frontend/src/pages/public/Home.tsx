@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ShieldCheck, BadgeCheck, FileWarning, Zap, Star } from "lucide-react";
+import { ArrowRight, ShieldCheck, BadgeCheck, FileWarning, Zap, Star, Wrench } from "lucide-react";
 import { company, differentials, serviceLines } from "../../lib/companyInfo";
 import { listProducts } from "../../api/products";
 import { formatCurrency } from "../../lib/format";
@@ -40,7 +40,7 @@ export default function Home() {
 
       <section className="section-y bg-white">
         <div className="container-page">
-          <div className="grid gap-6 sm:grid-cols-3">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <HighlightCard
               icon={BadgeCheck}
               title="Calibracao rastreavel"
@@ -58,6 +58,12 @@ export default function Home() {
               title="Manutencao eletrica"
               description="Predial e industrial, paineis, QGBT, CCM e motores CA/CC com equipe especializada."
               to="/servicos/manutencao-eletrica"
+            />
+            <HighlightCard
+              icon={Wrench}
+              title="RLP Maintenance CMMS"
+              description="Assine o software de gestao de manutencao: planos, ordens, almoxarifado, mao de obra e custo por ativo."
+              to="/servicos/rlp-maintenance-cmms"
             />
           </div>
         </div>

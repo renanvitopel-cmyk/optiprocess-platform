@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
 import { Menu, X, LogOut } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
@@ -6,12 +6,31 @@ import { getPortalNav } from "./portalNav";
 import { clientDisplayName } from "../lib/format";
 import { Logo } from "../components/Logo";
 
+const COLLAPSE_KEY = "optiprocess-portal-sidebar-collapsed";
+
 export function ClientPortalLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Preferencia por dispositivo (aberto/fechado) - guardada so no navegador, nao no
+  // perfil do usuario, entao cada computador/celular lembra do proprio jeito.
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const { user, logout } = useAuth();
   const portalNav = getPortalNav(user?.client?.contractedServices ?? []);
 
-  const nav = (
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
+    } catch {
+      // Sem localStorage disponivel (aba anonima, etc.) - so nao persiste, sem quebrar.
+    }
+  }, [collapsed]);
+
+  const nav = (isCollapsed: boolean) => (
     <nav className="flex flex-col gap-0.5 px-3 py-4">
       {portalNav.map((item) => (
         <NavLink
@@ -19,34 +38,49 @@ export function ClientPortalLayout() {
           to={item.to}
           end={item.to === "/portal" || item.exact}
           onClick={() => setMobileOpen(false)}
+          title={isCollapsed ? item.label : undefined}
           className={({ isActive }) =>
-            `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
+            `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${isCollapsed ? "justify-center" : ""} ${
               isActive ? "bg-navy-800 text-safety-yellow" : "text-navy-200 hover:bg-navy-800/60 hover:text-white"
             }`
           }
         >
           <item.icon className="h-4.5 w-4.5 shrink-0" />
-          {item.label}
+          {!isCollapsed && item.label}
         </NavLink>
       ))}
       <button
         type="button"
         onClick={() => logout()}
-        className="mt-4 flex items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium text-red-300 hover:bg-navy-800/60"
+        title={isCollapsed ? "Sair" : undefined}
+        className={`mt-4 flex items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium text-red-300 hover:bg-navy-800/60 ${isCollapsed ? "justify-center" : ""}`}
       >
-        <LogOut className="h-4.5 w-4.5" /> Sair
+        <LogOut className="h-4.5 w-4.5 shrink-0" /> {!isCollapsed && "Sair"}
       </button>
     </nav>
   );
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <aside className="hidden w-64 shrink-0 bg-navy-950 lg:block">
-        <div className="sticky top-0 h-screen overflow-y-auto">
-          <Link to="/portal" className="flex h-16 items-center px-5" aria-label="OptiProcess - portal do cliente">
-            <Logo variant="light" size="sm" />
-          </Link>
-          {nav}
+      <aside className={`hidden shrink-0 bg-navy-950 transition-[width] duration-150 lg:block ${collapsed ? "w-16" : "w-64"}`}>
+        <div className="sticky top-0 h-screen overflow-y-auto overflow-x-hidden">
+          <div className={`flex h-16 items-center ${collapsed ? "justify-center px-2" : "px-5"}`}>
+            {!collapsed && (
+              <Link to="/portal" aria-label="OptiProcess - portal do cliente">
+                <Logo variant="light" size="sm" />
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              className={`text-navy-300 hover:text-white ${collapsed ? "" : "ml-auto"}`}
+              aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+              title={collapsed ? "Expandir menu" : "Recolher menu"}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
+          {nav(collapsed)}
         </div>
       </aside>
 
@@ -60,7 +94,7 @@ export function ClientPortalLayout() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            {nav}
+            {nav(false)}
           </aside>
         </div>
       )}

@@ -132,8 +132,11 @@ export const addMeterReading = asyncHandler(async (req: Request, res: Response) 
 
   let triggeredWorkOrder = null;
   if (alertTriggered) {
+    // "Ja aberta" = qualquer status que nao seja terminal - com o status da OS
+    // expandido (Planejada/Programada/Aguardando...), so OPEN/IN_PROGRESS deixaria
+    // passar uma duplicata enquanto a preditiva anterior esta em alguma dessas etapas.
     const alreadyOpen = await prisma.maintenanceWorkOrder.findFirst({
-      where: { triggeredByMeterId: meter.id, deletedAt: null, status: { in: ["OPEN", "IN_PROGRESS"] } },
+      where: { triggeredByMeterId: meter.id, deletedAt: null, status: { notIn: ["COMPLETED", "CANCELED"] } },
     });
     if (!alreadyOpen) {
       const number = await nextClientMaintenanceOrderNumber(meter.instrument.clientId);

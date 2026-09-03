@@ -64,7 +64,14 @@ export default function WorkOrdersList() {
         <select className="input sm:w-56" value={status} onChange={(e) => { setStatus(e.target.value as MaintenanceOrderStatus | ""); setPage(1); }}>
           <option value="">Todos os status</option>
           <option value="OPEN">Aberta</option>
-          <option value="IN_PROGRESS">Em andamento</option>
+          <option value="IN_TRIAGE">Em triagem</option>
+          <option value="PLANNED">Planejada</option>
+          <option value="PROGRAMMED">Programada</option>
+          <option value="RELEASED">Liberada</option>
+          <option value="IN_PROGRESS">Em execucao</option>
+          <option value="AWAITING_MATERIAL">Aguardando material</option>
+          <option value="AWAITING_RELEASE">Aguardando liberacao</option>
+          <option value="AWAITING_STOPPAGE">Aguardando parada</option>
           <option value="COMPLETED">Concluida</option>
           <option value="CANCELED">Cancelada</option>
         </select>

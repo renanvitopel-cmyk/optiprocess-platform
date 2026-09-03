@@ -54,7 +54,7 @@ export async function createMaintenanceWorkOrder(input: WorkOrderInput): Promise
   return data;
 }
 
-export async function updateMaintenanceWorkOrder(id: string, input: Partial<WorkOrderInput>): Promise<MaintenanceWorkOrder> {
+export async function updateMaintenanceWorkOrder(id: string, input: Partial<WorkOrderInput> & { status?: MaintenanceOrderStatus }): Promise<MaintenanceWorkOrder> {
   const { data } = await api.patch<MaintenanceWorkOrder>(`/maintenance-work-orders/${id}`, input);
   return data;
 }

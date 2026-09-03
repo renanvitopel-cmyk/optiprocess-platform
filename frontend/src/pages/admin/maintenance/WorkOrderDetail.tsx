@@ -5,6 +5,7 @@ import { Pencil, Trash2, PlayCircle, CheckCircle2, Plus, X } from "lucide-react"
 import {
   getMaintenanceWorkOrder,
   deleteMaintenanceWorkOrder,
+  updateMaintenanceWorkOrder,
   startMaintenanceWorkOrder,
   completeMaintenanceWorkOrder,
   updateChecklistItem,
@@ -16,7 +17,7 @@ import {
 import { listSpareParts } from "../../../api/spareParts";
 import { listAssetParts } from "../../../api/instruments";
 import { listLaborResources } from "../../../api/laborResources";
-import type { ChecklistItemResult } from "../../../api/types";
+import type { ChecklistItemResult, MaintenanceOrderStatus } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -108,6 +109,19 @@ export default function WorkOrderDetail() {
     try {
       await completeMaintenanceWorkOrder(id);
       notify("success", "OS concluida.");
+      invalidate();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleStatusChange(status: MaintenanceOrderStatus) {
+    setBusy(true);
+    try {
+      await updateMaintenanceWorkOrder(id, { status });
+      notify("success", "Status atualizado.");
       invalidate();
     } catch (error) {
       notify("error", getApiErrorMessage(error));
@@ -227,7 +241,30 @@ export default function WorkOrderDetail() {
         <div className="space-y-6 lg:col-span-2">
           <div className="card space-y-4 p-5">
             <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge status={workOrder.status} />
+              {canManage && !isCompleted && !workOrder.startedAt ? (
+                // So cobre os estados sem botao dedicado - "Em execucao" (Iniciar) e
+                // "Concluida" (Concluir) tem acao propria, com validacao de checklist e
+                // efeitos colaterais (ex.: fecha a Solicitacao de Servico vinculada) que
+                // esse select generico nao replica.
+                <select
+                  className="input h-auto w-auto py-1 text-xs"
+                  value={workOrder.status}
+                  disabled={busy}
+                  onChange={(e) => handleStatusChange(e.target.value as MaintenanceOrderStatus)}
+                >
+                  <option value="OPEN">Aberta</option>
+                  <option value="IN_TRIAGE">Em triagem</option>
+                  <option value="PLANNED">Planejada</option>
+                  <option value="PROGRAMMED">Programada</option>
+                  <option value="RELEASED">Liberada</option>
+                  <option value="AWAITING_MATERIAL">Aguardando material</option>
+                  <option value="AWAITING_RELEASE">Aguardando liberacao</option>
+                  <option value="AWAITING_STOPPAGE">Aguardando parada</option>
+                  <option value="CANCELED">Cancelada</option>
+                </select>
+              ) : (
+                <StatusBadge status={workOrder.status} />
+              )}
               <span className="rounded-full border border-navy-200 bg-navy-50 px-2.5 py-0.5 text-xs font-medium text-navy-700">
                 {TYPE_LABELS[workOrder.type]}
               </span>

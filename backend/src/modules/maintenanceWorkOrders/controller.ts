@@ -537,7 +537,10 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
     period: { from: periodStart.toISOString(), to: periodEnd.toISOString() },
     totals: {
       workOrders: workOrders.length,
-      open: workOrders.filter((w) => w.status === "OPEN").length,
+      // "Aberta" aqui e' qualquer OS que ainda nao terminou (nao so o status literal
+      // "OPEN") - senao o numero cai artificialmente assim que a OS avanca pra Planejada/
+      // Programada/etc., escondendo trabalho que ainda esta pendente.
+      open: workOrders.filter((w) => !["COMPLETED", "CANCELED"].includes(w.status)).length,
       inProgress: workOrders.filter((w) => w.status === "IN_PROGRESS").length,
       completed: workOrders.filter((w) => w.status === "COMPLETED").length,
       corrective: workOrders.filter((w) => w.type === "CORRECTIVE").length,

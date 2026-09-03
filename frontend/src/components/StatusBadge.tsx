@@ -33,6 +33,12 @@ const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   PLANNED: { label: "Planejada", tone: "navy" },
   CONVERTED: { label: "Convertida em OS", tone: "green" },
   CLOSED: { label: "Encerrada", tone: "graphite" },
+  // ordem de manutencao (OS do CMMS) - IN_TRIAGE e PLANNED ja definidos acima (SS)
+  PROGRAMMED: { label: "Programada", tone: "navy" },
+  RELEASED: { label: "Liberada", tone: "navy" },
+  AWAITING_MATERIAL: { label: "Aguardando material", tone: "yellow" },
+  AWAITING_RELEASE: { label: "Aguardando liberacao", tone: "yellow" },
+  AWAITING_STOPPAGE: { label: "Aguardando parada", tone: "yellow" },
   // ordem de servico
   BUDGET: { label: "Orcamento", tone: "graphite" },
   APPROVED: { label: "Aprovada", tone: "navy" },

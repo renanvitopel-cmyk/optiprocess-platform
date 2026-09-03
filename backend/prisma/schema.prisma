@@ -85,9 +85,21 @@ enum OperationalStatus {
   IN_MAINTENANCE
 }
 
+// Fluxo da OS: Aberta -> Em triagem -> Planejada -> Programada -> Liberada -> Em execucao
+// -> Concluida (ou Cancelada a qualquer momento). Os 3 "Aguardando..." sao estados de
+// bloqueio que podem acontecer durante o planejamento ou a execucao. Nao ha validacao
+// rigida de transicao (a equipe pode pular etapas que nao se aplicam) - o valor guia o
+// quadro/relatorio, nao trava o fluxo.
 enum MaintenanceOrderStatus {
   OPEN
+  IN_TRIAGE
+  PLANNED
+  PROGRAMMED
+  RELEASED
   IN_PROGRESS
+  AWAITING_MATERIAL
+  AWAITING_RELEASE
+  AWAITING_STOPPAGE
   COMPLETED
   CANCELED
 }

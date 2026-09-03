@@ -560,7 +560,18 @@ export interface FailureCode {
 export type MaintenanceTriggerType = "TIME" | "METER";
 export type MaintenanceOrderType = "PREVENTIVE" | "CORRECTIVE" | "PREDICTIVE";
 export type MaintenancePriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-export type MaintenanceOrderStatus = "OPEN" | "IN_PROGRESS" | "COMPLETED" | "CANCELED";
+export type MaintenanceOrderStatus =
+  | "OPEN"
+  | "IN_TRIAGE"
+  | "PLANNED"
+  | "PROGRAMMED"
+  | "RELEASED"
+  | "IN_PROGRESS"
+  | "AWAITING_MATERIAL"
+  | "AWAITING_RELEASE"
+  | "AWAITING_STOPPAGE"
+  | "COMPLETED"
+  | "CANCELED";
 export type ChecklistItemResult = "PENDING" | "OK" | "NOT_OK" | "NA";
 export type DerivedDueStatus = "VALID" | "DUE_SOON" | "EXPIRED";
 

@@ -56,6 +56,8 @@ const sparePartSchema = z.object({
   category: z.string().nullish(),
   unit: z.string().min(1).optional(),
   minStock: z.coerce.number().int().nonnegative().optional(),
+  // Custo unitario (opcional) - so alimenta valor de estoque e custo por ativo quando preenchido.
+  unitCost: z.coerce.number().nonnegative().nullish(),
 });
 
 export const createSparePart = asyncHandler(async (req: Request, res: Response) => {
@@ -129,6 +131,9 @@ export const deleteSparePart = asyncHandler(async (req: Request, res: Response) 
 const movementSchema = z.object({
   type: z.enum(["IN", "OUT", "ADJUSTMENT"]),
   quantity: z.coerce.number().int().positive(),
+  // Custo unitario desta compra/movimento (opcional) - preenche automaticamente o
+  // unitCost da peca quando informado numa entrada (IN).
+  unitCost: z.coerce.number().nonnegative().nullish(),
   reason: z.string().nullish(),
 });
 

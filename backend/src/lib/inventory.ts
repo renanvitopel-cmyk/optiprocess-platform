@@ -34,6 +34,10 @@ interface SparePartMovementInput {
   sparePartId: string;
   type: InventoryMovementType;
   quantity: number;
+  // Custo unitario deste movimento (opcional). Se omitido, herda o unitCost vigente da
+  // peca - assim o historico de custo por ativo sempre tem uma base, mesmo sem informar
+  // toda hora.
+  unitCost?: number | null;
   reason?: string | null;
   maintenanceWorkOrderId?: string | null;
   createdById?: string;
@@ -49,9 +53,14 @@ export async function applySparePartMovement(input: SparePartMovementInput) {
   const newStock = input.type === "ADJUSTMENT" ? input.quantity : sparePart.stockQty + delta;
   if (newStock < 0) throw new ValidationError("Estoque nao pode ficar negativo.");
 
+  const unitCost = input.unitCost ?? sparePart.unitCost ?? null;
+  // Uma nova compra (IN) com custo informado atualiza o custo unitario vigente da peca -
+  // metodo "ultimo custo", mais simples que media ponderada e suficiente nessa escala.
+  const nextUnitCost = input.type === "IN" && input.unitCost != null ? input.unitCost : sparePart.unitCost;
+
   const [movement] = await prisma.$transaction([
-    prisma.sparePartMovement.create({ data: { ...input } }),
-    prisma.sparePart.update({ where: { id: sparePart.id }, data: { stockQty: newStock } }),
+    prisma.sparePartMovement.create({ data: { ...input, unitCost } }),
+    prisma.sparePart.update({ where: { id: sparePart.id }, data: { stockQty: newStock, unitCost: nextUnitCost } }),
   ]);
 
   return movement;

@@ -1,5 +1,5 @@
 import { forwardRef } from "react";
-import { listAssetTypes, createAssetType } from "../api/assetTypes";
+import { listLaborTypes, createLaborType } from "../api/laborTypes";
 import { CatalogInput } from "./CatalogInput";
 
 interface Props {
@@ -11,19 +11,19 @@ interface Props {
   onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
 }
 
-export const AssetTypeInput = forwardRef<HTMLInputElement, Props>(function AssetTypeInput(
-  { label = "Tipo de ativo", ...rest },
+export const LaborTypeInput = forwardRef<HTMLInputElement, Props>(function LaborTypeInput(
+  { label = "Tipo de mao de obra", ...rest },
   ref,
 ) {
   return (
     <CatalogInput
       ref={ref}
       label={label}
-      placeholder="Ex.: Motor, Compressor, Extrusora..."
+      placeholder="Ex.: Tecnico mecanico, Tecnico eletrico, Engenheiro..."
       hint="Comece a digitar para ver sugestoes do catalogo, ou digite um tipo novo."
-      queryKey="asset-types-picker"
-      list={() => listAssetTypes({ active: true })}
-      create={(name) => createAssetType({ name })}
+      queryKey="labor-types-picker"
+      list={() => listLaborTypes({ active: true })}
+      create={(name) => createLaborType({ name })}
       {...rest}
     />
   );

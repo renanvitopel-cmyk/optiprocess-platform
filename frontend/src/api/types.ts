@@ -512,6 +512,42 @@ export interface MaintenanceWorkOrderChecklistItem {
   sortOrder: number;
 }
 
+export interface LaborType {
+  id: string;
+  clientId: string | null;
+  name: string;
+  active: boolean;
+}
+
+export interface LaborResource {
+  id: string;
+  clientId: string;
+  client?: ClientRef;
+  type: string;
+  name: string;
+  registrationNumber: string | null;
+  hourlyRate: number | null;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface WorkOrderLaborEntry {
+  id: string;
+  workOrderId: string;
+  laborResourceId: string;
+  laborResource?: { id: string; name: string; type: string };
+  hours: number;
+  hourlyRateSnapshot: number | null;
+  createdAt: string;
+}
+
+export interface InstrumentCostSummary {
+  partsCost: number | null;
+  laborCost: number | null;
+  totalCost: number | null;
+  totalLaborHours: number;
+}
+
 export interface MaintenancePartUsed {
   id: string;
   sparePartId: string;
@@ -531,6 +567,7 @@ export interface SparePartMovement {
   sparePartId: string;
   type: "IN" | "OUT" | "ADJUSTMENT";
   quantity: number;
+  unitCost: number | null;
   reason: string | null;
   maintenanceWorkOrderId: string | null;
   createdAt: string;
@@ -546,6 +583,7 @@ export interface SparePart {
   unit: string;
   stockQty: number;
   minStock: number;
+  unitCost: number | null;
   active: boolean;
   createdAt: string;
   movements?: SparePartMovement[];
@@ -566,6 +604,7 @@ export interface AssetPartHistoryEntry {
   sparePart: { id: string; name: string; code: string | null; unit: string };
   totalQuantity: number;
   timesUsed: number;
+  totalCost: number | null;
   lastUsedAt: string;
   lastWorkOrder: { id: string; number: string } | null;
 }
@@ -597,6 +636,7 @@ export interface MaintenanceWorkOrder {
   observations: string | null;
   checklist?: MaintenanceWorkOrderChecklistItem[];
   partsUsed?: MaintenancePartUsed[];
+  laborEntries?: WorkOrderLaborEntry[];
   createdAt: string;
 }
 

@@ -1,6 +1,6 @@
 import { api } from "./client";
 import type { PagedResult } from "./client";
-import type { AssetPart, AssetPartHistoryEntry, AttachmentCategory, CalibrationAttachment, Instrument, InstrumentStatus, MaintenancePriority } from "./types";
+import type { AssetPart, AssetPartHistoryEntry, AttachmentCategory, CalibrationAttachment, Instrument, InstrumentCostSummary, InstrumentStatus, MaintenancePriority } from "./types";
 
 export interface ListInstrumentsParams {
   page?: number;
@@ -61,6 +61,12 @@ export async function removeAssetPart(instrumentId: string, linkId: string): Pro
 /** Consumo real (o que ja foi baixado do almoxarifado nas OS deste ativo) - diferente do BOM. */
 export async function getInstrumentPartsHistory(instrumentId: string): Promise<AssetPartHistoryEntry[]> {
   const { data } = await api.get<AssetPartHistoryEntry[]>(`/instruments/${instrumentId}/parts-history`);
+  return data;
+}
+
+/** Gastos totais do ativo (pecas + mao de obra, somados de todas as OS). */
+export async function getInstrumentCostSummary(instrumentId: string): Promise<InstrumentCostSummary> {
+  const { data } = await api.get<InstrumentCostSummary>(`/instruments/${instrumentId}/cost-summary`);
   return data;
 }
 

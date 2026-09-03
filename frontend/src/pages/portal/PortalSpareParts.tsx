@@ -9,6 +9,7 @@ import { Modal } from "../../components/Modal";
 import { TextInput } from "../../components/form/Field";
 import { useToast } from "../../components/Toast";
 import { getApiErrorMessage } from "../../api/client";
+import { formatCurrency } from "../../lib/format";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,6 +20,7 @@ const schema = z.object({
   category: z.string().optional(),
   unit: z.string().optional(),
   minStock: z.coerce.number().int().nonnegative().optional(),
+  unitCost: z.coerce.number().nonnegative().optional().or(z.literal("")),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -43,7 +45,7 @@ export default function PortalSpareParts() {
 
   async function onSubmit(values: FormValues) {
     try {
-      await createSparePart(values);
+      await createSparePart({ ...values, unitCost: values.unitCost === "" ? null : values.unitCost });
       notify("success", "Peca cadastrada no seu almoxarifado.");
       reset({ unit: "un" });
       setCreateOpen(false);
@@ -56,8 +58,13 @@ export default function PortalSpareParts() {
   async function handleMovement(part: SparePart, type: "IN" | "OUT") {
     const raw = window.prompt(type === "IN" ? `Entrada de quantos "${part.name}"?` : `Saida de quantos "${part.name}"?`);
     if (!raw || Number.isNaN(Number(raw)) || Number(raw) <= 0) return;
+    let unitCost: number | undefined;
+    if (type === "IN") {
+      const costRaw = window.prompt(`Custo unitario desta compra (opcional, deixe em branco pra pular):`, part.unitCost != null ? String(part.unitCost) : "");
+      if (costRaw && !Number.isNaN(Number(costRaw)) && Number(costRaw) >= 0) unitCost = Number(costRaw);
+    }
     try {
-      await addSparePartMovement(part.id, { type, quantity: Math.trunc(Number(raw)) });
+      await addSparePartMovement(part.id, { type, quantity: Math.trunc(Number(raw)), unitCost });
       notify("success", "Estoque atualizado.");
       queryClient.invalidateQueries({ queryKey: ["portal-spare-parts"] });
     } catch (error) {
@@ -88,6 +95,15 @@ export default function PortalSpareParts() {
         />
       </div>
 
+      {data && data.items.some((p) => p.unitCost != null) && (
+        <p className="mb-3 text-sm text-graphite-600">
+          Valor do estoque desta pagina:{" "}
+          <span className="font-semibold text-navy-900">
+            {formatCurrency(data.items.reduce((sum, p) => sum + (p.unitCost ?? 0) * p.stockQty, 0))}
+          </span>
+        </p>
+      )}
+
       <DataTable
         loading={isLoading}
         rows={data?.items ?? []}
@@ -107,6 +123,14 @@ export default function PortalSpareParts() {
             ),
           },
           { header: "Categoria", accessor: (p) => p.category ?? "-" },
+          {
+            header: "Custo unit.",
+            accessor: (p) => (p.unitCost != null ? formatCurrency(p.unitCost) : "-"),
+          },
+          {
+            header: "Valor em estoque",
+            accessor: (p) => (p.unitCost != null ? formatCurrency(p.unitCost * p.stockQty) : "-"),
+          },
           {
             header: "Estoque",
             accessor: (p) => (
@@ -156,6 +180,13 @@ export default function PortalSpareParts() {
             <TextInput label="Unidade" {...register("unit")} />
             <TextInput label="Estoque minimo" type="number" {...register("minStock")} />
           </div>
+          <TextInput
+            label="Custo unitario (opcional)"
+            type="number"
+            step="any"
+            hint="So alimenta o valor do estoque quando preenchido - pode deixar em branco."
+            {...register("unitCost")}
+          />
         </form>
       </Modal>
     </div>

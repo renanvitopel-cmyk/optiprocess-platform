@@ -13,6 +13,8 @@ import {
   updateChecklistItem,
   addWorkOrderPart,
   removeWorkOrderPart,
+  addWorkOrderLabor,
+  removeWorkOrderLabor,
   listWorkOrderAttachmentsRoute,
   uploadWorkOrderAttachment,
   deleteWorkOrderAttachment,
@@ -37,6 +39,9 @@ maintenanceWorkOrdersRouter.patch("/:id/checklist/:itemId", requireRole("ADMIN",
 
 maintenanceWorkOrdersRouter.post("/:id/parts", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addWorkOrderPart);
 maintenanceWorkOrdersRouter.delete("/:id/parts/:movementId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), removeWorkOrderPart);
+
+maintenanceWorkOrdersRouter.post("/:id/labor", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addWorkOrderLabor);
+maintenanceWorkOrdersRouter.delete("/:id/labor/:entryId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), removeWorkOrderLabor);
 
 maintenanceWorkOrdersRouter.get("/:id/attachments", listWorkOrderAttachmentsRoute);
 maintenanceWorkOrdersRouter.get("/:id/attachments/:attachmentId/url", getWorkOrderAttachmentUrl);

@@ -10,9 +10,12 @@ import {
   updateChecklistItem,
   addWorkOrderPart,
   removeWorkOrderPart,
+  addWorkOrderLabor,
+  removeWorkOrderLabor,
 } from "../../../api/maintenanceWorkOrders";
 import { listSpareParts } from "../../../api/spareParts";
 import { listAssetParts } from "../../../api/instruments";
+import { listLaborResources } from "../../../api/laborResources";
 import type { ChecklistItemResult } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
@@ -22,7 +25,7 @@ import { WorkOrderAttachments } from "./WorkOrderAttachments";
 import { useCmms } from "../../../lib/cmms";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
-import { clientDisplayName, formatDateTime } from "../../../lib/format";
+import { clientDisplayName, formatDateTime, formatCurrency } from "../../../lib/format";
 
 const RESULT_OPTIONS: { value: ChecklistItemResult; label: string; tone: string }[] = [
   { value: "OK", label: "OK", tone: "bg-green-50 text-safety-green-dark border-green-200" },
@@ -45,6 +48,8 @@ export default function WorkOrderDetail() {
   const [busy, setBusy] = useState(false);
   const [partSparePartId, setPartSparePartId] = useState("");
   const [partQty, setPartQty] = useState(1);
+  const [laborResourceId, setLaborResourceId] = useState("");
+  const [laborHours, setLaborHours] = useState(1);
 
   const { data: workOrder, isLoading } = useQuery({ queryKey: ["maintenance-work-order", id], queryFn: () => getMaintenanceWorkOrder(id) });
   const { data: spareParts } = useQuery({
@@ -56,6 +61,11 @@ export default function WorkOrderDetail() {
     queryKey: ["instrument-asset-parts", workOrder?.instrumentId],
     queryFn: () => listAssetParts(workOrder!.instrumentId),
     enabled: !!workOrder?.instrumentId,
+  });
+  const { data: laborResources } = useQuery({
+    queryKey: ["labor-resources-picker", workOrder?.clientId],
+    queryFn: () => listLaborResources({ clientId: workOrder!.clientId, active: true, pageSize: 200 }),
+    enabled: !!workOrder?.clientId,
   });
 
   // Prioriza na lista as pecas ja cadastradas no BOM do ativo desta OS.
@@ -136,6 +146,35 @@ export default function WorkOrderDetail() {
     try {
       await removeWorkOrderPart(id, movementId);
       notify("success", "Peca removida e estoque estornado.");
+      invalidate();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAddLabor() {
+    if (!laborResourceId || laborHours <= 0) return;
+    setBusy(true);
+    try {
+      await addWorkOrderLabor(id, { laborResourceId, hours: laborHours });
+      notify("success", "Mao de obra registrada.");
+      setLaborResourceId("");
+      setLaborHours(1);
+      invalidate();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemoveLabor(entryId: string) {
+    setBusy(true);
+    try {
+      await removeWorkOrderLabor(id, entryId);
+      notify("success", "Lancamento removido.");
       invalidate();
     } catch (error) {
       notify("error", getApiErrorMessage(error));
@@ -283,6 +322,52 @@ export default function WorkOrderDetail() {
                     <span>{part.sparePart?.name ?? "Peca"} - {part.quantity} {part.sparePart?.unit ?? "un."}</span>
                     {canManage && !isCompleted && (
                       <button onClick={() => handleRemovePart(part.id)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover peca">
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="card space-y-3 p-5">
+            <h2 className="font-semibold text-navy-900">Mao de obra</h2>
+            {canManage && !isCompleted && (
+              <div className="flex flex-wrap items-end gap-2">
+                <select className="input flex-1" value={laborResourceId} onChange={(e) => setLaborResourceId(e.target.value)}>
+                  <option value="">Selecione a mao de obra</option>
+                  {(laborResources?.items ?? []).map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name} - {r.type}{r.hourlyRate != null ? ` (${formatCurrency(r.hourlyRate)}/h)` : ""}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min={0.5}
+                  step={0.5}
+                  className="input w-24"
+                  value={laborHours}
+                  onChange={(e) => setLaborHours(Number(e.target.value))}
+                />
+                <button type="button" className="btn-outline" onClick={handleAddLabor} disabled={busy || !laborResourceId}>
+                  <Plus className="h-4 w-4" /> Adicionar
+                </button>
+              </div>
+            )}
+            {!workOrder.laborEntries || workOrder.laborEntries.length === 0 ? (
+              <p className="text-sm text-graphite-500">Nenhum lancamento de mao de obra.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {workOrder.laborEntries.map((entry) => (
+                  <li key={entry.id} className="flex items-center justify-between py-2 text-sm">
+                    <span>
+                      {entry.laborResource?.name ?? "Mao de obra"} - {entry.hours}h
+                      {entry.hourlyRateSnapshot != null && ` (${formatCurrency(entry.hourlyRateSnapshot * entry.hours)})`}
+                    </span>
+                    {canManage && !isCompleted && (
+                      <button onClick={() => handleRemoveLabor(entry.id)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover lancamento">
                         <X className="h-4 w-4" />
                       </button>
                     )}

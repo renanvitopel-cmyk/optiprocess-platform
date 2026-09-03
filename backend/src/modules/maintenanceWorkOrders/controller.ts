@@ -19,6 +19,7 @@ const detailInclude = {
   failureCode: true,
   checklist: { orderBy: { sortOrder: "asc" as const } },
   partsUsed: { include: { sparePart: { select: { id: true, name: true, code: true, unit: true } } } },
+  laborEntries: { include: { laborResource: { select: { id: true, name: true, type: true } } }, orderBy: { createdAt: "asc" as const } },
 };
 
 export const listMaintenanceWorkOrders = asyncHandler(async (req: Request, res: Response) => {
@@ -325,6 +326,56 @@ export const removeWorkOrderPart = asyncHandler(async (req: Request, res: Respon
   });
   await prisma.sparePartMovement.delete({ where: { id: movement.id } });
 
+  res.status(204).send();
+});
+
+const laborEntrySchema = z.object({
+  laborResourceId: z.string().uuid(),
+  hours: z.coerce.number().positive(),
+});
+
+export const addWorkOrderLabor = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const data = laborEntrySchema.parse(req.body);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
+  const laborResource = await prisma.laborResource.findFirst({ where: { id: data.laborResourceId, deletedAt: null } });
+  if (!laborResource) throw new NotFoundError("Recurso de mao de obra");
+  if (laborResource.clientId !== workOrder.clientId) {
+    throw new ValidationError("Essa mao de obra e' de outra empresa.");
+  }
+
+  const entry = await prisma.workOrderLabor.create({
+    data: {
+      workOrderId: workOrder.id,
+      laborResourceId: laborResource.id,
+      hours: data.hours,
+      // Snapshot do valor/hora vigente agora - preserva o custo historico mesmo que o
+      // recurso mude de valor/hora depois.
+      hourlyRateSnapshot: laborResource.hourlyRate,
+      createdById: req.user?.sub,
+    },
+    include: { laborResource: { select: { id: true, name: true, type: true } } },
+  });
+
+  res.status(201).json(entry);
+});
+
+export const removeWorkOrderLabor = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
+  const entry = await prisma.workOrderLabor.findFirst({ where: { id: req.params.entryId, workOrderId: workOrder.id } });
+  if (!entry) throw new NotFoundError("Lancamento de mao de obra");
+
+  await prisma.workOrderLabor.delete({ where: { id: entry.id } });
   res.status(204).send();
 });
 

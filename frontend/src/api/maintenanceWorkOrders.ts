@@ -10,6 +10,7 @@ import type {
   MaintenancePartUsed,
   MaintenancePriority,
   MaintenanceWorkOrder,
+  WorkOrderLaborEntry,
 } from "./types";
 
 export interface ListWorkOrdersParams {
@@ -91,6 +92,18 @@ export async function addWorkOrderPart(
 
 export async function removeWorkOrderPart(workOrderId: string, movementId: string): Promise<void> {
   await api.delete(`/maintenance-work-orders/${workOrderId}/parts/${movementId}`);
+}
+
+export async function addWorkOrderLabor(
+  workOrderId: string,
+  input: { laborResourceId: string; hours: number },
+): Promise<WorkOrderLaborEntry> {
+  const { data } = await api.post<WorkOrderLaborEntry>(`/maintenance-work-orders/${workOrderId}/labor`, input);
+  return data;
+}
+
+export async function removeWorkOrderLabor(workOrderId: string, entryId: string): Promise<void> {
+  await api.delete(`/maintenance-work-orders/${workOrderId}/labor/${entryId}`);
 }
 
 export async function listWorkOrderAttachments(id: string): Promise<CalibrationAttachment[]> {

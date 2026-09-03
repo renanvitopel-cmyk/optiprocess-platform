@@ -28,6 +28,8 @@ import { localStorageRouter } from "./modules/localStorage/routes";
 import { metersRouter } from "./modules/meters/routes";
 import { failureCodesRouter } from "./modules/failureCodes/routes";
 import { assetTypesRouter } from "./modules/assetTypes/routes";
+import { laborTypesRouter } from "./modules/laborTypes/routes";
+import { laborResourcesRouter } from "./modules/laborResources/routes";
 import { maintenancePlansRouter } from "./modules/maintenancePlans/routes";
 import { maintenanceWorkOrdersRouter } from "./modules/maintenanceWorkOrders/routes";
 import { sparePartsRouter } from "./modules/spareParts/routes";
@@ -72,6 +74,8 @@ export function createApp() {
   app.use("/api/meters", metersRouter);
   app.use("/api/failure-codes", failureCodesRouter);
   app.use("/api/asset-types", assetTypesRouter);
+  app.use("/api/labor-types", laborTypesRouter);
+  app.use("/api/labor-resources", laborResourcesRouter);
   app.use("/api/maintenance-plans", maintenancePlansRouter);
   app.use("/api/maintenance-work-orders", maintenanceWorkOrdersRouter);
   app.use("/api/spare-parts", sparePartsRouter);

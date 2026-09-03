@@ -27,6 +27,7 @@ export interface SparePartInput {
   category?: string | null;
   unit?: string;
   minStock?: number;
+  unitCost?: number | null;
 }
 
 export async function createSparePart(input: SparePartInput): Promise<SparePart> {
@@ -45,7 +46,7 @@ export async function deleteSparePart(id: string): Promise<void> {
 
 export async function addSparePartMovement(
   id: string,
-  input: { type: "IN" | "OUT" | "ADJUSTMENT"; quantity: number; reason?: string },
+  input: { type: "IN" | "OUT" | "ADJUSTMENT"; quantity: number; reason?: string; unitCost?: number | null },
 ): Promise<SparePartMovement> {
   const { data } = await api.post<SparePartMovement>(`/spare-parts/${id}/movements`, input);
   return data;

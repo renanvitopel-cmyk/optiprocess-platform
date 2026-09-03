@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2, CornerLeftUp, AlertTriangle } from "lucide-react";
-import { getInstrument, listAssetParts, addAssetPart, removeAssetPart, getInstrumentPartsHistory } from "../../api/instruments";
+import { getInstrument, listAssetParts, addAssetPart, removeAssetPart, getInstrumentPartsHistory, getInstrumentCostSummary } from "../../api/instruments";
 import { listSpareParts } from "../../api/spareParts";
 import { listServiceOrders } from "../../api/serviceOrders";
 import { listMeters, addMeterReading } from "../../api/meters";
@@ -11,7 +11,7 @@ import { listMaintenanceWorkOrders } from "../../api/maintenanceWorkOrders";
 import { PageHeader } from "../../components/PageHeader";
 import { FullPageSpinner } from "../../components/Spinner";
 import { StatusBadge } from "../../components/StatusBadge";
-import { formatDate, formatServiceCategory } from "../../lib/format";
+import { formatDate, formatServiceCategory, formatCurrency } from "../../lib/format";
 import { EmptyState } from "../../components/EmptyState";
 import { PortalInstrumentFormModal } from "./PortalInstrumentFormModal";
 import { MeterFormModal } from "../admin/instruments/MeterFormModal";
@@ -67,6 +67,11 @@ export default function PortalInstrumentDetail() {
   const { data: partsHistory } = useQuery({
     queryKey: ["portal-instrument-parts-history", id],
     queryFn: () => getInstrumentPartsHistory(id),
+    enabled: !!id && hasCmms,
+  });
+  const { data: costSummary } = useQuery({
+    queryKey: ["portal-instrument-cost-summary", id],
+    queryFn: () => getInstrumentCostSummary(id),
     enabled: !!id && hasCmms,
   });
 
@@ -148,6 +153,20 @@ export default function PortalInstrumentDetail() {
               <Info label="Proxima calibracao" value={formatDate(instrument.nextDueDate)} />
             </dl>
           </div>
+
+          {hasCmms && costSummary && (costSummary.partsCost != null || costSummary.laborCost != null) && (
+            <div className="card p-5">
+              <h2 className="mb-3 font-semibold text-navy-900">Gastos deste ativo</h2>
+              <dl className="grid gap-4 sm:grid-cols-3">
+                <Info label="Pecas" value={costSummary.partsCost != null ? formatCurrency(costSummary.partsCost) : "Nao rastreado"} />
+                <Info
+                  label="Mao de obra"
+                  value={costSummary.laborCost != null ? `${formatCurrency(costSummary.laborCost)} (${costSummary.totalLaborHours}h)` : `Nao rastreado (${costSummary.totalLaborHours}h)`}
+                />
+                <Info label="Total" value={costSummary.totalCost != null ? formatCurrency(costSummary.totalCost) : "-"} />
+              </dl>
+            </div>
+          )}
 
           <InstrumentAttachments instrumentId={instrument.id} canEdit />
         </div>
@@ -334,7 +353,10 @@ export default function PortalInstrumentDetail() {
                     <li key={entry.sparePart.id} className="py-2.5 text-sm">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-graphite-800">{entry.sparePart.name}</span>
-                        <span className="text-graphite-600">{entry.totalQuantity} {entry.sparePart.unit}</span>
+                        <span className="text-graphite-600">
+                          {entry.totalQuantity} {entry.sparePart.unit}
+                          {entry.totalCost != null && <span className="ml-1.5 text-graphite-400">({formatCurrency(entry.totalCost)})</span>}
+                        </span>
                       </div>
                       <p className="text-xs text-graphite-400">
                         Usada {entry.timesUsed}x · ultima vez {formatDate(entry.lastUsedAt)}

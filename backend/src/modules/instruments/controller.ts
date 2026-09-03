@@ -328,18 +328,29 @@ export const getInstrumentPartsHistory = asyncHandler(async (req: Request, res: 
 
   const byPart = new Map<
     string,
-    { sparePart: (typeof movements)[number]["sparePart"]; totalQuantity: number; timesUsed: number; lastUsedAt: Date; lastWorkOrder: { id: string; number: string } | null }
+    {
+      sparePart: (typeof movements)[number]["sparePart"];
+      totalQuantity: number;
+      timesUsed: number;
+      // Custo so soma quando o movimento tem unitCost - sem isso, fica null (opcional).
+      totalCost: number | null;
+      lastUsedAt: Date;
+      lastWorkOrder: { id: string; number: string } | null;
+    }
   >();
   for (const m of movements) {
+    const movementCost = m.unitCost != null ? m.unitCost * m.quantity : null;
     const entry = byPart.get(m.sparePartId);
     if (entry) {
       entry.totalQuantity += m.quantity;
       entry.timesUsed += 1;
+      if (movementCost != null) entry.totalCost = (entry.totalCost ?? 0) + movementCost;
     } else {
       byPart.set(m.sparePartId, {
         sparePart: m.sparePart,
         totalQuantity: m.quantity,
         timesUsed: 1,
+        totalCost: movementCost,
         lastUsedAt: m.createdAt,
         lastWorkOrder: m.maintenanceWorkOrder ? { id: m.maintenanceWorkOrder.id, number: m.maintenanceWorkOrder.number } : null,
       });
@@ -347,6 +358,57 @@ export const getInstrumentPartsHistory = asyncHandler(async (req: Request, res: 
   }
 
   res.json([...byPart.values()].sort((a, b) => b.totalQuantity - a.totalQuantity));
+});
+
+/**
+ * Gastos totais do ativo (pecas + mao de obra), somando todas as OS - o que fecha o
+ * ciclo "adicionar na OS -> ver o gasto por ativo" pedido pelo cliente.
+ */
+export const getInstrumentCostSummary = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!instrument) throw new NotFoundError("Instrumento");
+
+  const [partsMovements, laborEntries] = await Promise.all([
+    prisma.sparePartMovement.findMany({
+      where: { type: "OUT", maintenanceWorkOrder: { instrumentId: instrument.id, deletedAt: null } },
+      select: { quantity: true, unitCost: true },
+    }),
+    prisma.workOrderLabor.findMany({
+      where: { workOrder: { instrumentId: instrument.id, deletedAt: null } },
+      select: { hours: true, hourlyRateSnapshot: true },
+    }),
+  ]);
+
+  let partsCost = 0;
+  let partsCostKnown = false;
+  for (const m of partsMovements) {
+    if (m.unitCost != null) {
+      partsCost += m.unitCost * m.quantity;
+      partsCostKnown = true;
+    }
+  }
+
+  let laborCost = 0;
+  let laborCostKnown = false;
+  let totalHours = 0;
+  for (const l of laborEntries) {
+    totalHours += l.hours;
+    if (l.hourlyRateSnapshot != null) {
+      laborCost += l.hourlyRateSnapshot * l.hours;
+      laborCostKnown = true;
+    }
+  }
+
+  res.json({
+    partsCost: partsCostKnown ? partsCost : null,
+    laborCost: laborCostKnown ? laborCost : null,
+    totalCost: partsCostKnown || laborCostKnown ? partsCost + laborCost : null,
+    totalLaborHours: totalHours,
+  });
 });
 
 // ---------------------------------------------------------------------------

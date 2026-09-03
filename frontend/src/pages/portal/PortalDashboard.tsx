@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { BadgeCheck, AlertTriangle, ShieldX, FileWarning, FileSignature, ShoppingCart, Gauge, TimerReset, Activity, Wrench, Boxes, ShieldCheck, ClipboardList, ListChecks, GitBranch, Radar } from "lucide-react";
+import { BadgeCheck, AlertTriangle, ShieldX, FileWarning, FileSignature, ShoppingCart, Gauge, TimerReset, Activity, Wrench, Boxes, ShieldCheck, ClipboardList, ListChecks, GitBranch, Radar, HardHat } from "lucide-react";
 import { getClientDashboard } from "../../api/dashboard";
 import { listMaintenanceWorkOrders, getMaintenanceDashboard } from "../../api/maintenanceWorkOrders";
 import { useAuth } from "../../auth/AuthContext";
@@ -57,6 +57,9 @@ export default function PortalDashboard() {
           </Link>
           <Link to="/portal/almoxarifado" className="btn-outline">
             <Boxes className="h-4 w-4" /> Meu almoxarifado
+          </Link>
+          <Link to="/portal/manutencao/mao-de-obra" className="btn-outline">
+            <HardHat className="h-4 w-4" /> Mao de obra
           </Link>
         </div>
 

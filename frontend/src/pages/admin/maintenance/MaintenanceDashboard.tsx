@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Wrench, Gauge, ClipboardList, ShieldCheck, Activity, TimerReset, ListChecks, Boxes, GitBranch, Radar } from "lucide-react";
+import { Wrench, Gauge, ClipboardList, ShieldCheck, Activity, TimerReset, ListChecks, Boxes, GitBranch, Radar, HardHat } from "lucide-react";
 import { getMaintenanceDashboard } from "../../../api/maintenanceWorkOrders";
 import { listClients } from "../../../api/clients";
 import { PageHeader } from "../../../components/PageHeader";
@@ -11,7 +11,7 @@ import { clientDisplayName } from "../../../lib/format";
 import { useCmms } from "../../../lib/cmms";
 
 export default function MaintenanceDashboard() {
-  const { isClient, base, assetsBase, partsBase } = useCmms();
+  const { isClient, base, assetsBase, partsBase, laborBase } = useCmms();
   const [clientId, setClientId] = useState("");
 
   const { data: clients } = useQuery({
@@ -60,6 +60,9 @@ export default function MaintenanceDashboard() {
         </Link>
         <Link to={`${partsBase}${!isClient && clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <Boxes className="h-4 w-4" /> Almoxarifado
+        </Link>
+        <Link to={`${laborBase}${!isClient && clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+          <HardHat className="h-4 w-4" /> Mao de obra
         </Link>
       </div>
 

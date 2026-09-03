@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Trash2, Plus, AlertTriangle } from "lucide-react";
-import { deleteInstrument, getInstrument, listAssetParts, addAssetPart, removeAssetPart, getInstrumentPartsHistory } from "../../../api/instruments";
+import { deleteInstrument, getInstrument, listAssetParts, addAssetPart, removeAssetPart, getInstrumentPartsHistory, getInstrumentCostSummary } from "../../../api/instruments";
 import { listServiceOrders } from "../../../api/serviceOrders";
 import { listMeters, addMeterReading } from "../../../api/meters";
 import { listMaintenancePlans } from "../../../api/maintenancePlans";
@@ -18,7 +18,7 @@ import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { useAuth } from "../../../auth/AuthContext";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
-import { clientDisplayName, formatDate, formatServiceCategory } from "../../../lib/format";
+import { clientDisplayName, formatDate, formatServiceCategory, formatCurrency } from "../../../lib/format";
 import { EmptyState } from "../../../components/EmptyState";
 
 const PRIORITY_LABELS: Record<string, string> = { LOW: "Baixa", MEDIUM: "Media", HIGH: "Alta", CRITICAL: "Critica" };
@@ -67,6 +67,11 @@ export default function InstrumentDetail() {
   const { data: partsHistory } = useQuery({
     queryKey: ["instrument-parts-history", id],
     queryFn: () => getInstrumentPartsHistory(id),
+    enabled: !!id,
+  });
+  const { data: costSummary } = useQuery({
+    queryKey: ["instrument-cost-summary", id],
+    queryFn: () => getInstrumentCostSummary(id),
     enabled: !!id,
   });
   const { data: spareParts } = useQuery({
@@ -176,6 +181,20 @@ export default function InstrumentDetail() {
               <Info label="Proxima calibracao" value={formatDate(instrument.nextDueDate)} />
             </dl>
           </div>
+
+          {costSummary && (costSummary.partsCost != null || costSummary.laborCost != null) && (
+            <div className="card p-5">
+              <h2 className="mb-3 font-semibold text-navy-900">Gastos deste ativo</h2>
+              <dl className="grid gap-4 sm:grid-cols-3">
+                <Info label="Pecas" value={costSummary.partsCost != null ? formatCurrency(costSummary.partsCost) : "Nao rastreado"} />
+                <Info
+                  label="Mao de obra"
+                  value={costSummary.laborCost != null ? `${formatCurrency(costSummary.laborCost)} (${costSummary.totalLaborHours}h)` : `Nao rastreado (${costSummary.totalLaborHours}h)`}
+                />
+                <Info label="Total" value={costSummary.totalCost != null ? formatCurrency(costSummary.totalCost) : "-"} />
+              </dl>
+            </div>
+          )}
 
           <InstrumentAttachments instrumentId={instrument.id} canEdit={!!canManage} />
         </div>
@@ -392,7 +411,10 @@ export default function InstrumentDetail() {
                   <li key={entry.sparePart.id} className="py-2.5 text-sm">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-graphite-800">{entry.sparePart.name}</span>
-                      <span className="text-graphite-600">{entry.totalQuantity} {entry.sparePart.unit}</span>
+                      <span className="text-graphite-600">
+                        {entry.totalQuantity} {entry.sparePart.unit}
+                        {entry.totalCost != null && <span className="ml-1.5 text-graphite-400">({formatCurrency(entry.totalCost)})</span>}
+                      </span>
                     </div>
                     <p className="text-xs text-graphite-400">
                       Usada {entry.timesUsed}x · ultima vez {formatDate(entry.lastUsedAt)}

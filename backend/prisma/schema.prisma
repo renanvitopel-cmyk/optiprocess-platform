@@ -316,6 +316,8 @@ model Client {
   spareParts            SparePart[]
   failureCodes          FailureCode[]
   assetTypes            AssetType[]
+  laborTypes            LaborType[]
+  laborResources        LaborResource[]
 
   @@index([status])
   @@map("clients")
@@ -815,6 +817,67 @@ model MeterReading {
 }
 
 // Catalogo de causas de falha usado nas ordens de manutencao corretivas.
+model LaborType {
+  id       String  @id @default(uuid())
+  // Mesmo padrao do AssetType: sem clientId e' o catalogo padrao da OptiProcess
+  // (Tecnico mecanico, Tecnico eletrico, Engenheiro...), com clientId e' proprio da empresa.
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id])
+  name     String
+  active   Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([clientId, name])
+  @@index([clientId])
+  @@map("labor_types")
+}
+
+// Mao de obra do CMMS do proprio cliente - quem executa as OS, com custo/hora pra
+// apurar gasto de manutencao por ativo (ao lado do custo de pecas). Nao e' um login
+// de sistema (isso e' User/technicianId) - e' o cadastro do profissional/recurso.
+model LaborResource {
+  id                 String    @id @default(uuid())
+  clientId           String
+  client             Client    @relation(fields: [clientId], references: [id])
+  // Tecnico mecanico, Tecnico eletrico, Engenheiro... (catalogo LaborType)
+  type               String
+  name               String
+  // DRT/CREA/CFT etc - registro profissional, quando aplicavel.
+  registrationNumber String?
+  // Valor/hora - opcional, so alimenta custo quando preenchido.
+  hourlyRate         Float?
+  active             Boolean   @default(true)
+  createdById        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  workOrderEntries WorkOrderLabor[]
+
+  @@index([clientId])
+  @@map("labor_resources")
+}
+
+// Lancamento de horas de um recurso de mao de obra numa OS - mesmo papel do
+// SparePartMovement para pecas, so que para horas trabalhadas.
+model WorkOrderLabor {
+  id              String               @id @default(uuid())
+  workOrderId     String
+  workOrder       MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id])
+  laborResourceId String
+  laborResource   LaborResource        @relation(fields: [laborResourceId], references: [id])
+  hours           Float
+  // Snapshot do valor/hora no momento do lancamento - preserva o custo historico correto
+  // mesmo que o valor/hora do recurso mude depois.
+  hourlyRateSnapshot Float?
+  createdById     String?
+  createdAt       DateTime             @default(now())
+
+  @@index([workOrderId])
+  @@index([laborResourceId])
+  @@map("work_order_labor")
+}
+
 model AssetType {
   id       String  @id @default(uuid())
   // Sem clientId = catalogo padrao da OptiProcess (motor, compressor, extrusora...),
@@ -934,6 +997,7 @@ model MaintenanceWorkOrder {
 
   checklist MaintenanceWorkOrderChecklistItem[]
   partsUsed SparePartMovement[]
+  laborEntries WorkOrderLabor[]
 
   @@unique([clientId, number])
   @@index([clientId])
@@ -973,6 +1037,9 @@ model SparePart {
   unit        String    @default("un")
   stockQty    Int       @default(0)
   minStock    Int       @default(0)
+  // Custo unitario da ultima compra registrada (opcional) - alimenta o valor do estoque
+  // e o custo de manutencao por ativo. Sem isso, o almoxarifado funciona igual a antes.
+  unitCost    Float?
   active      Boolean   @default(true)
   createdById String?
   createdAt   DateTime  @default(now())
@@ -993,6 +1060,9 @@ model SparePartMovement {
   sparePart              SparePart             @relation(fields: [sparePartId], references: [id])
   type                   InventoryMovementType
   quantity               Int
+  // Custo unitario NESTE movimento (opcional, snapshot) - se nao informado ao registrar,
+  // herda o unitCost vigente da peca naquele momento.
+  unitCost               Float?
   reason                 String?
   maintenanceWorkOrderId String?
   maintenanceWorkOrder   MaintenanceWorkOrder? @relation(fields: [maintenanceWorkOrderId], references: [id])

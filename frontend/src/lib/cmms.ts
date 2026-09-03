@@ -18,5 +18,6 @@ export function useCmms() {
     base: isClient ? "/portal/manutencao" : "/gestao/manutencao",
     assetsBase: isClient ? "/portal/instrumentos" : "/gestao/instrumentos",
     partsBase: isClient ? "/portal/almoxarifado" : "/gestao/manutencao/almoxarifado",
+    laborBase: isClient ? "/portal/manutencao/mao-de-obra" : "/gestao/manutencao/mao-de-obra",
   };
 }

@@ -62,6 +62,7 @@ const WorkOrderForm = lazy(() => import("./pages/admin/maintenance/WorkOrderForm
 const WorkOrderDetail = lazy(() => import("./pages/admin/maintenance/WorkOrderDetail"));
 const FailureCodesList = lazy(() => import("./pages/admin/maintenance/FailureCodesList"));
 const SparePartsList = lazy(() => import("./pages/admin/maintenance/SparePartsList"));
+const LaborResourcesList = lazy(() => import("./pages/admin/maintenance/LaborResourcesList"));
 
 const PortalDashboard = lazy(() => import("./pages/portal/PortalDashboard"));
 const PortalInstruments = lazy(() => import("./pages/portal/PortalInstruments"));
@@ -138,6 +139,7 @@ export default function App() {
                 <Route path="manutencao/ordens/:id" element={<WorkOrderDetail />} />
                 <Route path="manutencao/falhas" element={<FailureCodesList />} />
                 <Route path="manutencao/almoxarifado" element={<SparePartsList />} />
+                <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
 
                 <Route path="produtos" element={<ProductsListAdmin />} />
                 <Route path="produtos/:id" element={<ProductDetailAdmin />} />
@@ -180,6 +182,7 @@ export default function App() {
                 <Route path="manutencao/falhas" element={<FailureCodesList />} />
                 <Route path="manutencao/arvore" element={<PortalInstrumentsTree />} />
                 <Route path="almoxarifado" element={<PortalSpareParts />} />
+                <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
                 <Route path="perfil" element={<PortalProfile />} />
               </Route>
             </Route>

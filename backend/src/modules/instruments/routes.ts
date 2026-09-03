@@ -12,6 +12,7 @@ import {
   addAssetPart,
   removeAssetPart,
   getInstrumentPartsHistory,
+  getInstrumentCostSummary,
   listInstrumentAttachmentsRoute,
   uploadInstrumentAttachment,
   deleteInstrumentAttachment,
@@ -38,6 +39,8 @@ instrumentsRouter.post("/:id/parts", requireRole("ADMIN", "TECHNICIAN", "CLIENT"
 instrumentsRouter.delete("/:id/parts/:linkId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), removeAssetPart);
 // Historico real de consumo (o que ja foi baixado do almoxarifado nas OS deste ativo).
 instrumentsRouter.get("/:id/parts-history", getInstrumentPartsHistory);
+// Gastos totais do ativo (pecas + mao de obra somadas de todas as OS).
+instrumentsRouter.get("/:id/cost-summary", getInstrumentCostSummary);
 
 // Anexos do ativo (manual, foto do equipamento etc.) - mesmo padrao ja usado nas OS.
 instrumentsRouter.get("/:id/attachments", listInstrumentAttachmentsRoute);

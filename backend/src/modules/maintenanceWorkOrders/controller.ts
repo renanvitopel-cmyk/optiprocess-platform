@@ -437,7 +437,7 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
 
   const workOrders = await prisma.maintenanceWorkOrder.findMany({
     where,
-    select: { id: true, type: true, status: true, startedAt: true, completedAt: true, instrumentId: true },
+    select: { id: true, type: true, status: true, startedAt: true, completedAt: true, instrumentId: true, triggeredByMeterId: true },
   });
 
   const completed = workOrders.filter((w) => w.completedAt && w.startedAt);
@@ -484,6 +484,10 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
       completed: workOrders.filter((w) => w.status === "COMPLETED").length,
       corrective: workOrders.filter((w) => w.type === "CORRECTIVE").length,
       preventive: workOrders.filter((w) => w.type === "PREVENTIVE").length,
+      predictive: workOrders.filter((w) => w.type === "PREDICTIVE").length,
+      // Quantas dessas preditivas foram abertas sozinhas por uma leitura fora da faixa
+      // (em vez de escolhidas a mao) - mede se a preditiva esta funcionando de verdade.
+      predictiveAutoOpened: workOrders.filter((w) => w.type === "PREDICTIVE" && w.triggeredByMeterId).length,
     },
     kpis: {
       mttrHours: Number((mttrMinutes / 60).toFixed(1)),

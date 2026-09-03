@@ -430,6 +430,7 @@ export interface MeterReading {
   meterId: string;
   value: number;
   readAt: string;
+  alertTriggered: boolean;
   recordedById: string | null;
   createdAt: string;
 }
@@ -440,6 +441,8 @@ export interface Meter {
   name: string;
   unit: string;
   currentValue: number;
+  minThreshold: number | null;
+  maxThreshold: number | null;
   createdAt: string;
   readings?: MeterReading[];
 }
@@ -548,6 +551,16 @@ export interface AssetPart {
   createdAt: string;
 }
 
+/** Consumo real de pecas de um ativo (o que ja foi baixado do almoxarifado nas OS dele) -
+ * diferente do AssetPart (BOM), que so lista o que e' compativel. */
+export interface AssetPartHistoryEntry {
+  sparePart: { id: string; name: string; code: string | null; unit: string };
+  totalQuantity: number;
+  timesUsed: number;
+  lastUsedAt: string;
+  lastWorkOrder: { id: string; number: string } | null;
+}
+
 export interface MaintenanceWorkOrder {
   id: string;
   number: string;
@@ -568,6 +581,8 @@ export interface MaintenanceWorkOrder {
   completedAt: string | null;
   failureCodeId: string | null;
   failureCode?: FailureCode | null;
+  // Preenchido quando a OS foi aberta sozinha por uma leitura de medidor fora da faixa.
+  triggeredByMeterId: string | null;
   meterReadingAtExecution: number | null;
   laborHours: number | null;
   observations: string | null;
@@ -585,6 +600,8 @@ export interface MaintenanceDashboardData {
     completed: number;
     corrective: number;
     preventive: number;
+    predictive: number;
+    predictiveAutoOpened: number;
   };
   kpis: {
     mttrHours: number;

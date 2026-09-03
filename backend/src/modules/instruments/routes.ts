@@ -10,6 +10,7 @@ import {
   listAssetParts,
   addAssetPart,
   removeAssetPart,
+  getInstrumentPartsHistory,
 } from "./controller";
 
 export const instrumentsRouter = Router();
@@ -30,3 +31,5 @@ instrumentsRouter.delete("/:id", requireRole("ADMIN"), deleteInstrument);
 instrumentsRouter.get("/:id/parts", listAssetParts);
 instrumentsRouter.post("/:id/parts", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addAssetPart);
 instrumentsRouter.delete("/:id/parts/:linkId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), removeAssetPart);
+// Historico real de consumo (o que ja foi baixado do almoxarifado nas OS deste ativo).
+instrumentsRouter.get("/:id/parts-history", getInstrumentPartsHistory);

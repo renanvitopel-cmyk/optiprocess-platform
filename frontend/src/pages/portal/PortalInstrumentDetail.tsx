@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2, CornerLeftUp } from "lucide-react";
-import { getInstrument, listAssetParts, addAssetPart, removeAssetPart } from "../../api/instruments";
+import { Pencil, Plus, Trash2, CornerLeftUp, AlertTriangle } from "lucide-react";
+import { getInstrument, listAssetParts, addAssetPart, removeAssetPart, getInstrumentPartsHistory } from "../../api/instruments";
 import { listSpareParts } from "../../api/spareParts";
 import { listServiceOrders } from "../../api/serviceOrders";
-import { listMeters } from "../../api/meters";
+import { listMeters, addMeterReading } from "../../api/meters";
 import { listMaintenancePlans } from "../../api/maintenancePlans";
 import { listMaintenanceWorkOrders } from "../../api/maintenanceWorkOrders";
 import { PageHeader } from "../../components/PageHeader";
@@ -14,6 +14,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { formatDate, formatServiceCategory } from "../../lib/format";
 import { EmptyState } from "../../components/EmptyState";
 import { PortalInstrumentFormModal } from "./PortalInstrumentFormModal";
+import { MeterFormModal } from "../admin/instruments/MeterFormModal";
 import { useAuth } from "../../auth/AuthContext";
 import { useToast } from "../../components/Toast";
 import { getApiErrorMessage } from "../../api/client";
@@ -26,6 +27,7 @@ export default function PortalInstrumentDetail() {
   const { notify } = useToast();
   const [editOpen, setEditOpen] = useState(false);
   const [addChildOpen, setAddChildOpen] = useState(false);
+  const [meterModalOpen, setMeterModalOpen] = useState(false);
   const [selectedSparePartId, setSelectedSparePartId] = useState("");
   const { data: instrument, isLoading } = useQuery({ queryKey: ["portal-instrument", id], queryFn: () => getInstrument(id) });
   const { data: serviceOrders } = useQuery({
@@ -59,6 +61,28 @@ export default function PortalInstrumentDetail() {
     queryFn: () => listSpareParts({ active: true, pageSize: 200 }),
     enabled: hasCmms,
   });
+  const { data: partsHistory } = useQuery({
+    queryKey: ["portal-instrument-parts-history", id],
+    queryFn: () => getInstrumentPartsHistory(id),
+    enabled: !!id && hasCmms,
+  });
+
+  async function handleAddReading(meterId: string) {
+    const value = window.prompt("Nova leitura do medidor:");
+    if (!value || Number.isNaN(Number(value))) return;
+    try {
+      const reading = await addMeterReading(meterId, Number(value));
+      if (reading.triggeredWorkOrder) {
+        notify("error", `Leitura fora da faixa! OS ${reading.triggeredWorkOrder.number} (preditiva) aberta automaticamente.`);
+      } else {
+        notify("success", "Leitura registrada.");
+      }
+      queryClient.invalidateQueries({ queryKey: ["portal-instrument-meters", id] });
+      queryClient.invalidateQueries({ queryKey: ["portal-instrument-maintenance-work-orders", id] });
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    }
+  }
 
   async function handleAddAssetPart() {
     if (!selectedSparePartId) return;
@@ -163,17 +187,36 @@ export default function PortalInstrumentDetail() {
           {hasCmms && (
             <>
               <div className="card p-5">
-                <h2 className="mb-3 font-semibold text-navy-900">Medidores</h2>
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="font-semibold text-navy-900">Medidores</h2>
+                  <button className="btn-ghost btn-sm" onClick={() => setMeterModalOpen(true)}>
+                    <Plus className="h-4 w-4" /> Novo
+                  </button>
+                </div>
                 {!meters || meters.length === 0 ? (
-                  <EmptyState title="Nenhum medidor" />
+                  <EmptyState title="Nenhum medidor" description="Cadastre um horimetro ou odometro para manutencao por uso ou condicao (preditiva)." />
                 ) : (
                   <ul className="divide-y divide-gray-100">
-                    {meters.map((m) => (
-                      <li key={m.id} className="py-2.5 text-sm">
-                        <p className="font-medium text-graphite-800">{m.name}</p>
-                        <p className="text-xs text-graphite-400">{m.currentValue} {m.unit}</p>
-                      </li>
-                    ))}
+                    {meters.map((m) => {
+                      const outOfRange = (m.minThreshold != null && m.currentValue < m.minThreshold) || (m.maxThreshold != null && m.currentValue > m.maxThreshold);
+                      return (
+                        <li key={m.id} className="flex items-center justify-between py-2.5 text-sm">
+                          <div>
+                            <p className="flex items-center gap-1.5 font-medium text-graphite-800">
+                              {m.name}
+                              {outOfRange && <AlertTriangle className="h-3.5 w-3.5 text-safety-red" aria-label="Fora da faixa normal" />}
+                            </p>
+                            <p className={`text-xs ${outOfRange ? "font-medium text-safety-red" : "text-graphite-400"}`}>
+                              {m.currentValue} {m.unit}
+                              {(m.minThreshold != null || m.maxThreshold != null) && (
+                                <> · faixa normal: {m.minThreshold ?? "-"} a {m.maxThreshold ?? "-"} {m.unit}</>
+                              )}
+                            </p>
+                          </div>
+                          <button className="btn-ghost btn-sm" onClick={() => handleAddReading(m.id)}>Registrar leitura</button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
@@ -268,8 +311,48 @@ export default function PortalInstrumentDetail() {
               )}
             </div>
           )}
+
+          {hasCmms && (
+            <div className="card p-5">
+              <h2 className="mb-1 font-semibold text-navy-900">Historico de pecas consumidas</h2>
+              <p className="mb-3 text-xs text-graphite-500">O que ja foi baixado do seu almoxarifado nas OS deste ativo.</p>
+              {!partsHistory || partsHistory.length === 0 ? (
+                <EmptyState title="Nenhum consumo registrado" description="Aparece aqui assim que uma OS deste ativo consumir uma peca do almoxarifado." />
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {partsHistory.map((entry) => (
+                    <li key={entry.sparePart.id} className="py-2.5 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-graphite-800">{entry.sparePart.name}</span>
+                        <span className="text-graphite-600">{entry.totalQuantity} {entry.sparePart.unit}</span>
+                      </div>
+                      <p className="text-xs text-graphite-400">
+                        Usada {entry.timesUsed}x · ultima vez {formatDate(entry.lastUsedAt)}
+                        {entry.lastWorkOrder && (
+                          <>
+                            {" "}·{" "}
+                            <Link to={`/portal/manutencao/ordens/${entry.lastWorkOrder.id}`} className="hover:underline">{entry.lastWorkOrder.number}</Link>
+                          </>
+                        )}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      <MeterFormModal
+        open={meterModalOpen}
+        onClose={() => setMeterModalOpen(false)}
+        instrumentId={instrument.id}
+        onSaved={() => {
+          setMeterModalOpen(false);
+          queryClient.invalidateQueries({ queryKey: ["portal-instrument-meters", id] });
+        }}
+      />
 
       <PortalInstrumentFormModal
         open={addChildOpen}

@@ -2,9 +2,10 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { NotFoundError } from "../../utils/errors";
+import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { assertServiceAccess } from "../../middleware/rbac";
+import { nextClientMaintenanceOrderNumber } from "../../utils/sequence";
 
 /** Meter nao tem clientId proprio (pertence a um Instrument) - o escopo do cliente
  * e' aplicado via filtro na relacao instrument.clientId. */
@@ -42,10 +43,22 @@ const meterSchema = z.object({
   name: z.string().min(1, "Informe o nome do medidor."),
   unit: z.string().min(1, "Informe a unidade (h, km, ciclos...)."),
   currentValue: z.coerce.number().nonnegative().optional(),
+  // Faixa normal de operacao - fora dela, a leitura dispara manutencao preditiva.
+  minThreshold: z.coerce.number().nullish(),
+  maxThreshold: z.coerce.number().nullish(),
 });
 
 export const createMeter = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = meterSchema.parse(req.body);
+  if (data.minThreshold != null && data.maxThreshold != null && data.minThreshold > data.maxThreshold) {
+    throw new ValidationError("O limite minimo nao pode ser maior que o maximo.");
+  }
+
+  const instrument = await prisma.instrument.findFirst({ where: { id: data.instrumentId, deletedAt: null } });
+  if (!instrument) throw new NotFoundError("Ativo");
+  if (req.user?.role === "CLIENT" && instrument.clientId !== req.user.clientId) throw new ForbiddenError();
+
   const meter = await prisma.meter.create({ data: { ...data, createdById: req.user?.sub } });
 
   await writeAuditLog({
@@ -60,9 +73,17 @@ export const createMeter = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const updateMeter = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = meterSchema.partial().parse(req.body);
-  const existing = await prisma.meter.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  const existing = await prisma.meter.findFirst({ where: { id: req.params.id, deletedAt: null, ...instrumentClientFilter(req) } });
   if (!existing) throw new NotFoundError("Medidor");
+
+  const minThreshold = data.minThreshold !== undefined ? data.minThreshold : existing.minThreshold;
+  const maxThreshold = data.maxThreshold !== undefined ? data.maxThreshold : existing.maxThreshold;
+  if (minThreshold != null && maxThreshold != null && minThreshold > maxThreshold) {
+    throw new ValidationError("O limite minimo nao pode ser maior que o maximo.");
+  }
+  if (req.user?.role === "CLIENT") delete data.instrumentId; // cliente nao move o medidor para outro ativo
 
   const meter = await prisma.meter.update({ where: { id: existing.id }, data });
   res.json(meter);
@@ -90,17 +111,66 @@ const readingSchema = z.object({
   readAt: z.coerce.date().optional(),
 });
 
+/**
+ * Registra a leitura e, se ela ultrapassar a faixa normal do medidor, dispara a
+ * manutencao preditiva de verdade: marca a leitura e abre uma OS tipo PREDICTIVE
+ * sozinha (sem precisar de ninguem escolher "Preditiva" num formulario). Nao duplica
+ * se ja existir uma OS preditiva aberta para o mesmo medidor.
+ */
 export const addMeterReading = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = readingSchema.parse(req.body);
-  const meter = await prisma.meter.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  const meter = await prisma.meter.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...instrumentClientFilter(req) },
+    include: { instrument: { select: { id: true, clientId: true, tag: true, type: true } } },
+  });
   if (!meter) throw new NotFoundError("Medidor");
+
+  const alertTriggered =
+    (meter.minThreshold != null && data.value < meter.minThreshold) ||
+    (meter.maxThreshold != null && data.value > meter.maxThreshold);
+
+  let triggeredWorkOrder = null;
+  if (alertTriggered) {
+    const alreadyOpen = await prisma.maintenanceWorkOrder.findFirst({
+      where: { triggeredByMeterId: meter.id, deletedAt: null, status: { in: ["OPEN", "IN_PROGRESS"] } },
+    });
+    if (!alreadyOpen) {
+      const number = await nextClientMaintenanceOrderNumber(meter.instrument.clientId);
+      const direction = meter.maxThreshold != null && data.value > meter.maxThreshold ? "acima do maximo" : "abaixo do minimo";
+      const limit = meter.maxThreshold != null && data.value > meter.maxThreshold ? meter.maxThreshold : meter.minThreshold;
+      triggeredWorkOrder = await prisma.maintenanceWorkOrder.create({
+        data: {
+          number,
+          clientId: meter.instrument.clientId,
+          instrumentId: meter.instrument.id,
+          type: "PREDICTIVE",
+          priority: "HIGH",
+          status: "OPEN",
+          description: `Leitura de "${meter.name}" (${data.value} ${meter.unit}) ficou ${direction} (${limit} ${meter.unit}). OS aberta automaticamente para inspecao.`,
+          triggeredByMeterId: meter.id,
+          createdById: req.user?.sub,
+        },
+      });
+    }
+  }
 
   const [reading] = await prisma.$transaction([
     prisma.meterReading.create({
-      data: { meterId: meter.id, value: data.value, readAt: data.readAt ?? new Date(), recordedById: req.user?.sub },
+      data: { meterId: meter.id, value: data.value, readAt: data.readAt ?? new Date(), recordedById: req.user?.sub, alertTriggered },
     }),
     prisma.meter.update({ where: { id: meter.id }, data: { currentValue: data.value } }),
   ]);
 
-  res.status(201).json(reading);
+  if (triggeredWorkOrder) {
+    await writeAuditLog({
+      userId: req.user?.sub,
+      action: "CREATE",
+      entityType: "MaintenanceWorkOrder",
+      entityId: triggeredWorkOrder.id,
+      description: `OS ${triggeredWorkOrder.number} aberta automaticamente (leitura de "${meter.name}" fora da faixa)`,
+    });
+  }
+
+  res.status(201).json({ ...reading, triggeredWorkOrder });
 });

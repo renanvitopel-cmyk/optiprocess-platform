@@ -1,6 +1,6 @@
 import { api } from "./client";
 import type { PagedResult } from "./client";
-import type { AssetPart, Instrument, InstrumentStatus } from "./types";
+import type { AssetPart, AssetPartHistoryEntry, Instrument, InstrumentStatus } from "./types";
 
 export interface ListInstrumentsParams {
   page?: number;
@@ -55,4 +55,10 @@ export async function addAssetPart(instrumentId: string, sparePartId: string, no
 
 export async function removeAssetPart(instrumentId: string, linkId: string): Promise<void> {
   await api.delete(`/instruments/${instrumentId}/parts/${linkId}`);
+}
+
+/** Consumo real (o que ja foi baixado do almoxarifado nas OS deste ativo) - diferente do BOM. */
+export async function getInstrumentPartsHistory(instrumentId: string): Promise<AssetPartHistoryEntry[]> {
+  const { data } = await api.get<AssetPartHistoryEntry[]>(`/instruments/${instrumentId}/parts-history`);
+  return data;
 }

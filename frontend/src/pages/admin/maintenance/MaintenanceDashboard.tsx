@@ -96,6 +96,13 @@ export default function MaintenanceDashboard() {
               <p className="mt-1 text-2xl font-bold text-navy-900">{data.totals.corrective}</p>
             </div>
             <div className="card p-5">
+              <p className="text-xs uppercase tracking-wide text-graphite-400">Preditivas (periodo)</p>
+              <p className="mt-1 text-2xl font-bold text-navy-900">{data.totals.predictive}</p>
+              {data.totals.predictive > 0 && (
+                <p className="mt-0.5 text-xs text-graphite-400">{data.totals.predictiveAutoOpened} abertas sozinhas por medidor</p>
+              )}
+            </div>
+            <div className="card p-5">
               <p className="text-xs uppercase tracking-wide text-graphite-400">Total de OS (periodo)</p>
               <p className="mt-1 text-2xl font-bold text-navy-900">{data.totals.workOrders}</p>
             </div>

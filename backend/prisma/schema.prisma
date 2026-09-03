@@ -776,12 +776,17 @@ model Meter {
   name         String    // ex.: "Horimetro", "Odometro"
   unit         String    // ex.: "h", "km", "ciclos"
   currentValue Float     @default(0)
+  // Faixa normal de operacao: uma leitura fora disso e' manutencao preditiva de
+  // verdade (condicao medida ultrapassou o limite), nao so um rotulo escolhido a mao.
+  minThreshold Float?
+  maxThreshold Float?
   createdById  String?
   createdAt    DateTime  @default(now())
   deletedAt    DateTime?
 
   readings MeterReading[]
   plans    MaintenancePlan[]
+  triggeredWorkOrders MaintenanceWorkOrder[]
 
   @@index([instrumentId])
   @@map("meters")
@@ -793,6 +798,9 @@ model MeterReading {
   meter        Meter    @relation(fields: [meterId], references: [id], onDelete: Cascade)
   value        Float
   readAt       DateTime @default(now())
+  // Ficou fora do min/maxThreshold vigente no momento do registro - guardado na leitura
+  // (nao recalculado depois) porque o limite do medidor pode mudar com o tempo.
+  alertTriggered Boolean @default(false)
   recordedById String?
   createdAt    DateTime @default(now())
 
@@ -895,6 +903,10 @@ model MaintenanceWorkOrder {
   meterReadingAtExecution Float?
   laborHours   Float?
   observations String?
+  // Preenchido quando a OS foi aberta sozinha por uma leitura de medidor fora da faixa -
+  // e' o que torna "Preditiva" uma manutencao de verdade, nao so uma opcao no formulario.
+  triggeredByMeterId String?
+  triggeredByMeter    Meter?              @relation(fields: [triggeredByMeterId], references: [id])
   createdById  String?
   createdAt    DateTime               @default(now())
   updatedAt    DateTime               @updatedAt

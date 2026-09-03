@@ -300,3 +300,45 @@ export const removeAssetPart = asyncHandler(async (req: Request, res: Response) 
   await prisma.assetPart.delete({ where: { id: link.id } });
   res.status(204).send();
 });
+
+/**
+ * Historico real de consumo de pecas deste ativo - diferente do BOM (que so lista o que
+ * e' COMPATIVEL), isso soma o que de fato ja foi baixado do almoxarifado nas OS deste
+ * ativo, pra responder "quais spare parts esse ativo realmente usa e com que frequencia".
+ */
+export const getInstrumentPartsHistory = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!instrument) throw new NotFoundError("Instrumento");
+
+  const movements = await prisma.sparePartMovement.findMany({
+    where: { type: "OUT", maintenanceWorkOrder: { instrumentId: instrument.id, deletedAt: null } },
+    include: { sparePart: { select: { id: true, name: true, code: true, unit: true } }, maintenanceWorkOrder: { select: { id: true, number: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const byPart = new Map<
+    string,
+    { sparePart: (typeof movements)[number]["sparePart"]; totalQuantity: number; timesUsed: number; lastUsedAt: Date; lastWorkOrder: { id: string; number: string } | null }
+  >();
+  for (const m of movements) {
+    const entry = byPart.get(m.sparePartId);
+    if (entry) {
+      entry.totalQuantity += m.quantity;
+      entry.timesUsed += 1;
+    } else {
+      byPart.set(m.sparePartId, {
+        sparePart: m.sparePart,
+        totalQuantity: m.quantity,
+        timesUsed: 1,
+        lastUsedAt: m.createdAt,
+        lastWorkOrder: m.maintenanceWorkOrder ? { id: m.maintenanceWorkOrder.id, number: m.maintenanceWorkOrder.number } : null,
+      });
+    }
+  }
+
+  res.json([...byPart.values()].sort((a, b) => b.totalQuantity - a.totalQuantity));
+});

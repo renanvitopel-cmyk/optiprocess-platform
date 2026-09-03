@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2, Plus } from "lucide-react";
-import { deleteInstrument, getInstrument, listAssetParts, addAssetPart, removeAssetPart } from "../../../api/instruments";
+import { Pencil, Trash2, Plus, AlertTriangle } from "lucide-react";
+import { deleteInstrument, getInstrument, listAssetParts, addAssetPart, removeAssetPart, getInstrumentPartsHistory } from "../../../api/instruments";
 import { listServiceOrders } from "../../../api/serviceOrders";
 import { listMeters, addMeterReading } from "../../../api/meters";
 import { listMaintenancePlans } from "../../../api/maintenancePlans";
@@ -61,6 +61,11 @@ export default function InstrumentDetail() {
     queryFn: () => listAssetParts(id),
     enabled: !!id,
   });
+  const { data: partsHistory } = useQuery({
+    queryKey: ["instrument-parts-history", id],
+    queryFn: () => getInstrumentPartsHistory(id),
+    enabled: !!id,
+  });
   const { data: spareParts } = useQuery({
     queryKey: ["spare-parts-picker", instrument?.clientId],
     queryFn: () => listSpareParts({ clientId: instrument!.clientId, active: true, pageSize: 200 }),
@@ -71,9 +76,14 @@ export default function InstrumentDetail() {
     const value = window.prompt("Nova leitura do medidor:");
     if (!value || Number.isNaN(Number(value))) return;
     try {
-      await addMeterReading(meterId, Number(value));
-      notify("success", "Leitura registrada.");
+      const reading = await addMeterReading(meterId, Number(value));
+      if (reading.triggeredWorkOrder) {
+        notify("error", `Leitura fora da faixa! OS ${reading.triggeredWorkOrder.number} (preditiva) aberta automaticamente.`);
+      } else {
+        notify("success", "Leitura registrada.");
+      }
       queryClient.invalidateQueries({ queryKey: ["instrument-meters", id] });
+      queryClient.invalidateQueries({ queryKey: ["instrument-maintenance-work-orders", id] });
     } catch (error) {
       notify("error", getApiErrorMessage(error));
     }
@@ -230,20 +240,31 @@ export default function InstrumentDetail() {
               )}
             </div>
             {!meters || meters.length === 0 ? (
-              <EmptyState title="Nenhum medidor" description="Cadastre um horimetro ou odometro para manutencao por uso." />
+              <EmptyState title="Nenhum medidor" description="Cadastre um horimetro ou odometro para manutencao por uso ou condicao (preditiva)." />
             ) : (
               <ul className="divide-y divide-gray-100">
-                {meters.map((m) => (
-                  <li key={m.id} className="flex items-center justify-between py-2.5 text-sm">
-                    <div>
-                      <p className="font-medium text-graphite-800">{m.name}</p>
-                      <p className="text-xs text-graphite-400">{m.currentValue} {m.unit}</p>
-                    </div>
-                    {canManage && (
-                      <button className="btn-ghost btn-sm" onClick={() => handleAddReading(m.id)}>Registrar leitura</button>
-                    )}
-                  </li>
-                ))}
+                {meters.map((m) => {
+                  const outOfRange = (m.minThreshold != null && m.currentValue < m.minThreshold) || (m.maxThreshold != null && m.currentValue > m.maxThreshold);
+                  return (
+                    <li key={m.id} className="flex items-center justify-between py-2.5 text-sm">
+                      <div>
+                        <p className="flex items-center gap-1.5 font-medium text-graphite-800">
+                          {m.name}
+                          {outOfRange && <AlertTriangle className="h-3.5 w-3.5 text-safety-red" aria-label="Fora da faixa normal" />}
+                        </p>
+                        <p className={`text-xs ${outOfRange ? "font-medium text-safety-red" : "text-graphite-400"}`}>
+                          {m.currentValue} {m.unit}
+                          {(m.minThreshold != null || m.maxThreshold != null) && (
+                            <> · faixa normal: {m.minThreshold ?? "-"} a {m.maxThreshold ?? "-"} {m.unit}</>
+                          )}
+                        </p>
+                      </div>
+                      {canManage && (
+                        <button className="btn-ghost btn-sm" onClick={() => handleAddReading(m.id)}>Registrar leitura</button>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -344,6 +365,34 @@ export default function InstrumentDetail() {
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="card p-5">
+            <h2 className="mb-1 font-semibold text-navy-900">Historico de pecas consumidas</h2>
+            <p className="mb-3 text-xs text-graphite-500">O que ja foi baixado do almoxarifado nas OS deste ativo - diferente do BOM acima, que so lista o que e' compativel.</p>
+            {!partsHistory || partsHistory.length === 0 ? (
+              <EmptyState title="Nenhum consumo registrado" description="Aparece aqui assim que uma OS deste ativo consumir uma peca do almoxarifado." />
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {partsHistory.map((entry) => (
+                  <li key={entry.sparePart.id} className="py-2.5 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-graphite-800">{entry.sparePart.name}</span>
+                      <span className="text-graphite-600">{entry.totalQuantity} {entry.sparePart.unit}</span>
+                    </div>
+                    <p className="text-xs text-graphite-400">
+                      Usada {entry.timesUsed}x · ultima vez {formatDate(entry.lastUsedAt)}
+                      {entry.lastWorkOrder && (
+                        <>
+                          {" "}·{" "}
+                          <Link to={`/gestao/manutencao/ordens/${entry.lastWorkOrder.id}`} className="hover:underline">{entry.lastWorkOrder.number}</Link>
+                        </>
+                      )}
+                    </p>
                   </li>
                 ))}
               </ul>

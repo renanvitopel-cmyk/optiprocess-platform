@@ -16,6 +16,16 @@ function withDerivedStatus<T extends { status: InstrumentStatus; nextDueDate: Da
   return { ...instrument, derivedStatus: derived };
 }
 
+/** Resolve o nivel hierarquico (Planta/Area/Maquina/Subconjunto/Parte) do "type" (texto
+ * livre) de cada ativo, casando por nome (case-insensitive) contra o catalogo AssetType -
+ * so pra arvore de ativos escolher o icone certo, sem precisar virar chave estrangeira. */
+async function attachAssetTypeLevel<T extends { type: string }>(instruments: T[]): Promise<(T & { assetTypeLevel: string | null })[]> {
+  if (instruments.length === 0) return [];
+  const types = await prisma.assetType.findMany({ where: { level: { not: null } }, select: { name: true, level: true } });
+  const byName = new Map(types.map((t) => [t.name.toLowerCase(), t.level]));
+  return instruments.map((i) => ({ ...i, assetTypeLevel: byName.get(i.type.toLowerCase()) ?? null }));
+}
+
 export const listInstruments = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
@@ -59,7 +69,8 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
     prisma.instrument.count({ where }),
   ]);
 
-  res.json(buildPagedResult(items.map(withDerivedStatus), total, pageParams));
+  const withLevel = await attachAssetTypeLevel(items.map(withDerivedStatus));
+  res.json(buildPagedResult(withLevel, total, pageParams));
 });
 
 const instrumentRefSelect = { id: true, type: true, model: true, serialNumber: true, tag: true } as const;
@@ -89,7 +100,8 @@ export const getInstrument = asyncHandler(async (req: Request, res: Response) =>
     },
   });
   if (!instrument) throw new NotFoundError("Instrumento");
-  res.json(withDerivedStatus(instrument));
+  const [withLevel] = await attachAssetTypeLevel([withDerivedStatus(instrument)]);
+  res.json(withLevel);
 });
 
 const instrumentSchema = z.object({

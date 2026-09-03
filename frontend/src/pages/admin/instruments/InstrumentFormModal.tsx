@@ -39,9 +39,11 @@ interface Props {
   /** Pre-preenche o ativo pai e o cliente quando aberto a partir de "Adicionar filho" na ficha do pai. */
   initialParentId?: string;
   initialClientId?: string;
+  /** Sugestao de TAG (ex.: "F01-RMP-") a partir do TAG do pai - so um valor inicial, o campo continua livre pra editar/apagar. */
+  initialTagPrefix?: string;
 }
 
-export function InstrumentFormModal({ open, onClose, onSaved, instrument, initialParentId, initialClientId }: Props) {
+export function InstrumentFormModal({ open, onClose, onSaved, instrument, initialParentId, initialClientId, initialTagPrefix }: Props) {
   const { notify } = useToast();
   const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -69,10 +71,10 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               criticality: instrument.criticality,
               parentId: instrument.parentId ?? "",
             }
-          : { criticality: "MEDIUM", parentId: initialParentId ?? "", clientId: initialClientId ?? "" },
+          : { criticality: "MEDIUM", parentId: initialParentId ?? "", clientId: initialClientId ?? "", tag: initialTagPrefix ?? "" },
       );
     }
-  }, [open, instrument, initialParentId, initialClientId, reset]);
+  }, [open, instrument, initialParentId, initialClientId, initialTagPrefix, reset]);
 
   async function onSubmit(values: FormValues) {
     try {
@@ -106,7 +108,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <AssetTypeInput required error={errors.type?.message} {...register("type")} />
+          <AssetTypeInput required currentValue={instrument?.type} error={errors.type?.message} {...register("type")} />
           <SelectInput
             label="Criticidade"
             hint="Quanto uma parada deste ativo pesa pra empresa - guia prioridade de OS e estoque de pecas."

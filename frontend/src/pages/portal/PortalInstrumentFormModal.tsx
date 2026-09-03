@@ -31,11 +31,13 @@ interface Props {
   instrument?: Instrument;
   /** Pre-preenche o ativo pai quando aberto pelo "Adicionar componente" da ficha do pai. */
   initialParentId?: string;
+  /** Sugestao de TAG (ex.: "F01-RMP-") a partir do TAG do pai - so um valor inicial, o campo continua livre pra editar/apagar. */
+  initialTagPrefix?: string;
 }
 
 /** Cadastro de ativo pelo proprio cliente no portal - sem escolha de empresa (o backend
  * sempre grava para a empresa do usuario logado) e so com os campos essenciais. */
-export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, initialParentId }: Props) {
+export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, initialParentId, initialTagPrefix }: Props) {
   const { notify } = useToast();
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -56,10 +58,10 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
               criticality: instrument.criticality,
               parentId: instrument.parentId ?? "",
             }
-          : { criticality: "MEDIUM", parentId: initialParentId ?? "" },
+          : { criticality: "MEDIUM", parentId: initialParentId ?? "", tag: initialTagPrefix ?? "" },
       );
     }
-  }, [open, instrument, initialParentId, reset]);
+  }, [open, instrument, initialParentId, initialTagPrefix, reset]);
 
   async function onSubmit(values: FormValues) {
     try {
@@ -97,7 +99,7 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <AssetTypeInput required error={errors.type?.message} {...register("type")} />
+          <AssetTypeInput required currentValue={instrument?.type} error={errors.type?.message} {...register("type")} />
           <SelectInput
             label="Criticidade"
             hint="Quanto uma parada deste ativo pesa pra sua operacao."

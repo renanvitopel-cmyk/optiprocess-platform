@@ -139,6 +139,9 @@ export interface Instrument {
   derivedStatus?: InstrumentStatus;
   // Quanto uma parada deste ativo pesa pra empresa - guia prioridade de OS e estoque.
   criticality: MaintenancePriority;
+  // Nivel hierarquico resolvido a partir do catalogo AssetType (por nome) - so pra
+  // escolher o icone certo na arvore de ativos, ausente quando o tipo nao tem nivel definido.
+  assetTypeLevel?: AssetHierarchyLevel | null;
   calibrations?: CalibrationSummary[];
   // Arvore de ativos: um filho e' um Ativo completo apontando para o pai.
   parentId?: string | null;
@@ -449,10 +452,13 @@ export interface Meter {
   readings?: MeterReading[];
 }
 
+export type AssetHierarchyLevel = "PLANT" | "AREA" | "MACHINE" | "SUBASSEMBLY" | "PART";
+
 export interface AssetType {
   id: string;
   clientId: string | null;
   name: string;
+  level: AssetHierarchyLevel | null;
   active: boolean;
 }
 

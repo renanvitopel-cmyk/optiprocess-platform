@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Minus, Gauge } from "lucide-react";
+import { Plus, Minus, Building2, Box, AlertTriangle } from "lucide-react";
 import type { Instrument } from "../api/types";
+import { ASSET_LEVEL_ICONS } from "../lib/assetHierarchy";
 import { StatusBadge } from "./StatusBadge";
 import { EmptyState } from "./EmptyState";
 
@@ -47,10 +48,10 @@ export function AssetTree({ instruments, linkBase, rootLabel }: AssetTreeProps) 
     <div className="card p-5">
       {rootLabel && (
         <div className="mb-2 flex items-center gap-2 pb-2 text-sm font-semibold text-navy-900">
-          <Gauge className="h-4 w-4" /> {rootLabel}
+          <Building2 className="h-4 w-4" /> {rootLabel}
         </div>
       )}
-      <ul className={rootLabel ? "pl-1" : ""}>
+      <ul>
         {tree.map((node) => (
           <TreeRow key={node.instrument.id} node={node} linkBase={linkBase} depth={0} defaultOpen />
         ))}
@@ -64,12 +65,14 @@ function TreeRow({ node, linkBase, depth, defaultOpen = false }: { node: TreeNod
   const [open, setOpen] = useState(defaultOpen);
   const { instrument, children } = node;
   const hasChildren = children.length > 0;
+  const LevelIcon = (instrument.assetTypeLevel && ASSET_LEVEL_ICONS[instrument.assetTypeLevel]) || Box;
+  const alert = instrument.criticality === "CRITICAL" || (instrument.derivedStatus ?? instrument.status) === "EXPIRED";
 
   return (
-    <li>
+    <li className={depth > 0 ? "border-l border-gray-200" : ""}>
       <div
         className="group flex cursor-pointer items-center gap-2 rounded-md py-1.5 pr-2 hover:bg-navy-50/60"
-        style={{ paddingLeft: `${depth * 20}px` }}
+        style={{ paddingLeft: `${depth * 20 + 4}px` }}
         onClick={() => navigate(`${linkBase}/${instrument.id}`)}
       >
         {hasChildren ? (
@@ -87,8 +90,10 @@ function TreeRow({ node, linkBase, depth, defaultOpen = false }: { node: TreeNod
         ) : (
           <span className="h-5 w-5 shrink-0" />
         )}
-        <span className="font-medium text-navy-900">TAG {instrument.tag ?? "-"}</span>
-        <span className="text-xs text-graphite-400">{instrument.type} - {instrument.model}</span>
+        <LevelIcon className="h-4 w-4 shrink-0 text-navy-500" />
+        <span className="font-mono text-sm font-semibold text-navy-900">{instrument.tag ?? "sem TAG"}</span>
+        <span className="text-xs text-graphite-400">– {instrument.type} · {instrument.model}</span>
+        {alert && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-safety-red" aria-label="Atencao: critico ou vencido" />}
         <span className="ml-auto flex shrink-0 gap-1.5">
           {(instrument.criticality === "CRITICAL" || instrument.criticality === "HIGH") && (
             <StatusBadge status={instrument.criticality} />

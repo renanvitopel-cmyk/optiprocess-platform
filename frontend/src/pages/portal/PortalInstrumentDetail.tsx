@@ -390,6 +390,7 @@ export default function PortalInstrumentDetail() {
         open={addChildOpen}
         onClose={() => setAddChildOpen(false)}
         initialParentId={instrument.id}
+        initialTagPrefix={instrument.tag ? `${instrument.tag}-` : undefined}
         onSaved={() => {
           setAddChildOpen(false);
           queryClient.invalidateQueries({ queryKey: ["portal-instrument", id] });

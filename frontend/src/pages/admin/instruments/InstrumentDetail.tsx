@@ -438,6 +438,7 @@ export default function InstrumentDetail() {
         onClose={() => setAddChildOpen(false)}
         initialParentId={instrument.id}
         initialClientId={instrument.clientId}
+        initialTagPrefix={instrument.tag ? `${instrument.tag}-` : undefined}
         onSaved={() => {
           setAddChildOpen(false);
           queryClient.invalidateQueries({ queryKey: ["instrument", id] });

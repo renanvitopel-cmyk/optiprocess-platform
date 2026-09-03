@@ -63,6 +63,17 @@ enum MaintenancePriority {
   CRITICAL
 }
 
+// Nivel do ativo na hierarquia funcional (planta -> maquina -> subconjunto -> parte),
+// usado pelo catalogo AssetType so pra escolher o icone certo na arvore de ativos -
+// nao trava o que pode ser filho de que (a arvore continua livre por parentId).
+enum AssetHierarchyLevel {
+  PLANT
+  AREA
+  MACHINE
+  SUBASSEMBLY
+  PART
+}
+
 enum MaintenanceOrderStatus {
   OPEN
   IN_PROGRESS
@@ -885,6 +896,9 @@ model AssetType {
   clientId String?
   client   Client? @relation(fields: [clientId], references: [id])
   name     String
+  // Opcional: tipos antigos (Motor, Compressor...) ja cadastrados nao tem nivel definido -
+  // a arvore so troca o icone quando sabe o nivel, sem bloquear nada por falta dele.
+  level    AssetHierarchyLevel?
   active   Boolean @default(true)
   createdAt DateTime @default(now())
 

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { AssetHierarchyLevel } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/errors";
@@ -32,6 +33,10 @@ export const listAssetTypes = asyncHandler(async (req: Request, res: Response) =
 const assetTypeSchema = z.object({
   name: z.string().min(2, "Informe o nome do tipo."),
   clientId: z.string().uuid().nullish(),
+  // Nivel na hierarquia funcional (Planta/Area/Maquina/Subconjunto/Parte) - so pra arvore
+  // de ativos escolher o icone certo. Opcional: tipos antigos (Motor, Compressor...) nao
+  // precisam disso pra continuar funcionando.
+  level: z.nativeEnum(AssetHierarchyLevel).nullish(),
 });
 
 export const createAssetType = asyncHandler(async (req: Request, res: Response) => {

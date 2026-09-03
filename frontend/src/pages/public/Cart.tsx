@@ -14,7 +14,7 @@ import { EmptyState } from "../../components/EmptyState";
 
 const schema = z.object({
   contactName: z.string().min(2, "Informe seu nome."),
-  contactEmail: z.string().email("Informe um e-mail valido."),
+  contactEmail: z.string().email("Informe um e-mail válido."),
   contactPhone: z.string().optional(),
   message: z.string().optional(),
 });
@@ -57,9 +57,9 @@ export default function Cart() {
     return (
       <div className="container-page section-y max-w-lg text-center">
         <ShoppingCart className="mx-auto h-12 w-12 text-safety-green" />
-        <h1 className="mt-4 text-2xl font-bold text-navy-900">Pedido de cotacao enviado!</h1>
+        <h1 className="mt-4 text-2xl font-bold text-navy-900">Pedido de cotação enviado!</h1>
         <p className="mt-2 text-graphite-500">
-          Numero da solicitacao: <strong>{submitted}</strong>. Nossa equipe comercial vai analisar e retornar em
+          Número da solicitação: <strong>{submitted}</strong>. Nossa equipe comercial vai analisar e retornar em
           breve com valores e prazos.
         </p>
         <button className="btn-primary mt-6" onClick={() => navigate("/produtos")}>
@@ -74,8 +74,8 @@ export default function Cart() {
       <div className="container-page section-y">
         <EmptyState
           icon={ShoppingCart}
-          title="Seu carrinho esta vazio"
-          description="Adicione produtos do catalogo para solicitar uma cotacao."
+          title="Seu carrinho está vazio"
+          description="Adicione produtos do catálogo para solicitar uma cotação."
           action={
             <Link to="/produtos" className="btn-primary">
               Ver produtos
@@ -89,7 +89,7 @@ export default function Cart() {
   return (
     <div className="container-page section-y">
       <h1 className="text-2xl font-bold text-navy-900 sm:text-3xl">Seu carrinho</h1>
-      <p className="mt-2 text-graphite-500">Revise os itens e envie como pedido de cotacao para nossa equipe comercial.</p>
+      <p className="mt-2 text-graphite-500">Revise os itens e envie como pedido de cotação para nossa equipe comercial.</p>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-3">
         <div className="table-shell lg:col-span-2">
@@ -138,9 +138,9 @@ export default function Cart() {
           <TextInput label="Nome" required error={errors.contactName?.message} {...register("contactName")} />
           <TextInput label="E-mail" type="email" required error={errors.contactEmail?.message} {...register("contactEmail")} />
           <TextInput label="Telefone / WhatsApp" error={errors.contactPhone?.message} {...register("contactPhone")} />
-          <TextareaInput label="Observacoes" rows={3} {...register("message")} />
+          <TextareaInput label="Observações" rows={3} {...register("message")} />
           <button type="submit" className="btn-primary w-full" disabled={isSubmitting}>
-            {isSubmitting ? "Enviando..." : "Enviar pedido de cotacao"}
+            {isSubmitting ? "Enviando..." : "Enviar pedido de cotação"}
           </button>
         </form>
       </div>

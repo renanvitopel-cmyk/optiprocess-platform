@@ -13,7 +13,7 @@ import { buildWhatsAppLink } from "../../components/WhatsAppButton";
 
 const schema = z.object({
   contactName: z.string().min(2, "Informe seu nome."),
-  contactEmail: z.string().email("Informe um e-mail valido."),
+  contactEmail: z.string().email("Informe um e-mail válido."),
   contactPhone: z.string().optional(),
   message: z.string().min(5, "Escreva sua mensagem."),
 });
@@ -51,7 +51,7 @@ export default function Contact() {
       <section className="bg-navy-950 py-14 text-white">
         <div className="container-page">
           <h1 className="text-3xl font-bold text-white sm:text-4xl">Contato</h1>
-          <p className="mt-3 max-w-2xl text-navy-200">Fale com a nossa equipe. Respondemos o mais rapido possivel.</p>
+          <p className="mt-3 max-w-2xl text-navy-200">Fale com a nossa equipe. Respondemos o mais rápido possível.</p>
         </div>
       </section>
 
@@ -63,7 +63,7 @@ export default function Contact() {
             <ContactRow icon={Mail} text={company.email} />
             {config?.whatsappNumber && (
               <a
-                href={buildWhatsAppLink(config.whatsappNumber, "Ola! Gostaria de falar com a OptiProcess.")}
+                href={buildWhatsAppLink(config.whatsappNumber, "Olá! Gostaria de falar com a OptiProcess.")}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-primary w-full justify-center"
@@ -78,7 +78,7 @@ export default function Contact() {
               <div className="card flex flex-col items-center gap-3 p-8 text-center">
                 <CheckCircle2 className="h-12 w-12 text-safety-green" />
                 <h2 className="text-xl font-bold text-navy-900">Mensagem enviada!</h2>
-                <p className="text-graphite-500">Retornaremos o mais breve possivel.</p>
+                <p className="text-graphite-500">Retornaremos o mais breve possível.</p>
               </div>
             ) : (
               <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6" noValidate>

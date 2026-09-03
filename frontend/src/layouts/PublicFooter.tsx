@@ -13,7 +13,7 @@ export function PublicFooter() {
         </div>
 
         <div>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-200">Servicos</h3>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-200">Serviços</h3>
           <ul className="space-y-2 text-sm text-navy-300">
             {serviceLines.map((s) => (
               <li key={s.slug}>
@@ -38,7 +38,7 @@ export function PublicFooter() {
               <Link to="/validar-certificado" className="hover:text-safety-yellow">Validar certificado</Link>
             </li>
             <li>
-              <Link to="/orcamento" className="hover:text-safety-yellow">Solicitar orcamento</Link>
+              <Link to="/orcamento" className="hover:text-safety-yellow">Solicitar orçamento</Link>
             </li>
           </ul>
         </div>

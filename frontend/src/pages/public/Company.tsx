@@ -16,14 +16,14 @@ export default function Company() {
           <div className="card p-6">
             <div className="flex items-center gap-2 text-navy-800">
               <Target className="h-5 w-5" />
-              <h2 className="text-lg font-bold">Missao</h2>
+              <h2 className="text-lg font-bold">Missão</h2>
             </div>
             <p className="mt-3 text-graphite-600">{company.mission}</p>
           </div>
           <div className="card p-6">
             <div className="flex items-center gap-2 text-navy-800">
               <Eye className="h-5 w-5" />
-              <h2 className="text-lg font-bold">Visao</h2>
+              <h2 className="text-lg font-bold">Visão</h2>
             </div>
             <p className="mt-3 text-graphite-600">{company.vision}</p>
           </div>

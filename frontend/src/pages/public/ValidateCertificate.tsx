@@ -53,9 +53,9 @@ export default function ValidateCertificate() {
         <div className="container-page">
           <div className="mx-auto flex max-w-xl flex-col items-center text-center">
             <QrCode className="h-10 w-10 text-safety-yellow" />
-            <h1 className="mt-3 text-3xl font-bold text-white sm:text-4xl">Validacao de certificado</h1>
+            <h1 className="mt-3 text-3xl font-bold text-white sm:text-4xl">Validação de certificado</h1>
             <p className="mt-3 text-navy-200">
-              Digite o numero do certificado ou escaneie o QR Code impresso no documento para verificar sua
+              Digite o número do certificado ou escaneie o QR Code impresso no documento para verificar sua
               autenticidade.
             </p>
           </div>
@@ -89,8 +89,8 @@ export default function ValidateCertificate() {
             {!loading && result && !result.valid && (
               <div className="flex flex-col items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-8 text-center">
                 <ShieldX className="h-10 w-10 text-safety-red" />
-                <p className="font-semibold text-safety-red">Certificado nao encontrado</p>
-                <p className="text-sm text-graphite-600">{result.message ?? "Verifique o numero informado e tente novamente."}</p>
+                <p className="font-semibold text-safety-red">Certificado não encontrado</p>
+                <p className="text-sm text-graphite-600">{result.message ?? "Verifique o número informado e tente novamente."}</p>
               </div>
             )}
 
@@ -99,21 +99,21 @@ export default function ValidateCertificate() {
                 <div className="flex items-center gap-3">
                   <StatusIcon status={result.status} />
                   <div>
-                    <p className="text-lg font-bold text-navy-900">Certificado valido</p>
+                    <p className="text-lg font-bold text-navy-900">Certificado válido</p>
                     <p className="text-sm text-graphite-500">{statusLabel(result.status)}</p>
                   </div>
                 </div>
 
                 <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-                  <Field label="Numero do certificado" value={result.certificateNumber} />
-                  <Field label="Revisao" value={String(result.revisionNumber)} />
+                  <Field label="Número do certificado" value={result.certificateNumber} />
+                  <Field label="Revisão" value={String(result.revisionNumber)} />
                   <Field label="Cliente" value={result.client} />
                   <Field label="Resultado" value={result.result ? RESULT_LABELS[result.result] ?? result.result : "-"} />
                   <Field label="Equipamento" value={result.instrument?.type} />
                   <Field label="Marca / Modelo" value={`${result.instrument?.manufacturer ?? ""} ${result.instrument?.model ?? ""}`} />
-                  <Field label="Numero de serie" value={result.instrument?.serialNumber} />
-                  <Field label="Tag / Patrimonio" value={result.instrument?.tag ?? "-"} />
-                  <Field label="Data da calibracao" value={formatDate(result.calibrationDate)} />
+                  <Field label="Número de série" value={result.instrument?.serialNumber} />
+                  <Field label="Tag / Patrimônio" value={result.instrument?.tag ?? "-"} />
+                  <Field label="Data da calibração" value={formatDate(result.calibrationDate)} />
                   <Field label="Validade" value={formatDate(result.validUntil)} />
                 </dl>
 
@@ -122,7 +122,7 @@ export default function ValidateCertificate() {
                     <Download className="h-4 w-4" /> {downloading ? "Abrindo..." : "Visualizar certificado (PDF)"}
                   </button>
                 ) : (
-                  <p className="mt-6 text-sm text-graphite-500">O documento em PDF nao esta disponivel para visualizacao publica.</p>
+                  <p className="mt-6 text-sm text-graphite-500">O documento em PDF não está disponível para visualização pública.</p>
                 )}
               </div>
             )}
@@ -149,8 +149,8 @@ function statusBorderClass(status?: string) {
 }
 
 function statusLabel(status?: string) {
-  if (status === "EXPIRED") return "Atencao: certificado vencido";
-  if (status === "DUE_SOON") return "Proximo do vencimento";
+  if (status === "EXPIRED") return "Atenção: certificado vencido";
+  if (status === "DUE_SOON") return "Próximo do vencimento";
   return "Dentro da validade";
 }
 

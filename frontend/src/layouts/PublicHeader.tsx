@@ -7,9 +7,10 @@ import { useCart } from "../cart/CartContext";
 import { Logo } from "../components/Logo";
 
 const NAV_LINKS = [
-  { to: "/", label: "Inicio" },
+  { to: "/", label: "Início" },
   { to: "/empresa", label: "Empresa" },
-  { to: "/servicos", label: "Servicos" },
+  { to: "/servicos", label: "Serviços" },
+  { to: "/servicos/rlp-maintenance-cmms", label: "Software de Manutenção" },
   { to: "/produtos", label: "Produtos" },
   { to: "/validar-certificado", label: "Validar certificado" },
   { to: "/contato", label: "Contato" },
@@ -23,11 +24,11 @@ export function PublicHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-navy-900/10 bg-navy-950 text-white">
       <div className="container-page flex h-16 items-center justify-between">
-        <Link to="/" aria-label="OptiProcess - pagina inicial">
+        <Link to="/" aria-label="OptiProcess - página inicial">
           <Logo variant="light" size="md" />
         </Link>
 
-        <nav className="hidden items-center gap-6 text-sm font-medium lg:flex">
+        <nav className="hidden items-center gap-5 text-sm font-medium xl:flex">
           {NAV_LINKS.map((link) => (
             <NavLink
               key={link.to}
@@ -42,7 +43,7 @@ export function PublicHeader() {
           ))}
         </nav>
 
-        <div className="hidden items-center gap-3 lg:flex">
+        <div className="hidden items-center gap-3 xl:flex">
           <Link to="/carrinho" className="relative text-navy-100 hover:text-safety-yellow" aria-label="Carrinho">
             <ShoppingCart className="h-5 w-5" />
             {totalItems > 0 && (
@@ -52,11 +53,11 @@ export function PublicHeader() {
             )}
           </Link>
           <Link to="/orcamento" className="btn-primary btn-sm">
-            Solicitar orcamento
+            Solicitar orçamento
           </Link>
           {user ? (
             <Link to={homeForRole(user.role)} className="btn-outline btn-sm border-white/30 bg-transparent text-white hover:bg-white/10">
-              Minha area <ChevronDown className="h-3.5 w-3.5" />
+              Minha área <ChevronDown className="h-3.5 w-3.5" />
             </Link>
           ) : (
             <Link to="/entrar" className="btn-outline btn-sm border-white/30 bg-transparent text-white hover:bg-white/10">
@@ -67,7 +68,7 @@ export function PublicHeader() {
 
         <button
           type="button"
-          className="text-white lg:hidden"
+          className="text-white xl:hidden"
           onClick={() => setOpen((v) => !v)}
           aria-label={open ? "Fechar menu" : "Abrir menu"}
           aria-expanded={open}
@@ -77,7 +78,7 @@ export function PublicHeader() {
       </div>
 
       {open && (
-        <div className="border-t border-white/10 bg-navy-950 lg:hidden">
+        <div className="border-t border-white/10 bg-navy-950 xl:hidden">
           <nav className="container-page flex flex-col gap-1 py-3 text-sm font-medium">
             {NAV_LINKS.map((link) => (
               <NavLink
@@ -94,14 +95,14 @@ export function PublicHeader() {
               Carrinho {totalItems > 0 && `(${totalItems})`}
             </Link>
             <Link to="/orcamento" onClick={() => setOpen(false)} className="btn-primary btn-sm mt-2 justify-center">
-              Solicitar orcamento
+              Solicitar orçamento
             </Link>
             <Link
               to={user ? homeForRole(user.role) : "/entrar"}
               onClick={() => setOpen(false)}
               className="btn-outline btn-sm justify-center border-white/30 bg-transparent text-white hover:bg-white/10"
             >
-              {user ? "Minha area" : "Entrar"}
+              {user ? "Minha área" : "Entrar"}
             </Link>
           </nav>
         </div>

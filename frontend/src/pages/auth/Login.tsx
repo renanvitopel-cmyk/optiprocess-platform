@@ -10,7 +10,7 @@ import { getApiErrorMessage } from "../../api/client";
 import { LogoFull } from "../../components/Logo";
 
 const schema = z.object({
-  email: z.string().email("Informe um e-mail valido."),
+  email: z.string().email("Informe um e-mail válido."),
   password: z.string().min(1, "Informe a senha."),
 });
 type FormValues = z.infer<typeof schema>;
@@ -34,7 +34,7 @@ export default function Login() {
       const from = (location.state as { from?: string } | null)?.from;
       navigate(from ?? homeForRole(user.role), { replace: true });
     } catch (error) {
-      setServerError(getApiErrorMessage(error, "Nao foi possivel entrar. Verifique suas credenciais."));
+      setServerError(getApiErrorMessage(error, "Não foi possível entrar. Verifique suas credenciais."));
     }
   }
 
@@ -43,7 +43,7 @@ export default function Login() {
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
         <div className="mb-6 flex flex-col items-center text-center">
           <LogoFull variant="dark" className="h-32" />
-          <p className="mt-3 text-sm text-graphite-500">Acesse a gestao interna ou o portal do cliente</p>
+          <p className="mt-3 text-sm text-graphite-500">Acesse a gestão interna ou o portal do cliente</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>

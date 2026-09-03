@@ -10,12 +10,13 @@ export default function ServiceDetail() {
   if (!service) return <NotFound />;
 
   const isPlatform = !!service.controls;
+  const quoteLink = `/orcamento?servico=${service.serviceCategory}`;
 
   return (
     <div>
       <section className="bg-navy-950 py-16 text-white">
         <div className="container-page">
-          <p className="text-sm font-semibold text-safety-yellow">{service.subtitle ?? "Servicos"}</p>
+          <p className="text-sm font-semibold text-safety-yellow">{service.subtitle ?? "Serviços"}</p>
           <h1 className="mt-1 text-3xl font-bold text-white sm:text-4xl">{service.title}</h1>
           <p className="mt-3 max-w-2xl text-navy-200">{service.shortDescription}</p>
         </div>
@@ -25,7 +26,7 @@ export default function ServiceDetail() {
         <div className="container-page grid gap-10 lg:grid-cols-3">
           <div className="space-y-10 lg:col-span-2">
             <div>
-              <h2 className="text-xl font-bold text-navy-900">{isPlatform ? "Controles de manutencao" : "O que fazemos"}</h2>
+              <h2 className="text-xl font-bold text-navy-900">{isPlatform ? "Controles de manutenção" : "O que fazemos"}</h2>
               <ul className="mt-4 space-y-3">
                 {(service.controls ?? service.items).map((item) => (
                   <li key={item} className="flex items-start gap-3 text-graphite-700">
@@ -38,7 +39,7 @@ export default function ServiceDetail() {
 
             {service.benefits && (
               <div>
-                <h2 className="text-xl font-bold text-navy-900">Beneficios de assinar</h2>
+                <h2 className="text-xl font-bold text-navy-900">Benefícios de assinar</h2>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   {service.benefits.map((b) => (
                     <div key={b.title} className="card p-5">
@@ -53,8 +54,8 @@ export default function ServiceDetail() {
 
             {service.integrations && (
               <div>
-                <h2 className="text-xl font-bold text-navy-900">Integracoes</h2>
-                <p className="mt-1 text-sm text-graphite-500">O CMMS conversa com o resto do que a OptiProcess ja faz por voce - nada fica solto.</p>
+                <h2 className="text-xl font-bold text-navy-900">Integrações</h2>
+                <p className="mt-1 text-sm text-graphite-500">O CMMS conversa com o resto do que a OptiProcess já faz por você - nada fica solto.</p>
                 <ul className="mt-4 space-y-3">
                   {service.integrations.map((item) => (
                     <li key={item} className="flex items-start gap-3 text-graphite-700">
@@ -68,14 +69,14 @@ export default function ServiceDetail() {
           </div>
 
           <div className="card h-fit p-6">
-            <h3 className="font-bold text-navy-900">{isPlatform ? "Quer assinar o CMMS?" : "Precisa deste servico?"}</h3>
+            <h3 className="font-bold text-navy-900">{isPlatform ? "Quer assinar o CMMS?" : "Precisa deste serviço?"}</h3>
             <p className="mt-2 text-sm text-graphite-500">
               {isPlatform
-                ? "Fale com nossa equipe pra conhecer os planos de assinatura e colocar sua manutencao pra rodar no sistema."
-                : "Solicite um orcamento sem compromisso e nossa equipe tecnica entrara em contato."}
+                ? "Fale com nossa equipe pra conhecer os planos de assinatura e colocar sua manutenção pra rodar no sistema."
+                : "Solicite um orçamento sem compromisso e nossa equipe técnica entrará em contato."}
             </p>
-            <Link to="/orcamento" className="btn-primary mt-4 w-full justify-center">
-              {isPlatform ? "Falar com um consultor" : "Solicitar orcamento"} <ArrowRight className="h-4 w-4" />
+            <Link to={quoteLink} className="btn-primary mt-4 w-full justify-center">
+              {service.ctaLabel} <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </div>
@@ -83,7 +84,7 @@ export default function ServiceDetail() {
 
       <section className="section-y bg-gray-50">
         <div className="container-page">
-          <h2 className="text-xl font-bold text-navy-900">Outros servicos</h2>
+          <h2 className="text-xl font-bold text-navy-900">Outros serviços</h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             {serviceLines
               .filter((s) => s.slug !== service.slug)

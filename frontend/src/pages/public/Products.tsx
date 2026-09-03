@@ -24,7 +24,7 @@ export default function Products() {
         <div className="container-page">
           <h1 className="text-3xl font-bold text-white sm:text-4xl">Produtos</h1>
           <p className="mt-3 max-w-2xl text-navy-200">
-            Materiais eletricos, automacao Gefran, inversores e carregadores veiculares WEG WEMOB.
+            Materiais elétricos, automação Gefran, inversores e carregadores veiculares WEG WEMOB.
           </p>
         </div>
       </section>
@@ -90,10 +90,10 @@ export default function Products() {
                 Anterior
               </button>
               <span className="flex items-center px-2 text-sm text-graphite-500">
-                Pagina {data.page} de {data.totalPages}
+                Página {data.page} de {data.totalPages}
               </span>
               <button className="btn-outline btn-sm" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}>
-                Proxima
+                Próxima
               </button>
             </div>
           )}

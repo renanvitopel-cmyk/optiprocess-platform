@@ -57,7 +57,7 @@ export default function ProductDetail() {
               rel="noopener noreferrer"
               className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-navy-700 hover:underline"
             >
-              <FileText className="h-4 w-4" /> Ficha tecnica
+              <FileText className="h-4 w-4" /> Ficha técnica
             </a>
           )}
 
@@ -84,7 +84,7 @@ export default function ProductDetail() {
               </button>
             </div>
           ) : (
-            <p className="mt-6 font-medium text-safety-red">Produto indisponivel no momento. Fale com nosso comercial.</p>
+            <p className="mt-6 font-medium text-safety-red">Produto indisponível no momento. Fale com nosso comercial.</p>
           )}
         </div>
       </div>

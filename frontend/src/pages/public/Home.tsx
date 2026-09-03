@@ -1,11 +1,10 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ShieldCheck, BadgeCheck, FileWarning, Zap, Star, Wrench } from "lucide-react";
+import { ArrowRight, ShieldCheck, BadgeCheck, FileWarning, Zap, Star, Wrench, MapPin } from "lucide-react";
 import { company, differentials, serviceLines } from "../../lib/companyInfo";
 import { listProducts } from "../../api/products";
 import { formatCurrency } from "../../lib/format";
 import { InlineSpinner } from "../../components/Spinner";
-import { LogoFull } from "../../components/Logo";
 
 export default function Home() {
   const { data: featured, isLoading } = useQuery({
@@ -17,30 +16,27 @@ export default function Home() {
     <div>
       <section className="relative overflow-hidden bg-navy-950 text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(245,180,0,0.12),transparent_55%)]" />
-        <div className="container-page relative flex flex-col items-center gap-10 py-12 sm:py-16 lg:flex-row lg:items-center lg:justify-between lg:gap-12">
-          <div className="flex flex-col items-start gap-6 lg:max-w-xl">
-            <span className="inline-flex items-center gap-2 rounded-full border border-safety-yellow/30 bg-safety-yellow/10 px-3 py-1 text-xs font-semibold text-safety-yellow">
-              <ShieldCheck className="h-3.5 w-3.5" /> Seguranca e excelencia tecnica industrial
-            </span>
-            <h1 className="max-w-2xl text-4xl font-extrabold leading-tight text-white sm:text-5xl">
-              Eletrica, instrumentacao e calibracao com a confianca que a sua operacao precisa
-            </h1>
-            <p className="max-w-xl text-lg text-navy-200">
-              {company.fullName}. Manutencao eletrica predial e industrial, calibracao rastreavel, laudos tecnicos e
-              assistencia especializada para manter sua planta segura e em pleno funcionamento.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <Link to="/orcamento" className="btn-primary">
-                Solicitar orcamento <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link to="/servicos" className="btn-outline border-white/30 bg-transparent text-white hover:bg-white/10">
-                Conhecer servicos
-              </Link>
-            </div>
-          </div>
-
-          <div className="flex shrink-0 items-center justify-center rounded-2xl bg-white p-10 shadow-2xl sm:p-14 lg:h-80 lg:w-80">
-            <LogoFull variant="dark" className="h-40 w-auto sm:h-52" />
+        <div className="container-page relative flex flex-col items-start gap-6 py-16 sm:py-20">
+          <span className="inline-flex items-center gap-2 rounded-full border border-safety-yellow/30 bg-safety-yellow/10 px-3 py-1 text-xs font-semibold text-safety-yellow">
+            <ShieldCheck className="h-3.5 w-3.5" /> Segurança e excelência técnica industrial
+          </span>
+          <h1 className="max-w-2xl text-4xl font-extrabold leading-tight text-white sm:text-5xl">
+            Manutenção elétrica, calibração e laudos para sua operação não parar
+          </h1>
+          <p className="max-w-xl text-lg text-navy-200">
+            {company.fullName}. Manutenção elétrica predial e industrial, calibração rastreável, laudos técnicos e
+            assistência especializada para manter sua planta segura e em pleno funcionamento.
+          </p>
+          <p className="flex items-center gap-2 text-sm font-medium text-navy-300">
+            <MapPin className="h-4 w-4 text-safety-yellow" /> Atendimento em Sorocaba e região
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Link to="/orcamento" className="btn-primary">
+              Solicitar orçamento <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link to="/servicos" className="btn-outline border-white/30 bg-transparent text-white hover:bg-white/10">
+              Conhecer serviços
+            </Link>
           </div>
         </div>
       </section>
@@ -50,26 +46,26 @@ export default function Home() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <HighlightCard
               icon={BadgeCheck}
-              title="Calibracao rastreavel"
-              description="Certificados com rastreabilidade RBC, QR Code de autenticidade e validacao publica online."
+              title="Calibração rastreável"
+              description="Certificados com cadeia de rastreabilidade metrológica, QR Code de autenticidade e validação pública online."
               to="/servicos/calibracao-instrumentacao"
             />
             <HighlightCard
               icon={FileWarning}
-              title="Laudos tecnicos"
-              description="Instalacoes eletricas, termografia infravermelha, aterramento e SPDA com validade tecnica."
+              title="Laudos técnicos"
+              description="Instalações elétricas, termografia infravermelha, aterramento e SPDA com validade técnica."
               to="/servicos/laudos-tecnicos"
             />
             <HighlightCard
               icon={Zap}
-              title="Manutencao eletrica"
-              description="Predial e industrial, paineis, QGBT, CCM e motores CA/CC com equipe especializada."
+              title="Manutenção elétrica"
+              description="Predial e industrial, painéis, QGBT, CCM e motores CA/CC com equipe especializada."
               to="/servicos/manutencao-eletrica"
             />
             <HighlightCard
               icon={Wrench}
               title="RLP Maintenance CMMS"
-              description="Assine o software de gestao de manutencao: planos, ordens, almoxarifado, mao de obra e custo por ativo."
+              description="Assine o software de gestão de manutenção: planos, ordens, almoxarifado, mão de obra e custo por ativo."
               to="/servicos/rlp-maintenance-cmms"
             />
           </div>
@@ -78,9 +74,9 @@ export default function Home() {
 
       <section className="section-y bg-gray-50">
         <div className="container-page">
-          <h2 className="text-2xl font-bold text-navy-900 sm:text-3xl">Nossos servicos</h2>
+          <h2 className="text-2xl font-bold text-navy-900 sm:text-3xl">Nossos serviços</h2>
           <p className="mt-2 max-w-2xl text-graphite-500">
-            Solucoes completas para instalacao, manutencao, instrumentacao e assistencia tecnica industrial.
+            Soluções completas para instalação, manutenção, instrumentação e assistência técnica industrial.
           </p>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {serviceLines.map((service) => (
@@ -120,10 +116,10 @@ export default function Home() {
           <div className="flex items-end justify-between">
             <div>
               <h2 className="text-2xl font-bold text-navy-900 sm:text-3xl">Produtos em destaque</h2>
-              <p className="mt-2 text-graphite-500">Materiais eletricos, automacao Gefran e carregadores WEG WEMOB.</p>
+              <p className="mt-2 text-graphite-500">Materiais elétricos, automação Gefran e carregadores WEG WEMOB.</p>
             </div>
             <Link to="/produtos" className="hidden text-sm font-medium text-navy-700 hover:underline sm:inline">
-              Ver catalogo completo
+              Ver catálogo completo
             </Link>
           </div>
 
@@ -147,20 +143,20 @@ export default function Home() {
           </div>
 
           <Link to="/produtos" className="btn-outline mt-6 w-full justify-center sm:hidden">
-            Ver catalogo completo
+            Ver catálogo completo
           </Link>
         </div>
       </section>
 
       <section className="section-y bg-safety-yellow">
         <div className="container-page flex flex-col items-center gap-4 text-center">
-          <h2 className="text-2xl font-bold text-navy-950 sm:text-3xl">Precisa de um orcamento?</h2>
+          <h2 className="text-2xl font-bold text-navy-950 sm:text-3xl">Precisa de um orçamento?</h2>
           <p className="max-w-xl text-navy-900">
-            Conte-nos sobre o seu projeto ou necessidade de manutencao, calibracao ou laudo tecnico. Nossa equipe
+            Conte-nos sobre o seu projeto ou necessidade de manutenção, calibração ou laudo técnico. Nossa equipe
             responde rapidamente.
           </p>
           <Link to="/orcamento" className="btn-secondary">
-            Solicitar orcamento agora
+            Solicitar orçamento agora
           </Link>
         </div>
       </section>

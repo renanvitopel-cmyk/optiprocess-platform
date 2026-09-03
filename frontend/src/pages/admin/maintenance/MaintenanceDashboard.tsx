@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Wrench, Gauge, ClipboardList, ShieldCheck, Activity, TimerReset, ListChecks, Boxes, GitBranch, Radar, HardHat } from "lucide-react";
+import { Wrench, Gauge, ClipboardList, ClipboardPlus, ShieldCheck, Activity, TimerReset, ListChecks, Boxes, GitBranch, Radar, HardHat } from "lucide-react";
 import { getMaintenanceDashboard } from "../../../api/maintenanceWorkOrders";
 import { listClients } from "../../../api/clients";
 import { PageHeader } from "../../../components/PageHeader";
@@ -45,6 +45,9 @@ export default function MaintenanceDashboard() {
         </Link>
         <Link to={`${base}/arvore${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <GitBranch className="h-4 w-4" /> Arvore de ativos
+        </Link>
+        <Link to={`${base}/solicitacoes${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+          <ClipboardPlus className="h-4 w-4" /> Solicitacoes de servico
         </Link>
         <Link to={`${base}/ordens${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <ClipboardList className="h-4 w-4" /> Ordens de manutencao

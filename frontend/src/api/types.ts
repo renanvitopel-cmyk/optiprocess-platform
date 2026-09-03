@@ -466,6 +466,44 @@ export interface Meter {
 
 export type AssetHierarchyLevel = "PLANT" | "AREA" | "MACHINE" | "SUBASSEMBLY" | "PART";
 
+export type ServiceRequestStatus = "OPEN" | "IN_TRIAGE" | "AWAITING_INFO" | "PLANNED" | "CONVERTED" | "REJECTED" | "CLOSED";
+
+export interface ServiceRequestCategory {
+  id: string;
+  clientId: string | null;
+  name: string;
+  active: boolean;
+}
+
+export interface ServiceRequest {
+  id: string;
+  number: string;
+  clientId: string;
+  client?: ClientRef;
+  requestedById: string | null;
+  requestedBy?: { id: string; name: string } | null;
+  areaId: string | null;
+  area?: { id: string; name: string } | null;
+  instrumentId: string | null;
+  instrument?: InstrumentRef | null;
+  location: string | null;
+  categoryId: string | null;
+  category?: { id: string; name: string } | null;
+  description: string;
+  safetyImpact: boolean;
+  qualityImpact: boolean;
+  productionImpact: boolean;
+  suggestedPriority: MaintenancePriority;
+  status: ServiceRequestStatus;
+  triageById: string | null;
+  triageBy?: { id: string; name: string } | null;
+  triageNotes: string | null;
+  rejectionReason: string | null;
+  workOrderId: string | null;
+  workOrder?: { id: string; number: string; status: string } | null;
+  createdAt: string;
+}
+
 export interface Plant {
   id: string;
   clientId: string;

@@ -25,6 +25,14 @@ const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   STOPPED: { label: "Parado", tone: "red" },
   STANDBY: { label: "Reserva", tone: "navy" },
   DEACTIVATED: { label: "Desativado", tone: "graphite" },
+  // solicitacao de servico (SS) - REJECTED e' compartilhado com laudo/calibracao
+  // (rotulo generico "Reprovado"); use o prop `label` pra sobrescrever com "Rejeitada".
+  OPEN: { label: "Aberta", tone: "navy" },
+  IN_TRIAGE: { label: "Em triagem", tone: "yellow" },
+  AWAITING_INFO: { label: "Aguardando informacao", tone: "yellow" },
+  PLANNED: { label: "Planejada", tone: "navy" },
+  CONVERTED: { label: "Convertida em OS", tone: "green" },
+  CLOSED: { label: "Encerrada", tone: "graphite" },
   // ordem de servico
   BUDGET: { label: "Orcamento", tone: "graphite" },
   APPROVED: { label: "Aprovada", tone: "navy" },

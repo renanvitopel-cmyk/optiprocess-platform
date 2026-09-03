@@ -246,6 +246,13 @@ export const completeMaintenanceWorkOrder = asyncHandler(async (req: Request, re
     description: `OS ${workOrder.number} concluida`,
   });
 
+  // Se a OS veio de uma Solicitacao de Servico, a conclusao da OS fecha a solicitacao -
+  // e' o "conclusao da OS atualiza a SS" do fluxo pedido.
+  await prisma.serviceRequest.updateMany({
+    where: { workOrderId: workOrder.id, status: { notIn: ["CLOSED", "REJECTED"] } },
+    data: { status: "CLOSED" },
+  });
+
   res.json(workOrder);
 });
 

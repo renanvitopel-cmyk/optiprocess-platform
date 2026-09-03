@@ -92,6 +92,19 @@ enum MaintenanceOrderStatus {
   CANCELED
 }
 
+// Fluxo da Solicitacao de Servico (SS) - porta de entrada simples pra quem opera reportar
+// necessidade de manutencao, antes de virar uma OS de verdade. Nao confundir com o status
+// da OS (MaintenanceOrderStatus) nem com ServiceOrder (OS externa da OptiProcess).
+enum ServiceRequestStatus {
+  OPEN
+  IN_TRIAGE
+  AWAITING_INFO
+  PLANNED
+  CONVERTED
+  REJECTED
+  CLOSED
+}
+
 enum ChecklistItemResult {
   PENDING
   OK
@@ -214,6 +227,7 @@ enum AttachmentEntityType {
   CLIENT
   MAINTENANCE_WORK_ORDER
   INSTRUMENT
+  SERVICE_REQUEST
 }
 
 // Classifica o registro fotografico feito pelo tecnico em campo. As fotos entram
@@ -251,6 +265,8 @@ model User {
   contractsAsResponsible        ServiceContract[]  @relation("ContractResponsible")
   maintenancePlansAsResponsible      MaintenancePlan[]       @relation("MaintenancePlanResponsible")
   maintenanceWorkOrdersAsTechnician  MaintenanceWorkOrder[]  @relation("MaintenanceWorkOrderTechnician")
+  serviceRequestsAsRequester    ServiceRequest[]        @relation("ServiceRequestRequester")
+  serviceRequestsAsTriage       ServiceRequest[]        @relation("ServiceRequestTriage")
   auditLogs                     AuditLog[]
   notifications                 Notification[]
 
@@ -344,6 +360,8 @@ model Client {
   areas                 Area[]
   assetSystems          AssetSystem[]
   costCenters           CostCenter[]
+  serviceRequests           ServiceRequest[]
+  serviceRequestCategories  ServiceRequestCategory[]
 
   @@index([status])
   @@map("clients")
@@ -474,6 +492,7 @@ model Instrument {
   maintenancePlans      MaintenancePlan[]
   maintenanceWorkOrders MaintenanceWorkOrder[]
   assetParts            AssetPart[]
+  serviceRequests       ServiceRequest[]
 
   @@index([clientId])
   @@index([status])
@@ -979,6 +998,7 @@ model Area {
 
   assetSystems AssetSystem[]
   instruments  Instrument[]
+  serviceRequests ServiceRequest[]
 
   @@unique([plantId, name])
   @@index([clientId])
@@ -1040,6 +1060,73 @@ model FailureCode {
   @@unique([clientId, code])
   @@index([clientId])
   @@map("failure_codes")
+}
+
+// Catalogo de categorias de Solicitacao de Servico (ex.: Eletrica, Mecanica, Limpeza) -
+// mesmo padrao do FailureCode: sem clientId e' o catalogo padrao da OptiProcess, com
+// clientId e' o que a propria empresa cadastrou.
+model ServiceRequestCategory {
+  id        String   @id @default(uuid())
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id])
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  requests ServiceRequest[]
+
+  @@unique([clientId, name])
+  @@index([clientId])
+  @@map("service_request_categories")
+}
+
+// Solicitacao de Servico (SS): porta de entrada simples pra operadores/solicitantes
+// reportarem uma necessidade de manutencao. PCM faz a triagem (aprova/pede informacao/
+// rejeita); se aprovada, vira uma Ordem de Manutencao (OS) vinculada. Nao e' a OS em si
+// (isso e' MaintenanceWorkOrder) nem a Ordem de Servico externa da OptiProcess (isso e'
+// ServiceOrder) - sao os 3 conceitos distintos deste sistema.
+model ServiceRequest {
+  id           String               @id @default(uuid())
+  // Numeracao propria por cliente ("SS-1", "SS-2"...), mesmo padrao da OS do CMMS.
+  number       String
+  clientId     String
+  client       Client               @relation(fields: [clientId], references: [id])
+  requestedById String?
+  requestedBy  User?                @relation("ServiceRequestRequester", fields: [requestedById], references: [id])
+  areaId       String?
+  area         Area?                @relation(fields: [areaId], references: [id])
+  instrumentId String?
+  instrument   Instrument?          @relation(fields: [instrumentId], references: [id])
+  location     String?
+  categoryId   String?
+  category     ServiceRequestCategory? @relation(fields: [categoryId], references: [id])
+  description  String
+  // Impacto percebido pelo solicitante - ajuda a triagem a priorizar sem depender so
+  // do texto livre da descricao.
+  safetyImpact     Boolean @default(false)
+  qualityImpact    Boolean @default(false)
+  productionImpact Boolean @default(false)
+  suggestedPriority MaintenancePriority @default(MEDIUM)
+  status       ServiceRequestStatus @default(OPEN)
+  triageById   String?
+  triageBy     User?                @relation("ServiceRequestTriage", fields: [triageById], references: [id])
+  triageNotes  String?
+  rejectionReason String?
+  // Preenchido quando a triagem aprova e a OS e' gerada - a SS nunca desaparece depois
+  // de convertida, so referencia a OS.
+  workOrderId  String?              @unique
+  workOrder    MaintenanceWorkOrder? @relation(fields: [workOrderId], references: [id])
+  createdById  String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  deletedAt    DateTime?
+
+  @@unique([clientId, number])
+  @@index([clientId])
+  @@index([status])
+  @@index([instrumentId])
+  @@index([areaId])
+  @@map("service_requests")
 }
 
 model MaintenancePlan {
@@ -1128,6 +1215,9 @@ model MaintenanceWorkOrder {
   checklist MaintenanceWorkOrderChecklistItem[]
   partsUsed SparePartMovement[]
   laborEntries WorkOrderLabor[]
+  // SS que originou esta OS (quando veio de uma Solicitacao de Servico aprovada) - lado
+  // inverso de ServiceRequest.workOrderId.
+  serviceRequest ServiceRequest?
 
   @@unique([clientId, number])
   @@index([clientId])

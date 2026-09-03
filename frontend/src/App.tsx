@@ -65,6 +65,9 @@ const MaintenancePlanDetail = lazy(() => import("./pages/admin/maintenance/Maint
 const WorkOrdersList = lazy(() => import("./pages/admin/maintenance/WorkOrdersList"));
 const WorkOrderForm = lazy(() => import("./pages/admin/maintenance/WorkOrderForm"));
 const WorkOrderDetail = lazy(() => import("./pages/admin/maintenance/WorkOrderDetail"));
+const ServiceRequestsList = lazy(() => import("./pages/admin/maintenance/ServiceRequestsList"));
+const ServiceRequestForm = lazy(() => import("./pages/admin/maintenance/ServiceRequestForm"));
+const ServiceRequestDetail = lazy(() => import("./pages/admin/maintenance/ServiceRequestDetail"));
 const FailureCodesList = lazy(() => import("./pages/admin/maintenance/FailureCodesList"));
 const SparePartsList = lazy(() => import("./pages/admin/maintenance/SparePartsList"));
 const LaborResourcesList = lazy(() => import("./pages/admin/maintenance/LaborResourcesList"));
@@ -147,6 +150,9 @@ export default function App() {
                 <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
                 <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
                 <Route path="manutencao/ordens/:id" element={<WorkOrderDetail />} />
+                <Route path="manutencao/solicitacoes" element={<ServiceRequestsList />} />
+                <Route path="manutencao/solicitacoes/novo" element={<ServiceRequestForm />} />
+                <Route path="manutencao/solicitacoes/:id" element={<ServiceRequestDetail />} />
                 <Route path="manutencao/falhas" element={<FailureCodesList />} />
                 <Route path="manutencao/almoxarifado" element={<SparePartsList />} />
                 <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
@@ -194,6 +200,9 @@ export default function App() {
                 <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
                 <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
                 <Route path="manutencao/ordens/:id" element={<WorkOrderDetail />} />
+                <Route path="manutencao/solicitacoes" element={<ServiceRequestsList />} />
+                <Route path="manutencao/solicitacoes/novo" element={<ServiceRequestForm />} />
+                <Route path="manutencao/solicitacoes/:id" element={<ServiceRequestDetail />} />
                 <Route path="manutencao/falhas" element={<FailureCodesList />} />
                 <Route path="manutencao/arvore" element={<PortalInstrumentsTree />} />
                 <Route path="almoxarifado" element={<PortalSpareParts />} />

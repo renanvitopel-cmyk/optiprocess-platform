@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, Gauge, BadgeCheck, FileWarning, ClipboardList, FileSignature, ShoppingCart, User, Wrench, ShieldCheck, ListChecks, Boxes, Radar, HardHat } from "lucide-react";
+import { LayoutDashboard, Gauge, BadgeCheck, FileWarning, ClipboardList, ClipboardPlus, FileSignature, ShoppingCart, User, Wrench, ShieldCheck, ListChecks, Boxes, Radar, HardHat } from "lucide-react";
 import type { ServiceCategory } from "../api/types";
 
 export interface PortalNavItem {
@@ -18,6 +18,7 @@ const PORTAL_NAV_ITEMS: PortalNavItem[] = [
   // (que ja mostra o CMMS como conteudo central para esse cliente), o resto vira incremento.
   { to: "/portal/manutencao", label: "RLP Maintenance CMMS", icon: Wrench, requires: ["CMMS_MAINTENANCE"], exact: true },
   { to: "/portal/instrumentos", label: "Meus ativos", icon: Gauge, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
+  { to: "/portal/manutencao/solicitacoes", label: "Solicitacoes de servico", icon: ClipboardPlus, requires: ["CMMS_MAINTENANCE"] },
   { to: "/portal/manutencao/ordens", label: "Ordem de manutencao", icon: ClipboardList, requires: ["CMMS_MAINTENANCE"] },
   // "Ordem de manutencao" (CMMS, executada pela propria equipe do cliente) e "ordens de
   // servico" (atendimento tecnico feito pela OptiProcess) sao coisas diferentes - o rotulo

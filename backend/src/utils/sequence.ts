@@ -42,3 +42,17 @@ export async function nextClientMaintenanceOrderNumber(clientId: string): Promis
 
   return `OS-${counter.value}`;
 }
+
+/** Mesmo padrao de numeracao por cliente da OS do CMMS, so que para Solicitacao de
+ * Servico ("SS-1", "SS-2"...). */
+export async function nextClientServiceRequestNumber(clientId: string): Promise<string> {
+  const counterKey = `serviceRequest:${clientId}`;
+
+  const counter = await prisma.counter.upsert({
+    where: { key: counterKey },
+    create: { key: counterKey, value: 1 },
+    update: { value: { increment: 1 } },
+  });
+
+  return `SS-${counter.value}`;
+}

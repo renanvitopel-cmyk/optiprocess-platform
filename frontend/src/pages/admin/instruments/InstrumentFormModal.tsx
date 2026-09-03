@@ -28,6 +28,7 @@ const schema = z.object({
   lastCalibrationDate: z.string().optional(),
   status: z.enum(["VALID", "DUE_SOON", "EXPIRED", "IN_MAINTENANCE"]).optional(),
   criticality: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
+  operationalStatus: z.enum(["IN_OPERATION", "STOPPED", "STANDBY", "DEACTIVATED", "IN_MAINTENANCE"]).optional(),
   parentId: z.string().uuid().optional().or(z.literal("")),
   plantId: z.string().uuid().optional().or(z.literal("")),
   areaId: z.string().uuid().optional().or(z.literal("")),
@@ -74,13 +75,14 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               lastCalibrationDate: instrument.lastCalibrationDate?.slice(0, 10) ?? "",
               status: instrument.status,
               criticality: instrument.criticality,
+              operationalStatus: instrument.operationalStatus,
               parentId: instrument.parentId ?? "",
               plantId: instrument.plantId ?? "",
               areaId: instrument.areaId ?? "",
               systemId: instrument.systemId ?? "",
               costCenterId: instrument.costCenterId ?? "",
             }
-          : { criticality: "MEDIUM", parentId: initialParentId ?? "", clientId: initialClientId ?? "", tag: initialTagPrefix ?? "" },
+          : { criticality: "MEDIUM", operationalStatus: "IN_OPERATION", parentId: initialParentId ?? "", clientId: initialClientId ?? "", tag: initialTagPrefix ?? "" },
       );
     }
   }, [open, instrument, initialParentId, initialClientId, initialTagPrefix, reset]);
@@ -124,7 +126,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
             {...register("tag")}
           />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <AssetTypeInput required currentValue={instrument?.type} error={errors.type?.message} {...register("type")} />
           <SelectInput
             label="Criticidade"
@@ -136,6 +138,18 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               { value: "CRITICAL", label: "Critica" },
             ]}
             {...register("criticality")}
+          />
+          <SelectInput
+            label="Condicao operacional"
+            hint="O que esta acontecendo com o ativo agora - diferente do status de calibracao."
+            options={[
+              { value: "IN_OPERATION", label: "Em operacao" },
+              { value: "STOPPED", label: "Parado" },
+              { value: "STANDBY", label: "Reserva" },
+              { value: "DEACTIVATED", label: "Desativado" },
+              { value: "IN_MAINTENANCE", label: "Em manutencao" },
+            ]}
+            {...register("operationalStatus")}
           />
         </div>
         <InstrumentPicker

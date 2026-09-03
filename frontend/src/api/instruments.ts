@@ -1,6 +1,6 @@
 import { api } from "./client";
 import type { PagedResult } from "./client";
-import type { AssetPart, AssetPartHistoryEntry, AttachmentCategory, CalibrationAttachment, Instrument, InstrumentCostSummary, InstrumentStatus, MaintenancePriority } from "./types";
+import type { AssetPart, AssetPartHistoryEntry, AttachmentCategory, CalibrationAttachment, Instrument, InstrumentCostSummary, InstrumentStatus, MaintenancePriority, OperationalStatus } from "./types";
 
 export interface ListInstrumentsParams {
   page?: number;
@@ -9,6 +9,11 @@ export interface ListInstrumentsParams {
   status?: InstrumentStatus;
   parentId?: string;
   criticality?: MaintenancePriority;
+  operationalStatus?: OperationalStatus;
+  plantId?: string;
+  areaId?: string;
+  systemId?: string;
+  costCenterId?: string;
   search?: string;
 }
 

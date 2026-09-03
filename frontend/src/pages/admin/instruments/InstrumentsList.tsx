@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, GitBranch, Tags } from "lucide-react";
 import { listInstruments } from "../../../api/instruments";
-import type { InstrumentStatus, MaintenancePriority } from "../../../api/types";
+import type { InstrumentStatus, MaintenancePriority, OperationalStatus } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { DataTable } from "../../../components/DataTable";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -22,12 +22,13 @@ export default function InstrumentsList() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<InstrumentStatus | "">("");
   const [criticality, setCriticality] = useState<MaintenancePriority | "">("");
+  const [operationalStatus, setOperationalStatus] = useState<OperationalStatus | "">("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["instruments", search, status, criticality, page, clientId],
-    queryFn: () => listInstruments({ search: search || undefined, status: status || undefined, criticality: criticality || undefined, page, pageSize: 15, clientId }),
+    queryKey: ["instruments", search, status, criticality, operationalStatus, page, clientId],
+    queryFn: () => listInstruments({ search: search || undefined, status: status || undefined, criticality: criticality || undefined, operationalStatus: operationalStatus || undefined, page, pageSize: 15, clientId }),
   });
 
   return (
@@ -81,6 +82,14 @@ export default function InstrumentsList() {
           <option value="MEDIUM">Media</option>
           <option value="LOW">Baixa</option>
         </select>
+        <select className="input sm:w-56" value={operationalStatus} onChange={(e) => { setOperationalStatus(e.target.value as OperationalStatus | ""); setPage(1); }}>
+          <option value="">Todas as condicoes operacionais</option>
+          <option value="IN_OPERATION">Em operacao</option>
+          <option value="STOPPED">Parado</option>
+          <option value="STANDBY">Reserva</option>
+          <option value="DEACTIVATED">Desativado</option>
+          <option value="IN_MAINTENANCE">Em manutencao</option>
+        </select>
       </div>
 
       <DataTable
@@ -106,6 +115,7 @@ export default function InstrumentsList() {
           { header: "Componente de", accessor: (i) => (i.parent ? `TAG ${i.parent.tag ?? i.parent.type}` : "-") },
           { header: "Cliente", accessor: (i) => clientDisplayName(i.client) },
           { header: "Criticidade", accessor: (i) => <StatusBadge status={i.criticality} /> },
+          { header: "Condicao", accessor: (i) => <StatusBadge status={i.operationalStatus} /> },
           { header: "Proxima calibracao", accessor: (i) => formatDate(i.nextDueDate) },
           { header: "Status", accessor: (i) => <StatusBadge status={i.derivedStatus ?? i.status} /> },
         ]}

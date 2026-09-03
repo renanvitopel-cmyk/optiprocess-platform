@@ -20,6 +20,11 @@ const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   EXPIRED: { label: "Vencido", tone: "red" },
   EXPIRING_SOON: { label: "Vencendo em breve", tone: "yellow" },
   IN_MAINTENANCE: { label: "Em manutencao", tone: "navy" },
+  // condicao operacional do ativo (independente do status de calibracao acima)
+  IN_OPERATION: { label: "Em operacao", tone: "green" },
+  STOPPED: { label: "Parado", tone: "red" },
+  STANDBY: { label: "Reserva", tone: "navy" },
+  DEACTIVATED: { label: "Desativado", tone: "graphite" },
   // ordem de servico
   BUDGET: { label: "Orcamento", tone: "graphite" },
   APPROVED: { label: "Aprovada", tone: "navy" },

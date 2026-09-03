@@ -6,6 +6,7 @@ export interface ListAuditLogsParams {
   page?: number;
   pageSize?: number;
   entityType?: string;
+  entityId?: string;
   userId?: string;
 }
 

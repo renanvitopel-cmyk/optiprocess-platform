@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { InstrumentStatus, MaintenancePriority } from "@prisma/client";
+import { InstrumentStatus, MaintenancePriority, OperationalStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -29,7 +29,7 @@ async function attachAssetTypeLevel<T extends { type: string }>(instruments: T[]
 export const listInstruments = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
-  const { clientId, search, status, parentId, criticality, plantId, areaId, systemId, costCenterId } = req.query as {
+  const { clientId, search, status, parentId, criticality, plantId, areaId, systemId, costCenterId, operationalStatus } = req.query as {
     clientId?: string;
     search?: string;
     status?: InstrumentStatus;
@@ -39,6 +39,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
     areaId?: string;
     systemId?: string;
     costCenterId?: string;
+    operationalStatus?: OperationalStatus;
   };
 
   const where = {
@@ -52,6 +53,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
     ...(areaId ? { areaId } : {}),
     ...(systemId ? { systemId } : {}),
     ...(costCenterId ? { costCenterId } : {}),
+    ...(operationalStatus ? { operationalStatus } : {}),
     ...(search
       ? {
           OR: [
@@ -140,6 +142,9 @@ const instrumentSchema = z.object({
   status: z.nativeEnum(InstrumentStatus).optional(),
   // Quanto uma parada deste ativo pesa pra empresa - guia prioridade de OS e estoque.
   criticality: z.nativeEnum(MaintenancePriority).optional(),
+  // Condicao operacional agora (roda/parado/reserva/desativado) - independente do status
+  // de calibracao acima.
+  operationalStatus: z.nativeEnum(OperationalStatus).optional(),
   // Arvore de ativos: um filho aponta para o ativo pai (mesmo cliente).
   parentId: z.string().uuid().nullish(),
   // Planta/Area/Sistema/Centro de custo: localizacao/classificacao do ativo (mesmo cliente).

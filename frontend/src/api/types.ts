@@ -118,6 +118,7 @@ export interface ServiceOrder {
 }
 
 export type InstrumentStatus = "VALID" | "DUE_SOON" | "EXPIRED" | "IN_MAINTENANCE";
+export type OperationalStatus = "IN_OPERATION" | "STOPPED" | "STANDBY" | "DEACTIVATED" | "IN_MAINTENANCE";
 
 export interface Instrument {
   id: string;
@@ -139,6 +140,8 @@ export interface Instrument {
   derivedStatus?: InstrumentStatus;
   // Quanto uma parada deste ativo pesa pra empresa - guia prioridade de OS e estoque.
   criticality: MaintenancePriority;
+  // Condicao operacional agora - independente do status de calibracao acima.
+  operationalStatus: OperationalStatus;
   // Nivel hierarquico resolvido a partir do catalogo AssetType (por nome) - so pra
   // escolher o icone certo na arvore de ativos, ausente quando o tipo nao tem nivel definido.
   assetTypeLevel?: AssetHierarchyLevel | null;

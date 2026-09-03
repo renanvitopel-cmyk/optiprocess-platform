@@ -5,10 +5,11 @@ import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagin
 
 export const listAuditLogs = asyncHandler(async (req: Request, res: Response) => {
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
-  const { entityType, userId } = req.query as { entityType?: string; userId?: string };
+  const { entityType, entityId, userId } = req.query as { entityType?: string; entityId?: string; userId?: string };
 
   const where = {
     ...(entityType ? { entityType } : {}),
+    ...(entityId ? { entityId } : {}),
     ...(userId ? { userId } : {}),
   };
 

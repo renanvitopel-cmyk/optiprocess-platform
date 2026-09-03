@@ -74,6 +74,17 @@ enum AssetHierarchyLevel {
   PART
 }
 
+// Condicao operacional do ativo agora (esta rodando? parado? so reserva?) - diferente
+// de InstrumentStatus, que e' sobre vencimento de calibracao (Valido/Vencido/...).
+// Um ativo pode estar "Valido" na calibracao e "Parado" na operacao ao mesmo tempo.
+enum OperationalStatus {
+  IN_OPERATION
+  STOPPED
+  STANDBY
+  DEACTIVATED
+  IN_MAINTENANCE
+}
+
 enum MaintenanceOrderStatus {
   OPEN
   IN_PROGRESS
@@ -433,6 +444,8 @@ model Instrument {
   // Quanto uma parada deste ativo pesa pra empresa - guia prioridade de OS, politica de
   // estoque de pecas e o que merece analise de causa. Mesma escala da prioridade da OS.
   criticality                MaintenancePriority @default(MEDIUM)
+  // Condicao operacional agora - independente do status de calibracao acima.
+  operationalStatus          OperationalStatus @default(IN_OPERATION)
   // Arvore de ativos: um filho e' um Ativo completo (TAG, calibracoes e planos proprios) que
   // aponta para o pai - nao uma lista solta sem ficha propria.
   parentId                   String?

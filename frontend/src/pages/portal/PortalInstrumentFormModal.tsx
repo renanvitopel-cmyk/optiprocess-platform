@@ -6,10 +6,12 @@ import { Modal } from "../../components/Modal";
 import { TextInput, SelectInput } from "../../components/form/Field";
 import { InstrumentPicker } from "../../components/InstrumentPicker";
 import { AssetTypeInput } from "../../components/AssetTypeInput";
+import { LocationPicker } from "../../components/LocationPicker";
 import { createInstrument, updateInstrument } from "../../api/instruments";
 import type { Instrument } from "../../api/types";
 import { useToast } from "../../components/Toast";
 import { getApiErrorMessage } from "../../api/client";
+import { useAuth } from "../../auth/AuthContext";
 
 const schema = z.object({
   type: z.string().min(2, "Informe o tipo de equipamento."),
@@ -21,6 +23,10 @@ const schema = z.object({
   calibrationFrequencyMonths: z.coerce.number().int().min(1).optional().or(z.literal("")),
   criticality: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   parentId: z.string().uuid().optional().or(z.literal("")),
+  plantId: z.string().uuid().optional().or(z.literal("")),
+  areaId: z.string().uuid().optional().or(z.literal("")),
+  systemId: z.string().uuid().optional().or(z.literal("")),
+  costCenterId: z.string().uuid().optional().or(z.literal("")),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -39,7 +45,8 @@ interface Props {
  * sempre grava para a empresa do usuario logado) e so com os campos essenciais. */
 export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, initialParentId, initialTagPrefix }: Props) {
   const { notify } = useToast();
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { user } = useAuth();
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
   });
 
@@ -57,6 +64,10 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
               calibrationFrequencyMonths: instrument.calibrationFrequencyMonths ?? undefined,
               criticality: instrument.criticality,
               parentId: instrument.parentId ?? "",
+              plantId: instrument.plantId ?? "",
+              areaId: instrument.areaId ?? "",
+              systemId: instrument.systemId ?? "",
+              costCenterId: instrument.costCenterId ?? "",
             }
           : { criticality: "MEDIUM", parentId: initialParentId ?? "", tag: initialTagPrefix ?? "" },
       );
@@ -65,7 +76,15 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
 
   async function onSubmit(values: FormValues) {
     try {
-      const payload = { ...values, parentId: values.parentId || null, calibrationFrequencyMonths: values.calibrationFrequencyMonths || null };
+      const payload = {
+        ...values,
+        parentId: values.parentId || null,
+        plantId: values.plantId || null,
+        areaId: values.areaId || null,
+        systemId: values.systemId || null,
+        costCenterId: values.costCenterId || null,
+        calibrationFrequencyMonths: values.calibrationFrequencyMonths || null,
+      };
       const saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
       notify("success", instrument ? "Ativo atualizado." : "Ativo cadastrado.");
       onSaved(saved);
@@ -119,6 +138,7 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
           error={errors.parentId?.message}
           {...register("parentId")}
         />
+        <LocationPicker clientId={user?.clientId ?? undefined} register={register} watch={watch} setValue={setValue} />
         <div className="grid gap-4 sm:grid-cols-3">
           <TextInput label="Fabricante" required error={errors.manufacturer?.message} {...register("manufacturer")} />
           <TextInput label="Modelo" required error={errors.model?.message} {...register("model")} />

@@ -106,7 +106,7 @@ export default function AssetTypesList() {
       <PageHeader
         title="Tipos de ativo"
         description="Catalogo usado no campo Tipo de ativo do cadastro"
-        breadcrumbs={[{ label: "Ativos", to: base }, { label: "Tipos de ativo" }]}
+        breadcrumbs={[{ label: "Ativos", to: base }, { label: "Cadastros tecnicos", to: `${base}/cadastros` }, { label: "Tipos de ativo" }]}
         actions={
           canManage && (
             <button className="btn-primary" onClick={openCreate}>

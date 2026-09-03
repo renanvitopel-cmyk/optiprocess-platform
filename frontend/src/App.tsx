@@ -36,6 +36,11 @@ const InstrumentsList = lazy(() => import("./pages/admin/instruments/Instruments
 const InstrumentDetail = lazy(() => import("./pages/admin/instruments/InstrumentDetail"));
 const InstrumentsTree = lazy(() => import("./pages/admin/instruments/InstrumentsTree"));
 const AssetTypesList = lazy(() => import("./pages/admin/instruments/AssetTypesList"));
+const TechnicalCatalogsHub = lazy(() => import("./pages/admin/instruments/TechnicalCatalogsHub"));
+const PlantsList = lazy(() => import("./pages/admin/instruments/PlantsList"));
+const AreasList = lazy(() => import("./pages/admin/instruments/AreasList"));
+const AssetSystemsList = lazy(() => import("./pages/admin/instruments/AssetSystemsList"));
+const CostCentersList = lazy(() => import("./pages/admin/instruments/CostCentersList"));
 const CalibrationsList = lazy(() => import("./pages/admin/calibrations/CalibrationsList"));
 const CalibrationForm = lazy(() => import("./pages/admin/calibrations/CalibrationForm"));
 const CalibrationDetail = lazy(() => import("./pages/admin/calibrations/CalibrationDetail"));
@@ -111,6 +116,11 @@ export default function App() {
 
                 <Route path="instrumentos" element={<InstrumentsList />} />
                 <Route path="instrumentos/tipos" element={<AssetTypesList />} />
+                <Route path="instrumentos/cadastros" element={<TechnicalCatalogsHub />} />
+                <Route path="instrumentos/plantas" element={<PlantsList />} />
+                <Route path="instrumentos/areas" element={<AreasList />} />
+                <Route path="instrumentos/sistemas" element={<AssetSystemsList />} />
+                <Route path="instrumentos/centros-custo" element={<CostCentersList />} />
                 <Route path="instrumentos/:id" element={<InstrumentDetail />} />
                 <Route path="manutencao/arvore" element={<InstrumentsTree />} />
 
@@ -162,6 +172,11 @@ export default function App() {
                 <Route index element={<PortalDashboard />} />
                 <Route path="instrumentos" element={<PortalInstruments />} />
                 <Route path="instrumentos/tipos" element={<AssetTypesList />} />
+                <Route path="instrumentos/cadastros" element={<TechnicalCatalogsHub />} />
+                <Route path="instrumentos/plantas" element={<PlantsList />} />
+                <Route path="instrumentos/areas" element={<AreasList />} />
+                <Route path="instrumentos/sistemas" element={<AssetSystemsList />} />
+                <Route path="instrumentos/centros-custo" element={<CostCentersList />} />
                 <Route path="instrumentos/:id" element={<PortalInstrumentDetail />} />
                 <Route path="certificados" element={<PortalCertificates />} />
                 <Route path="certificados/:id" element={<PortalCertificateDetail />} />

@@ -329,6 +329,10 @@ model Client {
   assetTypes            AssetType[]
   laborTypes            LaborType[]
   laborResources        LaborResource[]
+  plants                Plant[]
+  areas                 Area[]
+  assetSystems          AssetSystem[]
+  costCenters           CostCenter[]
 
   @@index([status])
   @@map("clients")
@@ -434,6 +438,18 @@ model Instrument {
   parentId                   String?
   parent                     Instrument?       @relation("InstrumentHierarchy", fields: [parentId], references: [id])
   children                   Instrument[]      @relation("InstrumentHierarchy")
+  // Planta/Area/Sistema/Centro de custo: atributos diretos de localizacao/classificacao do
+  // ativo (opcionais, cascata Planta->Area->Sistema) - complementam a arvore pai/filho
+  // (que e' sobre composicao fisica, ex.: compressor->motor), nao a substituem. Permitem
+  // filtrar "todos os ativos da Area X" sem precisar percorrer a arvore.
+  plantId                    String?
+  plant                      Plant?            @relation(fields: [plantId], references: [id], onDelete: Restrict)
+  areaId                     String?
+  area                       Area?             @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  systemId                   String?
+  system                     AssetSystem?      @relation(fields: [systemId], references: [id], onDelete: Restrict)
+  costCenterId               String?
+  costCenter                 CostCenter?       @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
   createdById                String?
   createdAt                  DateTime          @default(now())
   updatedAt                  DateTime          @updatedAt
@@ -450,6 +466,10 @@ model Instrument {
   @@index([status])
   @@index([nextDueDate])
   @@index([parentId])
+  @@index([plantId])
+  @@index([areaId])
+  @@index([systemId])
+  @@index([costCenterId])
   @@map("instruments")
 }
 
@@ -905,6 +925,89 @@ model AssetType {
   @@unique([clientId, name])
   @@index([clientId])
   @@map("asset_types")
+}
+
+// ---------------------------------------------------------------------------
+// Cadastro tecnico: planta/area/sistema/centro de custo - sempre da propria empresa
+// (diferente de AssetType/FailureCode/LaborType, que tem catalogo global da OptiProcess;
+// uma planta so faz sentido dentro de UMA empresa). Cascata: Area pertence a uma Planta,
+// Sistema pertence a uma Area - cada nivel so lista os filhos do nivel escolhido acima.
+// ---------------------------------------------------------------------------
+
+model Plant {
+  id        String    @id @default(uuid())
+  clientId  String
+  client    Client    @relation(fields: [clientId], references: [id])
+  name      String
+  code      String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  areas       Area[]
+  instruments Instrument[]
+
+  @@unique([clientId, name])
+  @@index([clientId])
+  @@map("plants")
+}
+
+model Area {
+  id        String    @id @default(uuid())
+  clientId  String
+  client    Client    @relation(fields: [clientId], references: [id])
+  plantId   String
+  plant     Plant     @relation(fields: [plantId], references: [id])
+  name      String
+  code      String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  assetSystems AssetSystem[]
+  instruments  Instrument[]
+
+  @@unique([plantId, name])
+  @@index([clientId])
+  @@index([plantId])
+  @@map("areas")
+}
+
+model AssetSystem {
+  id        String    @id @default(uuid())
+  clientId  String
+  client    Client    @relation(fields: [clientId], references: [id])
+  areaId    String
+  area      Area      @relation(fields: [areaId], references: [id])
+  name      String
+  code      String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  instruments Instrument[]
+
+  @@unique([areaId, name])
+  @@index([clientId])
+  @@index([areaId])
+  @@map("asset_systems")
+}
+
+model CostCenter {
+  id        String    @id @default(uuid())
+  clientId  String
+  client    Client    @relation(fields: [clientId], references: [id])
+  name      String
+  code      String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  instruments Instrument[]
+
+  @@unique([clientId, name])
+  @@index([clientId])
+  @@map("cost_centers")
 }
 
 model FailureCode {

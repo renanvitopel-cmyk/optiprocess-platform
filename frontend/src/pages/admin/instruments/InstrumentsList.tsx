@@ -42,8 +42,8 @@ export default function InstrumentsList() {
                 <GitBranch className="h-4 w-4" /> Ver arvore
               </button>
             )}
-            <button className="btn-outline" onClick={() => navigate("/gestao/instrumentos/tipos")}>
-              <Tags className="h-4 w-4" /> Tipos de ativo
+            <button className="btn-outline" onClick={() => navigate("/gestao/instrumentos/cadastros")}>
+              <Tags className="h-4 w-4" /> Cadastros tecnicos
             </button>
             {canManage && (
               <button className="btn-primary" onClick={() => setCreateOpen(true)}>

@@ -33,6 +33,10 @@ import { laborResourcesRouter } from "./modules/laborResources/routes";
 import { maintenancePlansRouter } from "./modules/maintenancePlans/routes";
 import { maintenanceWorkOrdersRouter } from "./modules/maintenanceWorkOrders/routes";
 import { sparePartsRouter } from "./modules/spareParts/routes";
+import { plantsRouter } from "./modules/plants/routes";
+import { areasRouter } from "./modules/areas/routes";
+import { assetSystemsRouter } from "./modules/assetSystems/routes";
+import { costCentersRouter } from "./modules/costCenters/routes";
 
 export function createApp() {
   const app = express();
@@ -79,6 +83,10 @@ export function createApp() {
   app.use("/api/maintenance-plans", maintenancePlansRouter);
   app.use("/api/maintenance-work-orders", maintenanceWorkOrdersRouter);
   app.use("/api/spare-parts", sparePartsRouter);
+  app.use("/api/plants", plantsRouter);
+  app.use("/api/areas", areasRouter);
+  app.use("/api/asset-systems", assetSystemsRouter);
+  app.use("/api/cost-centers", costCentersRouter);
 
   if (env.isProduction) {
     const frontendDist = path.resolve(__dirname, "../../frontend/dist");

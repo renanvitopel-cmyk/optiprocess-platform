@@ -32,8 +32,8 @@ export default function PortalInstruments() {
             <button className="btn-outline" onClick={() => navigate("/portal/manutencao/arvore")}>
               <GitBranch className="h-4 w-4" /> Ver arvore
             </button>
-            <button className="btn-outline" onClick={() => navigate("/portal/instrumentos/tipos")}>
-              <Tags className="h-4 w-4" /> Tipos de ativo
+            <button className="btn-outline" onClick={() => navigate("/portal/instrumentos/cadastros")}>
+              <Tags className="h-4 w-4" /> Cadastros tecnicos
             </button>
             <button className="btn-primary" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4" /> Novo ativo

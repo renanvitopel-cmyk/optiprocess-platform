@@ -148,6 +148,10 @@ export default function PortalInstrumentDetail() {
               <Info label="Numero de serie" value={instrument.serialNumber} />
               <Info label="Faixa de medicao" value={instrument.measurementRange ?? "-"} />
               <Info label="Local de instalacao" value={instrument.installationLocation ?? "-"} />
+              <Info label="Planta" value={instrument.plant?.name ?? "-"} />
+              <Info label="Area" value={instrument.area?.name ?? "-"} />
+              <Info label="Sistema" value={instrument.system?.name ?? "-"} />
+              <Info label="Centro de custo" value={instrument.costCenter?.name ?? "-"} />
               <Info label="Periodicidade" value={instrument.calibrationFrequencyMonths ? `${instrument.calibrationFrequencyMonths} meses` : "Nao rastreada"} />
               <Info label="Ultima calibracao" value={formatDate(instrument.lastCalibrationDate)} />
               <Info label="Proxima calibracao" value={formatDate(instrument.nextDueDate)} />

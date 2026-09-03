@@ -7,6 +7,7 @@ import { TextInput, SelectInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
 import { AssetTypeInput } from "../../../components/AssetTypeInput";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
+import { LocationPicker } from "../../../components/LocationPicker";
 import { createInstrument, updateInstrument } from "../../../api/instruments";
 import type { Instrument } from "../../../api/types";
 import { useToast } from "../../../components/Toast";
@@ -28,6 +29,10 @@ const schema = z.object({
   status: z.enum(["VALID", "DUE_SOON", "EXPIRED", "IN_MAINTENANCE"]).optional(),
   criticality: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   parentId: z.string().uuid().optional().or(z.literal("")),
+  plantId: z.string().uuid().optional().or(z.literal("")),
+  areaId: z.string().uuid().optional().or(z.literal("")),
+  systemId: z.string().uuid().optional().or(z.literal("")),
+  costCenterId: z.string().uuid().optional().or(z.literal("")),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -45,7 +50,7 @@ interface Props {
 
 export function InstrumentFormModal({ open, onClose, onSaved, instrument, initialParentId, initialClientId, initialTagPrefix }: Props) {
   const { notify } = useToast();
-  const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
   });
   const clientId = watch("clientId");
@@ -70,6 +75,10 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               status: instrument.status,
               criticality: instrument.criticality,
               parentId: instrument.parentId ?? "",
+              plantId: instrument.plantId ?? "",
+              areaId: instrument.areaId ?? "",
+              systemId: instrument.systemId ?? "",
+              costCenterId: instrument.costCenterId ?? "",
             }
           : { criticality: "MEDIUM", parentId: initialParentId ?? "", clientId: initialClientId ?? "", tag: initialTagPrefix ?? "" },
       );
@@ -78,7 +87,15 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
 
   async function onSubmit(values: FormValues) {
     try {
-      const payload = { ...values, parentId: values.parentId || null, calibrationFrequencyMonths: values.calibrationFrequencyMonths || null };
+      const payload = {
+        ...values,
+        parentId: values.parentId || null,
+        plantId: values.plantId || null,
+        areaId: values.areaId || null,
+        systemId: values.systemId || null,
+        costCenterId: values.costCenterId || null,
+        calibrationFrequencyMonths: values.calibrationFrequencyMonths || null,
+      };
       const saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
       notify("success", instrument ? "Ativo atualizado." : "Ativo cadastrado.");
       onSaved(saved);
@@ -128,6 +145,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
           error={errors.parentId?.message}
           {...register("parentId")}
         />
+        <LocationPicker clientId={clientId} register={register} watch={watch} setValue={setValue} />
         <div className="grid gap-4 sm:grid-cols-3">
           <TextInput label="Fabricante" required error={errors.manufacturer?.message} {...register("manufacturer")} />
           <TextInput label="Modelo" required error={errors.model?.message} {...register("model")} />

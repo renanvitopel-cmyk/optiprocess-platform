@@ -29,12 +29,16 @@ async function attachAssetTypeLevel<T extends { type: string }>(instruments: T[]
 export const listInstruments = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
-  const { clientId, search, status, parentId, criticality } = req.query as {
+  const { clientId, search, status, parentId, criticality, plantId, areaId, systemId, costCenterId } = req.query as {
     clientId?: string;
     search?: string;
     status?: InstrumentStatus;
     parentId?: string;
     criticality?: MaintenancePriority;
+    plantId?: string;
+    areaId?: string;
+    systemId?: string;
+    costCenterId?: string;
   };
 
   const where = {
@@ -44,6 +48,10 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
     ...(status ? { status } : {}),
     ...(parentId ? { parentId } : {}),
     ...(criticality ? { criticality } : {}),
+    ...(plantId ? { plantId } : {}),
+    ...(areaId ? { areaId } : {}),
+    ...(systemId ? { systemId } : {}),
+    ...(costCenterId ? { costCenterId } : {}),
     ...(search
       ? {
           OR: [
@@ -64,6 +72,10 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
       include: {
         client: { select: { id: true, companyName: true, tradeName: true } },
         parent: { select: { id: true, type: true, model: true, serialNumber: true, tag: true } },
+        plant: { select: { id: true, name: true } },
+        area: { select: { id: true, name: true } },
+        system: { select: { id: true, name: true } },
+        costCenter: { select: { id: true, name: true } },
       },
     }),
     prisma.instrument.count({ where }),
@@ -83,6 +95,10 @@ export const getInstrument = asyncHandler(async (req: Request, res: Response) =>
       client: { select: { id: true, companyName: true, tradeName: true } },
       parent: { select: instrumentRefSelect },
       children: { where: { deletedAt: null }, select: instrumentRefSelect, orderBy: { tag: "asc" } },
+      plant: { select: { id: true, name: true } },
+      area: { select: { id: true, name: true } },
+      system: { select: { id: true, name: true } },
+      costCenter: { select: { id: true, name: true } },
       calibrations: {
         where: { deletedAt: null },
         orderBy: { calibrationDate: "desc" },
@@ -126,7 +142,37 @@ const instrumentSchema = z.object({
   criticality: z.nativeEnum(MaintenancePriority).optional(),
   // Arvore de ativos: um filho aponta para o ativo pai (mesmo cliente).
   parentId: z.string().uuid().nullish(),
+  // Planta/Area/Sistema/Centro de custo: localizacao/classificacao do ativo (mesmo cliente).
+  plantId: z.string().uuid().nullish(),
+  areaId: z.string().uuid().nullish(),
+  systemId: z.string().uuid().nullish(),
+  costCenterId: z.string().uuid().nullish(),
 });
+
+/** Planta/area/sistema/centro de custo escolhidos precisam existir e ser do mesmo cliente
+ * do ativo - senao a ficha mostraria localizacao de outra empresa. */
+async function assertLocationFieldsBelongToClient(clientId: string, data: Pick<z.infer<typeof instrumentSchema>, "plantId" | "areaId" | "systemId" | "costCenterId">): Promise<void> {
+  if (data.plantId) {
+    const plant = await prisma.plant.findFirst({ where: { id: data.plantId, deletedAt: null } });
+    if (!plant) throw new NotFoundError("Planta");
+    if (plant.clientId !== clientId) throw new ValidationError("A planta selecionada e' de outra empresa.");
+  }
+  if (data.areaId) {
+    const area = await prisma.area.findFirst({ where: { id: data.areaId, deletedAt: null } });
+    if (!area) throw new NotFoundError("Area");
+    if (area.clientId !== clientId) throw new ValidationError("A area selecionada e' de outra empresa.");
+  }
+  if (data.systemId) {
+    const system = await prisma.assetSystem.findFirst({ where: { id: data.systemId, deletedAt: null } });
+    if (!system) throw new NotFoundError("Sistema");
+    if (system.clientId !== clientId) throw new ValidationError("O sistema selecionado e' de outra empresa.");
+  }
+  if (data.costCenterId) {
+    const costCenter = await prisma.costCenter.findFirst({ where: { id: data.costCenterId, deletedAt: null } });
+    if (!costCenter) throw new NotFoundError("Centro de custo");
+    if (costCenter.clientId !== clientId) throw new ValidationError("O centro de custo selecionado e' de outra empresa.");
+  }
+}
 
 /** Ativo pai precisa existir, pertencer ao mesmo cliente e nao criar um ciclo na arvore. */
 async function assertValidParent(clientId: string, parentId: string, excludeId?: string): Promise<void> {
@@ -178,6 +224,7 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
   const clientId = data.clientId;
   await assertTagAvailable(clientId, data.tag);
   if (data.parentId) await assertValidParent(clientId, data.parentId);
+  await assertLocationFieldsBelongToClient(clientId, data);
   const nextDueDate = data.lastCalibrationDate && data.calibrationFrequencyMonths
     ? computeNextDueDate(data.lastCalibrationDate, data.calibrationFrequencyMonths)
     : null;
@@ -214,6 +261,7 @@ export const updateInstrument = asyncHandler(async (req: Request, res: Response)
   if (data.parentId) {
     await assertValidParent(data.clientId ?? existing.clientId, data.parentId, existing.id);
   }
+  await assertLocationFieldsBelongToClient(data.clientId ?? existing.clientId, data);
 
   const lastCalibrationDate = data.lastCalibrationDate ?? existing.lastCalibrationDate;
   const frequency = data.calibrationFrequencyMonths ?? existing.calibrationFrequencyMonths;

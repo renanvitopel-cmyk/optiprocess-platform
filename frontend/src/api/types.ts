@@ -147,6 +147,15 @@ export interface Instrument {
   parentId?: string | null;
   parent?: InstrumentRef | null;
   children?: InstrumentRef[];
+  // Localizacao/classificacao do ativo (opcionais) - complementam a arvore pai/filho.
+  plantId?: string | null;
+  plant?: { id: string; name: string } | null;
+  areaId?: string | null;
+  area?: { id: string; name: string } | null;
+  systemId?: string | null;
+  system?: { id: string; name: string } | null;
+  costCenterId?: string | null;
+  costCenter?: { id: string; name: string } | null;
 }
 
 export type CalibrationResult = "APPROVED" | "APPROVED_WITH_RESTRICTION" | "REJECTED";
@@ -453,6 +462,42 @@ export interface Meter {
 }
 
 export type AssetHierarchyLevel = "PLANT" | "AREA" | "MACHINE" | "SUBASSEMBLY" | "PART";
+
+export interface Plant {
+  id: string;
+  clientId: string;
+  name: string;
+  code: string | null;
+  active: boolean;
+}
+
+export interface Area {
+  id: string;
+  clientId: string;
+  plantId: string;
+  plant?: { id: string; name: string };
+  name: string;
+  code: string | null;
+  active: boolean;
+}
+
+export interface AssetSystem {
+  id: string;
+  clientId: string;
+  areaId: string;
+  area?: { id: string; name: string; plant?: { id: string; name: string } };
+  name: string;
+  code: string | null;
+  active: boolean;
+}
+
+export interface CostCenter {
+  id: string;
+  clientId: string;
+  name: string;
+  code: string | null;
+  active: boolean;
+}
 
 export interface AssetType {
   id: string;

@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { FailureCode } from "./types";
+import type { FailureCode, MaintenancePriority } from "./types";
 
 export async function listFailureCodes(params: { active?: boolean; clientId?: string } = {}): Promise<FailureCode[]> {
   const { data } = await api.get<FailureCode[]>("/failure-codes", { params });
@@ -10,6 +10,13 @@ export interface FailureCodeInput {
   code: string;
   description: string;
   category?: string | null;
+  symptom?: string | null;
+  mode?: string | null;
+  mechanism?: string | null;
+  cause?: string | null;
+  correctiveAction?: string | null;
+  applicableAssetFamily?: string | null;
+  severity?: MaintenancePriority | null;
   clientId?: string | null;
 }
 

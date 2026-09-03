@@ -4,6 +4,7 @@ import type {
   AttachmentCategory,
   CalibrationAttachment,
   ChecklistItemResult,
+  FailureAnalysisData,
   LaborHourType,
   MaintenanceDashboardData,
   MaintenanceOrderStatus,
@@ -197,5 +198,10 @@ export async function getMaintenanceDashboard(params: {
   dateTo?: string;
 }): Promise<MaintenanceDashboardData> {
   const { data } = await api.get<MaintenanceDashboardData>("/maintenance-work-orders/dashboard", { params });
+  return data;
+}
+
+export async function getFailureAnalysis(params: { clientId?: string; dateFrom?: string; dateTo?: string }): Promise<FailureAnalysisData> {
+  const { data } = await api.get<FailureAnalysisData>("/maintenance-work-orders/failure-analysis", { params });
   return data;
 }

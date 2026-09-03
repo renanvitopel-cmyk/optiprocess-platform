@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Wrench, Gauge, ClipboardList, ClipboardPlus, ShieldCheck, Activity, TimerReset, ListChecks, Boxes, GitBranch, Radar, HardHat, OctagonPause, Kanban } from "lucide-react";
+import { Wrench, Gauge, ClipboardList, ClipboardPlus, ShieldCheck, Activity, TimerReset, ListChecks, Boxes, GitBranch, Radar, HardHat, OctagonPause, Kanban, BarChart3, Search } from "lucide-react";
 import { getMaintenanceDashboard } from "../../../api/maintenanceWorkOrders";
 import { listClients } from "../../../api/clients";
 import { PageHeader } from "../../../components/PageHeader";
@@ -63,6 +63,12 @@ export default function MaintenanceDashboard() {
         </Link>
         <Link to={`${base}/falhas`} className="btn-outline">
           <ListChecks className="h-4 w-4" /> Codigos de falha
+        </Link>
+        <Link to={`${base}/pareto${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+          <BarChart3 className="h-4 w-4" /> Pareto de falhas
+        </Link>
+        <Link to={`${base}/rca${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+          <Search className="h-4 w-4" /> RCA / 5 Porques
         </Link>
         <Link to={`${base}/paradas`} className="btn-outline">
           <OctagonPause className="h-4 w-4" /> Motivos de parada

@@ -554,6 +554,13 @@ export interface FailureCode {
   code: string;
   description: string;
   category: string | null;
+  symptom: string | null;
+  mode: string | null;
+  mechanism: string | null;
+  cause: string | null;
+  correctiveAction: string | null;
+  applicableAssetFamily: string | null;
+  severity: MaintenancePriority | null;
   active: boolean;
 }
 
@@ -794,6 +801,54 @@ export interface MaintenanceWorkOrder {
   partReservations?: SparePartReservation[];
   stoppages?: WorkOrderStoppage[];
   createdAt: string;
+}
+
+export type RcaStatus = "OPEN" | "IN_PROGRESS" | "CLOSED";
+
+export interface RootCauseAnalysis {
+  id: string;
+  clientId: string;
+  client?: ClientRef;
+  instrumentId: string | null;
+  instrument?: InstrumentRef | null;
+  workOrderId: string | null;
+  workOrder?: { id: string; number: string; status: string } | null;
+  problem: string;
+  participants: string | null;
+  why1: string | null;
+  why2: string | null;
+  why3: string | null;
+  why4: string | null;
+  why5: string | null;
+  rootCause: string | null;
+  correctiveActions: string | null;
+  preventiveActions: string | null;
+  responsibleId: string | null;
+  responsible?: { id: string; name: string } | null;
+  dueDate: string | null;
+  effectivenessVerifiedAt: string | null;
+  effectivenessNotes: string | null;
+  status: RcaStatus;
+  createdAt: string;
+}
+
+export interface FailureAnalysisBucket {
+  key: string;
+  label: string;
+  count: number;
+  downtimeHours: number;
+  cost: number;
+}
+
+export interface FailureAnalysisData {
+  period: { from: string; to: string };
+  totalCorrective: number;
+  emergency: number;
+  withoutFailureCode: number;
+  recurringFailureCodes: number;
+  byFailureCode: FailureAnalysisBucket[];
+  byInstrument: FailureAnalysisBucket[];
+  byArea: FailureAnalysisBucket[];
 }
 
 export interface MaintenanceDashboardData {

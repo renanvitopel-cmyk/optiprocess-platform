@@ -64,6 +64,9 @@ const MaintenancePlanForm = lazy(() => import("./pages/admin/maintenance/Mainten
 const MaintenancePlanDetail = lazy(() => import("./pages/admin/maintenance/MaintenancePlanDetail"));
 const WorkOrdersList = lazy(() => import("./pages/admin/maintenance/WorkOrdersList"));
 const KanbanBoard = lazy(() => import("./pages/admin/maintenance/KanbanBoard"));
+const RcaList = lazy(() => import("./pages/admin/maintenance/RcaList"));
+const RcaForm = lazy(() => import("./pages/admin/maintenance/RcaForm"));
+const FailureAnalysis = lazy(() => import("./pages/admin/maintenance/FailureAnalysis"));
 const WorkOrderForm = lazy(() => import("./pages/admin/maintenance/WorkOrderForm"));
 const WorkOrderDetail = lazy(() => import("./pages/admin/maintenance/WorkOrderDetail"));
 const ServiceRequestsList = lazy(() => import("./pages/admin/maintenance/ServiceRequestsList"));
@@ -157,6 +160,10 @@ export default function App() {
                 <Route path="manutencao/solicitacoes/novo" element={<ServiceRequestForm />} />
                 <Route path="manutencao/solicitacoes/:id" element={<ServiceRequestDetail />} />
                 <Route path="manutencao/falhas" element={<FailureCodesList />} />
+                <Route path="manutencao/pareto" element={<FailureAnalysis />} />
+                <Route path="manutencao/rca" element={<RcaList />} />
+                <Route path="manutencao/rca/novo" element={<RcaForm />} />
+                <Route path="manutencao/rca/:id" element={<RcaForm />} />
                 <Route path="manutencao/paradas" element={<StoppageReasonsList />} />
                 <Route path="manutencao/almoxarifado" element={<SparePartsList />} />
                 <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
@@ -209,6 +216,10 @@ export default function App() {
                 <Route path="manutencao/solicitacoes/novo" element={<ServiceRequestForm />} />
                 <Route path="manutencao/solicitacoes/:id" element={<ServiceRequestDetail />} />
                 <Route path="manutencao/falhas" element={<FailureCodesList />} />
+                <Route path="manutencao/pareto" element={<FailureAnalysis />} />
+                <Route path="manutencao/rca" element={<RcaList />} />
+                <Route path="manutencao/rca/novo" element={<RcaForm />} />
+                <Route path="manutencao/rca/:id" element={<RcaForm />} />
                 <Route path="manutencao/paradas" element={<StoppageReasonsList />} />
                 <Route path="manutencao/arvore" element={<PortalInstrumentsTree />} />
                 <Route path="almoxarifado" element={<PortalSpareParts />} />

@@ -9,6 +9,7 @@ import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
 import { deriveDueStatus, computeNextDueDate } from "../../utils/status";
 import { getStorageProvider } from "../../lib/storage";
+import { assertInstrumentLimitNotExceeded } from "../../lib/planLimits";
 import type { AttachmentCategory } from "@prisma/client";
 
 function withDerivedStatus<T extends { status: InstrumentStatus; nextDueDate: Date | null }>(instrument: T) {
@@ -227,6 +228,7 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
     throw new ValidationError("Selecione o cliente.");
   }
   const clientId = data.clientId;
+  await assertInstrumentLimitNotExceeded(clientId);
   await assertTagAvailable(clientId, data.tag);
   if (data.parentId) await assertValidParent(clientId, data.parentId);
   await assertLocationFieldsBelongToClient(clientId, data);

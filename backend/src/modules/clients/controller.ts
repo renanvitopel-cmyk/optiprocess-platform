@@ -6,6 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { ForbiddenError, NotFoundError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
+import { getClientPlanUsage } from "../../lib/planLimits";
 
 export const listClients = asyncHandler(async (req: Request, res: Response) => {
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
@@ -35,7 +36,7 @@ export const listClients = asyncHandler(async (req: Request, res: Response) => {
       where,
       orderBy: { companyName: "asc" },
       ...toSkipTake(pageParams),
-      include: { _count: { select: { instruments: true, serviceOrders: true, contracts: true } } },
+      include: { _count: { select: { instruments: true, serviceOrders: true, contracts: true } }, plan: { select: { id: true, name: true } } },
     }),
     prisma.client.count({ where }),
   ]);
@@ -60,6 +61,7 @@ export const getClient = asyncHandler(async (req: Request, res: Response) => {
     where: { id: req.params.id, deletedAt: null },
     include: {
       contacts: true,
+      plan: true,
       // Usuarios de portal (role CLIENT) vinculados a esta empresa - a ficha usa isto
       // para mostrar se o acesso ja foi liberado e para quem.
       users: {
@@ -73,7 +75,8 @@ export const getClient = asyncHandler(async (req: Request, res: Response) => {
     },
   });
   if (!client) throw new NotFoundError("Cliente");
-  res.json(client);
+  const usage = await getClientPlanUsage(client.id);
+  res.json({ ...client, planUsage: { users: usage.users, instruments: usage.instruments } });
 });
 
 const clientSchema = z.object({
@@ -98,12 +101,15 @@ const clientSchema = z.object({
   commercialContactName: z.string().nullish(),
   status: z.nativeEnum(ClientStatus).optional(),
   contractedServices: z.array(z.nativeEnum(ServiceCategory)).optional(),
+  planId: z.string().uuid().nullish(),
   notes: z.string().nullish(),
 });
 
 export const createClient = asyncHandler(async (req: Request, res: Response) => {
   const data = clientSchema.parse(req.body);
-  const client = await prisma.client.create({ data: { ...data, createdById: req.user?.sub } });
+  const client = await prisma.client.create({
+    data: { ...data, planStartedAt: data.planId ? new Date() : null, createdById: req.user?.sub },
+  });
 
   await writeAuditLog({
     userId: req.user?.sub,
@@ -121,7 +127,14 @@ export const updateClient = asyncHandler(async (req: Request, res: Response) => 
   const existing = await prisma.client.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Cliente");
 
-  const client = await prisma.client.update({ where: { id: req.params.id }, data });
+  // Troca de plano (inclusive para nenhum) marca a data de inicio da assinatura atual -
+  // atribuir o mesmo plano de novo (ou nao mexer no campo) nao reseta a data.
+  const planChanged = "planId" in data && data.planId !== existing.planId;
+
+  const client = await prisma.client.update({
+    where: { id: req.params.id },
+    data: { ...data, ...(planChanged ? { planStartedAt: data.planId ? new Date() : null } : {}) },
+  });
 
   await writeAuditLog({
     userId: req.user?.sub,

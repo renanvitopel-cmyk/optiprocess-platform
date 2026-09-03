@@ -368,6 +368,11 @@ model Client {
   // Areas de servico que o cliente contratou (marcacao rapida na ficha, usada
   // para segmentar). Contratos com vigencia e valor ficam em ServiceContract.
   contractedServices     ServiceCategory[]
+  // Plano de assinatura (limites de uso) - opcional: sem plano atribuido, o cliente
+  // segue sem limite nenhum (compatibilidade com todo cliente cadastrado antes da Fase 7).
+  planId                 String?
+  plan                   Plan?        @relation(fields: [planId], references: [id])
+  planStartedAt          DateTime?
   notes                  String?
   createdById            String?
   createdAt              DateTime     @default(now())
@@ -401,7 +406,31 @@ model Client {
   maintenancePlanTemplates  MaintenancePlanTemplate[]
 
   @@index([status])
+  @@index([planId])
   @@map("clients")
+}
+
+// ---------------------------------------------------------------------------
+// Administracao da plataforma (planos de assinatura)
+// ---------------------------------------------------------------------------
+
+// Plano comercial que a OptiProcess oferece aos seus clientes (Plus/Pro/Advanced...).
+// Define limites de uso (null = sem limite) - nao ha integracao de cobranca aqui, so
+// atribuicao de plano + aplicacao dos limites nas telas de Usuarios e Ativos.
+model Plan {
+  id             String    @id @default(uuid())
+  name           String    @unique
+  description    String?
+  priceMonthly   Float?
+  maxUsers       Int?
+  maxInstruments Int?
+  features       String[]  @default([])
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  clients Client[]
+
+  @@map("plans")
 }
 
 model ClientContact {

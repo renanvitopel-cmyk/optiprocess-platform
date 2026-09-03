@@ -7,6 +7,7 @@ import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagin
 import { hashPassword, generateTemporaryPassword } from "../../lib/password";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
+import { assertUserLimitNotExceeded } from "../../lib/planLimits";
 
 const userSelect = {
   id: true,
@@ -66,6 +67,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   if (data.role === "CLIENT" && !data.clientId) {
     throw new ValidationError("Usuarios do tipo Cliente precisam estar vinculados a uma empresa.");
   }
+  if (data.role === "CLIENT" && data.clientId) await assertUserLimitNotExceeded(data.clientId);
 
   const passwordHash = await hashPassword(data.password);
   const user = await prisma.user.create({
@@ -101,6 +103,13 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const data = updateUserSchema.parse(req.body);
   const existing = await prisma.user.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Usuario");
+
+  // So conta contra o limite do plano quando o usuario esta passando a ocupar uma vaga
+  // nova naquele cliente (role virando CLIENT, ou mudando de empresa) - reativar
+  // (active:true) um usuario que ja pertencia ao cliente nao e' uma vaga nova.
+  const nextClientId = data.role === "CLIENT" || existing.role === "CLIENT" ? (data.clientId !== undefined ? data.clientId : existing.clientId) : null;
+  const clientChanged = nextClientId && nextClientId !== existing.clientId;
+  if (clientChanged) await assertUserLimitNotExceeded(nextClientId);
 
   const user = await prisma.user.update({
     where: { id: req.params.id },

@@ -95,6 +95,60 @@ export const getAdminDashboard = asyncHandler(async (_req: Request, res: Respons
   });
 });
 
+/** Visao "administracao da plataforma" (Super Admin): distribuicao de clientes por plano,
+ * MRR estimado (soma do priceMonthly dos clientes ativos com plano) e clientes perto do
+ * limite do proprio plano. Sem integracao de cobranca - MRR e' so estimativa a partir do
+ * preco cadastrado no plano. */
+export const getPlatformDashboard = asyncHandler(async (_req: Request, res: Response) => {
+  const [plans, clientsWithPlan, totalActiveClients, clientsWithoutPlan] = await Promise.all([
+    prisma.plan.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { clients: true } } } }),
+    prisma.client.findMany({
+      where: { deletedAt: null, planId: { not: null } },
+      select: { id: true, companyName: true, tradeName: true, status: true, plan: { select: { name: true, priceMonthly: true, maxUsers: true, maxInstruments: true } } },
+    }),
+    prisma.client.count({ where: { deletedAt: null, status: "ACTIVE" } }),
+    prisma.client.count({ where: { deletedAt: null, planId: null } }),
+  ]);
+
+  const mrr = clientsWithPlan
+    .filter((c) => c.status === "ACTIVE" && c.plan?.priceMonthly != null)
+    .reduce((sum, c) => sum + (c.plan!.priceMonthly ?? 0), 0);
+
+  const pct = (current: number, limit: number | null) => (limit == null ? null : Math.round((current / limit) * 100));
+
+  const usageEntries = await Promise.all(
+    clientsWithPlan.map(async (c) => {
+      const [users, instruments] = await Promise.all([
+        prisma.user.count({ where: { clientId: c.id, deletedAt: null } }),
+        prisma.instrument.count({ where: { clientId: c.id, deletedAt: null } }),
+      ]);
+      const usersPct = pct(users, c.plan!.maxUsers);
+      const instrumentsPct = pct(instruments, c.plan!.maxInstruments);
+      return {
+        clientId: c.id,
+        name: c.tradeName || c.companyName,
+        planName: c.plan!.name,
+        users: { current: users, limit: c.plan!.maxUsers, pct: usersPct },
+        instruments: { current: instruments, limit: c.plan!.maxInstruments, pct: instrumentsPct },
+        worstPct: Math.max(usersPct ?? 0, instrumentsPct ?? 0),
+      };
+    }),
+  );
+
+  const nearLimitClients = usageEntries
+    .filter((e) => e.worstPct >= 80)
+    .sort((a, b) => b.worstPct - a.worstPct)
+    .slice(0, 20);
+
+  res.json({
+    totalActiveClients,
+    clientsWithoutPlan,
+    mrr,
+    plans: plans.map((p) => ({ id: p.id, name: p.name, active: p.active, priceMonthly: p.priceMonthly, clientCount: p._count.clients })),
+    nearLimitClients,
+  });
+});
+
 export const getClientDashboard = asyncHandler(async (req: Request, res: Response) => {
   if (req.user?.role !== "CLIENT" || !req.user.clientId) throw new ForbiddenError();
   const clientId = req.user.clientId;

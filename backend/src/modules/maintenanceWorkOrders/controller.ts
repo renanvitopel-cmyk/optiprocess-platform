@@ -727,6 +727,38 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
   const onTime = plans.filter((p) => !p.nextDueDate || p.nextDueDate >= now).length;
   const complianceRate = plans.length ? onTime / plans.length : 1;
 
+  // ---------------------------------------------------------------------------
+  // PCM: backlog, atrasadas/emergenciais, aguardando X, HH planejada x realizada
+  // e aderencia a programacao - tudo sobre o estado ATUAL da fila (nao filtrado
+  // por data de criacao, diferente das metricas acima), senao um item de backlog
+  // criado antes do periodo escolhido sumiria do numero.
+  // ---------------------------------------------------------------------------
+
+  const clientScopedWhere = { deletedAt: null, ...clientScopeFilter(req), ...(clientId ? { clientId } : {}), ...(instrumentId ? { instrumentId } : {}) };
+
+  const openOrders = await prisma.maintenanceWorkOrder.findMany({
+    where: { ...clientScopedWhere, status: { notIn: ["COMPLETED", "CANCELED"] } },
+    select: { id: true, status: true, priority: true, scheduledDate: true, laborHours: true },
+  });
+
+  const withEstimate = openOrders.filter((w) => w.laborHours != null);
+  const backlogHours = withEstimate.reduce((sum, w) => sum + (w.laborHours ?? 0), 0);
+
+  const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+  const overdue = openOrders.filter((w) => w.scheduledDate && w.scheduledDate < now && !sameDay(w.scheduledDate, now)).length;
+  const emergency = openOrders.filter((w) => w.priority === "CRITICAL").length;
+
+  const completedInPeriod = await prisma.maintenanceWorkOrder.findMany({
+    where: { ...clientScopedWhere, status: "COMPLETED", completedAt: { gte: periodStart, lte: periodEnd } },
+    select: { id: true, scheduledDate: true, completedAt: true, laborHours: true, laborEntries: { select: { hours: true } } },
+  });
+  const plannedHoursCompleted = completedInPeriod.reduce((sum, w) => sum + (w.laborHours ?? 0), 0);
+  const actualHoursCompleted = completedInPeriod.reduce((sum, w) => sum + w.laborEntries.reduce((s, l) => s + l.hours, 0), 0);
+
+  const scheduledCompleted = completedInPeriod.filter((w) => w.scheduledDate);
+  const onSchedule = scheduledCompleted.filter((w) => w.completedAt! <= w.scheduledDate! || sameDay(w.completedAt!, w.scheduledDate!)).length;
+  const scheduleAdherenceRate = scheduledCompleted.length ? onSchedule / scheduledCompleted.length : null;
+
   res.json({
     period: { from: periodStart.toISOString(), to: periodEnd.toISOString() },
     totals: {
@@ -749,6 +781,22 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
       mtbfHours: Number(mtbfHours.toFixed(1)),
       availabilityPct: Number((availability * 100).toFixed(1)),
       planComplianceRatePct: Number((complianceRate * 100).toFixed(1)),
+    },
+    // PCM: estado atual da fila (nao filtrado pelo periodo escolhido acima).
+    pcm: {
+      backlogHours: Number(backlogHours.toFixed(1)),
+      // Quantas das OS em aberto nao tem HH prevista preenchida - backlogHours so soma
+      // quem tem, entao esse numero mostra o quanto o backlog pode estar subestimado.
+      openWithoutEstimate: openOrders.length - withEstimate.length,
+      overdue,
+      emergency,
+      awaitingMaterial: openOrders.filter((w) => w.status === "AWAITING_MATERIAL").length,
+      awaitingRelease: openOrders.filter((w) => w.status === "AWAITING_RELEASE").length,
+      awaitingStoppage: openOrders.filter((w) => w.status === "AWAITING_STOPPAGE").length,
+      plannedHoursCompleted: Number(plannedHoursCompleted.toFixed(1)),
+      actualHoursCompleted: Number(actualHoursCompleted.toFixed(1)),
+      scheduleAdherencePct: scheduleAdherenceRate != null ? Number((scheduleAdherenceRate * 100).toFixed(1)) : null,
+      scheduledCompletedCount: scheduledCompleted.length,
     },
   });
 });

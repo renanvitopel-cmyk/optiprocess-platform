@@ -63,6 +63,7 @@ const MaintenancePlansList = lazy(() => import("./pages/admin/maintenance/Mainte
 const MaintenancePlanForm = lazy(() => import("./pages/admin/maintenance/MaintenancePlanForm"));
 const MaintenancePlanDetail = lazy(() => import("./pages/admin/maintenance/MaintenancePlanDetail"));
 const WorkOrdersList = lazy(() => import("./pages/admin/maintenance/WorkOrdersList"));
+const KanbanBoard = lazy(() => import("./pages/admin/maintenance/KanbanBoard"));
 const WorkOrderForm = lazy(() => import("./pages/admin/maintenance/WorkOrderForm"));
 const WorkOrderDetail = lazy(() => import("./pages/admin/maintenance/WorkOrderDetail"));
 const ServiceRequestsList = lazy(() => import("./pages/admin/maintenance/ServiceRequestsList"));
@@ -148,6 +149,7 @@ export default function App() {
                 <Route path="manutencao/planos/:id/editar" element={<MaintenancePlanForm />} />
                 <Route path="manutencao/planos/:id" element={<MaintenancePlanDetail />} />
                 <Route path="manutencao/ordens" element={<WorkOrdersList />} />
+                <Route path="manutencao/kanban" element={<KanbanBoard />} />
                 <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
                 <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
                 <Route path="manutencao/ordens/:id" element={<WorkOrderDetail />} />
@@ -199,6 +201,7 @@ export default function App() {
                 <Route path="manutencao/planos/:id/editar" element={<MaintenancePlanForm />} />
                 <Route path="manutencao/planos/:id" element={<MaintenancePlanDetail />} />
                 <Route path="manutencao/ordens" element={<WorkOrdersList />} />
+                <Route path="manutencao/kanban" element={<KanbanBoard />} />
                 <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
                 <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
                 <Route path="manutencao/ordens/:id" element={<WorkOrderDetail />} />

@@ -814,4 +814,17 @@ export interface MaintenanceDashboardData {
     availabilityPct: number;
     planComplianceRatePct: number;
   };
+  pcm: {
+    backlogHours: number;
+    openWithoutEstimate: number;
+    overdue: number;
+    emergency: number;
+    awaitingMaterial: number;
+    awaitingRelease: number;
+    awaitingStoppage: number;
+    plannedHoursCompleted: number;
+    actualHoursCompleted: number;
+    scheduleAdherencePct: number | null;
+    scheduledCompletedCount: number;
+  };
 }

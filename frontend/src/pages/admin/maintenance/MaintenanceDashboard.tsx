@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Wrench, Gauge, ClipboardList, ClipboardPlus, ShieldCheck, Activity, TimerReset, ListChecks, Boxes, GitBranch, Radar, HardHat, OctagonPause } from "lucide-react";
+import { Wrench, Gauge, ClipboardList, ClipboardPlus, ShieldCheck, Activity, TimerReset, ListChecks, Boxes, GitBranch, Radar, HardHat, OctagonPause, Kanban } from "lucide-react";
 import { getMaintenanceDashboard } from "../../../api/maintenanceWorkOrders";
 import { listClients } from "../../../api/clients";
 import { PageHeader } from "../../../components/PageHeader";
@@ -51,6 +51,9 @@ export default function MaintenanceDashboard() {
         </Link>
         <Link to={`${base}/ordens${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <ClipboardList className="h-4 w-4" /> Ordens de manutencao
+        </Link>
+        <Link to={`${base}/kanban${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+          <Kanban className="h-4 w-4" /> Kanban
         </Link>
         <Link to={`${base}/planos${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <ShieldCheck className="h-4 w-4" /> Planos de manutencao
@@ -114,6 +117,50 @@ export default function MaintenanceDashboard() {
             <div className="card p-5">
               <p className="text-xs uppercase tracking-wide text-graphite-400">Total de OS (periodo)</p>
               <p className="mt-1 text-2xl font-bold text-navy-900">{data.totals.workOrders}</p>
+            </div>
+          </div>
+
+          <h2 className="mb-3 mt-8 font-semibold text-navy-900">PCM - planejamento e controle</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="card p-5">
+              <p className="text-xs uppercase tracking-wide text-graphite-400">Backlog</p>
+              <p className="mt-1 text-2xl font-bold text-navy-900">{data.pcm.backlogHours}h</p>
+              {data.pcm.openWithoutEstimate > 0 && (
+                <p className="mt-0.5 text-xs text-graphite-400">{data.pcm.openWithoutEstimate} OS em aberto sem HH prevista (fora da conta)</p>
+              )}
+            </div>
+            <div className={`card p-5 ${data.pcm.overdue > 0 ? "border-safety-red/30 bg-red-50/40" : ""}`}>
+              <p className="text-xs uppercase tracking-wide text-graphite-400">Atrasadas</p>
+              <p className={`mt-1 text-2xl font-bold ${data.pcm.overdue > 0 ? "text-safety-red" : "text-navy-900"}`}>{data.pcm.overdue}</p>
+            </div>
+            <div className={`card p-5 ${data.pcm.emergency > 0 ? "border-safety-red/30 bg-red-50/40" : ""}`}>
+              <p className="text-xs uppercase tracking-wide text-graphite-400">Emergenciais (criticas, em aberto)</p>
+              <p className={`mt-1 text-2xl font-bold ${data.pcm.emergency > 0 ? "text-safety-red" : "text-navy-900"}`}>{data.pcm.emergency}</p>
+            </div>
+            <div className="card p-5">
+              <p className="text-xs uppercase tracking-wide text-graphite-400">Aderencia a programacao</p>
+              <p className="mt-1 text-2xl font-bold text-navy-900">
+                {data.pcm.scheduleAdherencePct != null ? `${data.pcm.scheduleAdherencePct}%` : "Dados insuficientes"}
+              </p>
+              {data.pcm.scheduleAdherencePct != null && (
+                <p className="mt-0.5 text-xs text-graphite-400">{data.pcm.scheduledCompletedCount} OS programadas concluidas no periodo</p>
+              )}
+            </div>
+            <div className="card p-5">
+              <p className="text-xs uppercase tracking-wide text-graphite-400">Aguardando material</p>
+              <p className="mt-1 text-2xl font-bold text-navy-900">{data.pcm.awaitingMaterial}</p>
+            </div>
+            <div className="card p-5">
+              <p className="text-xs uppercase tracking-wide text-graphite-400">Aguardando liberacao</p>
+              <p className="mt-1 text-2xl font-bold text-navy-900">{data.pcm.awaitingRelease}</p>
+            </div>
+            <div className="card p-5">
+              <p className="text-xs uppercase tracking-wide text-graphite-400">Aguardando parada</p>
+              <p className="mt-1 text-2xl font-bold text-navy-900">{data.pcm.awaitingStoppage}</p>
+            </div>
+            <div className="card p-5">
+              <p className="text-xs uppercase tracking-wide text-graphite-400">HH prevista x realizada (concluidas)</p>
+              <p className="mt-1 text-2xl font-bold text-navy-900">{data.pcm.plannedHoursCompleted}h / {data.pcm.actualHoursCompleted}h</p>
             </div>
           </div>
         </>

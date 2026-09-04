@@ -15,6 +15,8 @@ import {
   getInstrumentCostSummary,
   listInstrumentAttachmentsRoute,
   uploadInstrumentAttachment,
+  uploadInstrumentPhoto,
+  deleteInstrumentPhoto,
   deleteInstrumentAttachment,
   getInstrumentAttachmentUrl,
 } from "./controller";
@@ -45,5 +47,7 @@ instrumentsRouter.get("/:id/cost-summary", getInstrumentCostSummary);
 // Anexos do ativo (manual, foto do equipamento etc.) - mesmo padrao ja usado nas OS.
 instrumentsRouter.get("/:id/attachments", listInstrumentAttachmentsRoute);
 instrumentsRouter.get("/:id/attachments/:attachmentId/url", getInstrumentAttachmentUrl);
+instrumentsRouter.post("/:id/photo", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), uploadAny.single("file"), uploadInstrumentPhoto);
+instrumentsRouter.delete("/:id/photo", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), deleteInstrumentPhoto);
 instrumentsRouter.post("/:id/attachments", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), uploadAny.single("file"), uploadInstrumentAttachment);
 instrumentsRouter.delete("/:id/attachments/:attachmentId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), deleteInstrumentAttachment);

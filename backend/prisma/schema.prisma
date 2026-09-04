@@ -630,6 +630,11 @@ model Instrument {
   resolution                 String?
   unit                       String?
   installationLocation       String?
+  // Foto do ativo: uma so, para reconhecer o equipamento de relance nas listas e na ficha.
+  // Fica direto aqui (e nao em Attachment) porque e' a imagem principal, nao um anexo entre
+  // varios - o album completo continua nos anexos.
+  photoKey                   String?
+  photoFileName              String?
   // Marca o ativo como sujeito a calibracao. E' o que separa os dois mundos: a lista de
   // Ativos da OptiProcess mostra so os calibraveis (o que ela presta servico), enquanto o
   // CMMS do cliente enxerga toda a arvore dele - linha, maquina, componente.

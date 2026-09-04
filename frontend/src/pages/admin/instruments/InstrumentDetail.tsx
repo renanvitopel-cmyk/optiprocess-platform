@@ -184,11 +184,31 @@ export default function InstrumentDetail() {
         </p>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        {instrument.photoUrl && (
+          <img
+            src={instrument.photoUrl}
+            alt={`Foto do ativo ${instrument.tag ?? ""}`}
+            className="h-14 w-14 rounded-lg border border-gray-200 object-cover"
+          />
+        )}
         <StatusBadge status={instrument.derivedStatus ?? instrument.status} />
         <StatusBadge status={instrument.criticality} label={`Criticidade: ${PRIORITY_LABELS[instrument.criticality]}`} />
         <StatusBadge status={instrument.operationalStatus} />
       </div>
+
+      {/* Cadastro rapido deixa o tipo pendente de proposito - aqui e' o lugar de lembrar
+          que a ficha ainda nao esta completa, sem impedir nada. */}
+      {instrument.type === "A definir" && canManage && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-safety-yellow/40 bg-safety-yellow/10 px-4 py-3">
+          <p className="text-sm text-graphite-700">
+            Este ativo foi cadastrado pelo caminho rapido e ainda nao tem tipo definido.
+          </p>
+          <button className="btn-outline ml-auto text-sm" onClick={() => setEditOpen(true)}>
+            Completar ficha
+          </button>
+        </div>
+      )}
 
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
 

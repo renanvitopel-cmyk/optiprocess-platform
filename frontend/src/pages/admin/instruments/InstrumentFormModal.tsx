@@ -2,15 +2,16 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Camera, X } from "lucide-react";
 import { Modal } from "../../../components/Modal";
 import { TextInput, SelectInput, CheckboxInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
 import { AssetTypeInput } from "../../../components/AssetTypeInput";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { LocationPicker } from "../../../components/LocationPicker";
-import { createInstrument, updateInstrument, getInstrument } from "../../../api/instruments";
+import { createInstrument, updateInstrument, getInstrument, uploadInstrumentPhoto, deleteInstrumentPhoto } from "../../../api/instruments";
 import { listAssetTypes } from "../../../api/assetTypes";
+import { listAreas } from "../../../api/areas";
 import type { Instrument } from "../../../api/types";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../../auth/AuthContext";
@@ -21,7 +22,8 @@ const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
   tag: z.string().min(1, "Informe o TAG do ativo."),
   description: z.string().min(2, "Informe a descricao do ativo."),
-  type: z.string().min(2, "Informe o tipo (Planta, Linha, Maquina, Componente...)."),
+  // O cadastro inicial nao pergunta o tipo - ele entra depois, na ficha do ativo.
+  type: z.string().optional(),
   criticality: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   operationalStatus: z.enum(["IN_OPERATION", "STOPPED", "STANDBY", "DEACTIVATED", "IN_MAINTENANCE"]).optional(),
   parentId: z.string().uuid().optional().or(z.literal("")),
@@ -96,6 +98,24 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
     queryFn: () => listAssetTypes({ active: true }),
     staleTime: 60_000,
   });
+  // Cadastro novo e' o caminho rapido: so o que identifica o ativo e onde ele fica. A ficha
+  // completa (tipo, criticidade, fabricante, calibracao) aparece ao editar - assim ninguem
+  // precisa saber tudo sobre o equipamento para conseguir cadastra-lo.
+  const modoRapido = !instrument;
+
+  const [foto, setFoto] = useState<File | null>(null);
+  const [fotoRemovida, setFotoRemovida] = useState(false);
+  const previewFoto = foto ? URL.createObjectURL(foto) : fotoRemovida ? null : instrument?.photoUrl ?? null;
+
+  const plantId = watch("plantId");
+  const areaId = watch("areaId");
+  const { data: areasDaPlanta } = useQuery({
+    queryKey: ["areas-centro-custo", plantId],
+    queryFn: () => listAreas({ plantId: plantId as string, active: true }),
+    enabled: !!plantId && !parentId,
+  });
+  const centroDeCustoDaArea = (areasDaPlanta ?? []).find((a) => a.id === areaId)?.costCenter?.name ?? null;
+
   const level = (assetTypes ?? []).find((t) => t.name.toLowerCase() === (selectedType ?? "").toLowerCase())?.level ?? null;
   const isRoot = level === "PLANT";
   const exigeFichaTecnica = level === "MACHINE";
@@ -109,6 +129,8 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
 
   useEffect(() => {
     if (open) {
+      setFoto(null);
+      setFotoRemovida(false);
       reset(
         instrument
           ? {
@@ -160,8 +182,13 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
         costCenterId: values.costCenterId || null,
         calibrationFrequencyMonths: values.calibrationFrequencyMonths || null,
       };
-      const saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
-      notify("success", instrument ? "Ativo atualizado." : "Ativo cadastrado.");
+      let saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
+
+      // A foto so pode subir depois que o ativo existe - e' ela que da o id do arquivo.
+      if (foto) saved = await uploadInstrumentPhoto(saved.id, foto);
+      else if (fotoRemovida && instrument?.photoUrl) await deleteInstrumentPhoto(saved.id);
+
+      notify("success", instrument ? "Ativo atualizado." : "Ativo cadastrado. Complete a ficha tecnica quando quiser.");
       onSaved(saved);
     } catch (error) {
       notify("error", getApiErrorMessage(error));
@@ -199,14 +226,48 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
           />
         </div>
 
+        {/* Foto: opcional, mas e' o que faz a lista de ativos deixar de ser uma tabela de
+            codigos e virar algo que a equipe reconhece de relance. */}
+        <div className="flex items-center gap-4">
+          {previewFoto ? (
+            <img src={previewFoto} alt="Foto do ativo" className="h-20 w-20 shrink-0 rounded-lg border border-gray-200 object-cover" />
+          ) : (
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50">
+              <Camera className="h-6 w-6 text-graphite-300" />
+            </div>
+          )}
+          <div className="min-w-0">
+            <label className="btn-outline inline-flex cursor-pointer items-center gap-2 text-sm">
+              <Camera className="h-4 w-4" />
+              {previewFoto ? "Trocar foto" : "Adicionar foto"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const arquivo = e.target.files?.[0] ?? null;
+                  setFoto(arquivo);
+                  if (arquivo) setFotoRemovida(false);
+                }}
+              />
+            </label>
+            {previewFoto && (
+              <button
+                type="button"
+                className="ml-2 inline-flex items-center gap-1 text-xs text-graphite-500 hover:text-safety-red"
+                onClick={() => { setFoto(null); setFotoRemovida(true); }}
+              >
+                <X className="h-3 w-3" /> Remover
+              </button>
+            )}
+            <p className="mt-1 text-xs text-graphite-400">Opcional. Uma foto do equipamento ajuda a reconhecer o ativo na lista.</p>
+          </div>
+        </div>
+
         <InstrumentPicker
           label="Faz parte de (ativo pai)"
-          required={!isRoot}
-          hint={
-            isRoot
-              ? "Planta e' a raiz da arvore - nao precisa de pai."
-              : "Estrutura: Planta > Area > Ativo/Sistema > Equipamento > Componente."
-          }
+          required={!modoRapido && !isRoot}
+          hint="Estrutura: Planta > Area > Ativo/Sistema > Equipamento > Componente. Vazio = ativo no topo."
           clientId={clientId}
           excludeId={instrument?.id}
           error={errors.parentId?.message}
@@ -236,8 +297,10 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
           </div>
         )}
 
+        {!modoRapido && (
+        <>
         <div className="grid gap-4 sm:grid-cols-3">
-          <AssetTypeInput required currentValue={instrument?.type} error={errors.type?.message} {...register("type")} />
+          <AssetTypeInput currentValue={instrument?.type} error={errors.type?.message} {...register("type")} />
           <SelectInput
             label="Criticidade"
             hint="Quanto uma parada pesa pra empresa."
@@ -261,7 +324,6 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
             {...register("operationalStatus")}
           />
         </div>
-
         <Section
           title="Ficha do fabricante"
           hint={exigeFichaTecnica ? "obrigatoria para este tipo" : "opcional"}
@@ -318,18 +380,29 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
             <TextInput label="Unidade" {...register("unit")} />
           </div>
         </Section>
-
-        {!parentId && (
-          <Section title="Localizacao (planta e area)" hint="definida no ativo raiz" defaultOpen>
-            <p className="text-xs text-graphite-500">
-              Como este ativo nao tem pai, e' aqui que a planta e a area sao definidas. Todos os ativos abaixo
-              dele na arvore herdam esse contexto automaticamente.
-            </p>
-            <LocationPicker clientId={clientId} register={register} watch={watch} setValue={setValue} hideCostCenter />
-          </Section>
+        </>
         )}
 
-        {user?.role === "ADMIN" && (
+        {!parentId && (
+          <div className="rounded-lg border border-gray-200 p-4">
+            <p className="text-sm font-medium text-graphite-700">Onde fica</p>
+            <p className="mt-0.5 text-xs text-graphite-500">
+              Sem ativo pai, e' aqui que a planta e a area sao definidas - e todo ativo abaixo deste na arvore
+              herda esse contexto.
+            </p>
+            <div className="mt-3">
+              <LocationPicker clientId={clientId} register={register} watch={watch} setValue={setValue} hideCostCenter />
+            </div>
+            {areaId && (
+              <p className="mt-3 text-xs text-graphite-500">
+                Centro de custo: <span className="font-medium text-graphite-800">{centroDeCustoDaArea ?? "a area escolhida ainda nao tem um padrao"}</span>
+                {" "}- vem da area, nao se digita aqui.
+              </p>
+            )}
+          </div>
+        )}
+
+        {user?.role === "ADMIN" && !modoRapido && (
           <Section title="Excecao de centro de custo" hint="somente administrador">
             <p className="text-xs text-graphite-500">
               Por padrao o centro de custo vem da area. Preencha aqui apenas se este ativo especifico precisa
@@ -337,6 +410,12 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
             </p>
             <LocationPicker clientId={clientId} register={register} watch={watch} setValue={setValue} onlyCostCenter />
           </Section>
+        )}
+        {modoRapido && (
+          <p className="rounded-lg bg-gray-50 px-4 py-3 text-xs text-graphite-500">
+            Tipo do ativo, criticidade, ficha do fabricante e calibracao sao preenchidos depois, na ficha
+            deste ativo. Para cadastrar, basta o que esta acima.
+          </p>
         )}
       </form>
     </Modal>

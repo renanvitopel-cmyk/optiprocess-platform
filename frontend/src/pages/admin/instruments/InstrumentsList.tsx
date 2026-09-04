@@ -118,7 +118,22 @@ export default function InstrumentsList() {
               </span>
             ),
           },
-          { header: "Ativo", accessor: (i) => (<div><p className="font-medium text-navy-900">{i.description || i.type}</p><p className="text-xs text-graphite-400">{i.type}{i.model ? ` - ${i.model}` : ""}</p></div>) },
+          {
+            header: "Ativo",
+            accessor: (i) => (
+              <div className="flex items-center gap-2.5">
+                {/* Miniatura da foto: quem conhece o chao de fabrica reconhece o equipamento
+                    muito antes de ler o TAG. Sem foto, nao ocupa espaco. */}
+                {i.photoUrl && (
+                  <img src={i.photoUrl} alt="" className="h-9 w-9 shrink-0 rounded-md border border-gray-200 object-cover" />
+                )}
+                <div className="min-w-0">
+                  <p className="font-medium text-navy-900">{i.description || i.type}</p>
+                  <p className="text-xs text-graphite-400">{i.type}{i.model ? ` - ${i.model}` : ""}</p>
+                </div>
+              </div>
+            ),
+          },
           { header: "Componente de", accessor: (i) => (i.parent ? `TAG ${i.parent.tag ?? i.parent.type}` : "-") },
           { header: "Cliente", accessor: (i) => clientDisplayName(i.client) },
           { header: "Criticidade", accessor: (i) => <StatusBadge status={i.criticality} /> },

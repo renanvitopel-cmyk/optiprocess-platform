@@ -27,6 +27,20 @@ async function attachAssetTypeLevel<T extends { type: string }>(instruments: T[]
   return instruments.map((i) => ({ ...i, assetTypeLevel: byName.get(i.type.toLowerCase()) ?? null }));
 }
 
+/** Troca a chave de armazenamento por um link temporario que a tela consegue exibir.
+ * Assinar e' local (nao vai na rede), entao dá pra fazer isso item a item na listagem. */
+async function attachPhotoUrl<T extends { photoKey: string | null; photoFileName: string | null }>(
+  instruments: T[],
+): Promise<(T & { photoUrl: string | null })[]> {
+  const storage = getStorageProvider();
+  return Promise.all(
+    instruments.map(async (i) => ({
+      ...i,
+      photoUrl: i.photoKey ? await storage.getSignedDownloadUrl(i.photoKey, i.photoFileName ?? "foto", 3600) : null,
+    })),
+  );
+}
+
 export const listInstruments = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
@@ -95,7 +109,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
     prisma.instrument.count({ where }),
   ]);
 
-  const withLevel = await attachAssetTypeLevel(items.map(withDerivedStatus));
+  const withLevel = await attachPhotoUrl(await attachAssetTypeLevel(items.map(withDerivedStatus)));
   res.json(buildPagedResult(withLevel, total, pageParams));
 });
 
@@ -130,7 +144,7 @@ export const getInstrument = asyncHandler(async (req: Request, res: Response) =>
     },
   });
   if (!instrument) throw new NotFoundError("Instrumento");
-  const [withLevel] = await attachAssetTypeLevel([withDerivedStatus(instrument)]);
+  const [withLevel] = await attachPhotoUrl(await attachAssetTypeLevel([withDerivedStatus(instrument)]));
   res.json(withLevel);
 });
 
@@ -138,7 +152,9 @@ const instrumentSchema = z.object({
   // Opcional aqui porque o portal do cliente nunca envia clientId (o backend forca a
   // propria empresa do usuario); obrigatorio apenas para a equipe interna, checado abaixo.
   clientId: z.string().uuid().optional(),
-  type: z.string().min(2),
+  // Opcional: o cadastro inicial pede so TAG, descricao, onde o ativo fica e a foto. O tipo
+  // (e o resto da ficha) e' completado depois, na propria ficha do ativo.
+  type: z.string().min(2).optional(),
   // TAG e o codigo que identifica o ativo (cadastrado pelo cliente ou pela OptiProcess) -
   // e' o que agrupa, na ficha do ativo, todas as calibracoes e ordens de servico dele.
   tag: z.string().min(1, "Informe o TAG do ativo."),
@@ -220,6 +236,9 @@ async function resolveAssetLevel(type: string): Promise<string | null> {
  * faz sentido exigir. Planta, area, linha, sistema e componente nao tem numero de serie. */
 const LEVELS_COM_FICHA_TECNICA = new Set(["MACHINE"]);
 
+/** Tipo de um ativo cadastrado pelo caminho rapido, que ainda nao foi classificado. */
+export const TIPO_A_DEFINIR = "A definir";
+
 /** Contexto (planta/area/centro de custo) que este ativo deve ter, dado o pai escolhido.
  * O centro de custo vem do padrao da area; um ativo marcado como excecao (so ADMIN) fica
  * com o que foi definido a mao. */
@@ -285,10 +304,11 @@ async function propagateContextToDescendants(instrumentId: string, depth = 0): P
 
 /** Regras de preenchimento que dependem do nivel do ativo (requisitos 5 e 6). */
 async function assertLevelRules(
-  data: { type: string; description?: string | null; parentId?: string | null; manufacturer?: string | null; model?: string | null; serialNumber?: string | null },
+  data: { type?: string; description?: string | null; parentId?: string | null; manufacturer?: string | null; model?: string | null; serialNumber?: string | null },
   { isCreate }: { isCreate: boolean },
 ): Promise<void> {
-  const level = await resolveAssetLevel(data.type);
+  // Sem tipo escolhido nao ha nivel, e portanto nenhuma regra de nivel a cobrar.
+  const level = data.type ? await resolveAssetLevel(data.type) : null;
 
   if (isCreate && !data.description?.trim()) {
     throw new ValidationError("Informe a descricao do ativo.");
@@ -381,6 +401,10 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
   const instrument = await prisma.instrument.create({
     data: {
       ...data,
+      // Cadastro rapido nao escolhe tipo; fica marcado como pendente ate alguem completar
+      // a ficha - e' honesto na tela e nao casa com nenhum nivel da arvore, entao nenhuma
+      // regra de nivel dispara em cima de um ativo incompleto.
+      type: data.type ?? TIPO_A_DEFINIR,
       calibratable,
       clientId,
       plantId: context.plantId,
@@ -685,6 +709,42 @@ export const listInstrumentAttachmentsRoute = asyncHandler(async (req: Request, 
   });
   if (!instrument) throw new NotFoundError("Ativo");
   res.json(await listInstrumentAttachments(instrument.id));
+});
+
+/** Foto principal do ativo. Substituir apaga a anterior do armazenamento - nao faz sentido
+ * acumular fotos orfas de um campo que so guarda uma. */
+export const uploadInstrumentPhoto = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
+  const existing = await prisma.instrument.findFirst({ where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) } });
+  if (!existing) throw new NotFoundError("Ativo");
+
+  const file = req.file;
+  if (!file) throw new ValidationError("Selecione uma imagem.");
+  if (!file.mimetype.startsWith("image/")) throw new ValidationError("A foto do ativo precisa ser uma imagem.");
+
+  const storage = getStorageProvider();
+  const key = `instruments/${existing.id}/foto-${Date.now()}-${file.originalname}`;
+  await storage.upload(key, file.buffer, file.mimetype);
+
+  const anterior = existing.photoKey;
+  const instrument = await prisma.instrument.update({
+    where: { id: existing.id },
+    data: { photoKey: key, photoFileName: file.originalname },
+  });
+  if (anterior) await storage.delete(anterior).catch(() => undefined);
+
+  const [comFoto] = await attachPhotoUrl([instrument]);
+  res.status(201).json(comFoto);
+});
+
+export const deleteInstrumentPhoto = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
+  const existing = await prisma.instrument.findFirst({ where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) } });
+  if (!existing) throw new NotFoundError("Ativo");
+
+  if (existing.photoKey) await getStorageProvider().delete(existing.photoKey).catch(() => undefined);
+  await prisma.instrument.update({ where: { id: existing.id }, data: { photoKey: null, photoFileName: null } });
+  res.status(204).send();
 });
 
 export const uploadInstrumentAttachment = asyncHandler(async (req: Request, res: Response) => {

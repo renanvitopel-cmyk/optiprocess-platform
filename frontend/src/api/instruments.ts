@@ -108,3 +108,15 @@ export async function getInstrumentAttachmentUrl(instrumentId: string, attachmen
   const { data } = await api.get<{ url: string }>(`/instruments/${instrumentId}/attachments/${attachmentId}/url`);
   return data.url;
 }
+
+/** Envia (ou substitui) a foto principal do ativo. */
+export async function uploadInstrumentPhoto(id: string, file: File): Promise<Instrument> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post<Instrument>(`/instruments/${id}/photo`, form);
+  return data;
+}
+
+export async function deleteInstrumentPhoto(id: string): Promise<void> {
+  await api.delete(`/instruments/${id}/photo`);
+}

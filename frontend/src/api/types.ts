@@ -162,6 +162,9 @@ export interface Instrument {
   resolution: string | null;
   unit: string | null;
   installationLocation: string | null;
+  /** Foto principal do ativo - link temporario gerado pelo backend, nao a chave crua. */
+  photoUrl?: string | null;
+  photoFileName?: string | null;
   calibrationFrequencyMonths: number | null;
   lastCalibrationDate: string | null;
   nextDueDate: string | null;

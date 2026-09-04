@@ -925,17 +925,41 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
 
   const workOrders = await prisma.maintenanceWorkOrder.findMany({
     where,
-    select: { id: true, type: true, status: true, startedAt: true, completedAt: true, instrumentId: true, triggeredByMeterId: true },
+    select: { id: true, type: true, status: true, startedAt: true, completedAt: true, instrumentId: true, triggeredByMeterId: true, failureStartedAt: true, failureEndedAt: true, createdAt: true },
   });
 
-  const completed = workOrders.filter((w) => w.completedAt && w.startedAt);
-  const corrective = workOrders.filter((w) => w.type === "CORRECTIVE" && w.completedAt && w.startedAt);
+  /** Janela de reparo de uma OS, em minutos, pela melhor evidencia disponivel:
+   *
+   * 1) a janela da falha informada pelo tecnico (inicio -> termino) - e' o tempo real em
+   *    que o equipamento ficou fora, e o unico que vale para uma quebra;
+   * 2) "Iniciar" -> "Concluir", quando alguem de fato apertou Iniciar antes;
+   * 3) nada. A OS nao entra no MTTR.
+   *
+   * O passo 3 importa: antes, concluir uma OS sem ter apertado Iniciar gravava startedAt
+   * igual ao instante da conclusao, e a OS entrava no MTTR valendo zero - o indicador ia
+   * para o chao a cada OS fechada direto, que e' o que o tecnico faz na pratica. */
+  function minutosDeReparo(w: {
+    startedAt: Date | null; completedAt: Date | null;
+    failureStartedAt: Date | null; failureEndedAt: Date | null;
+  }): number | null {
+    if (w.failureStartedAt && w.failureEndedAt) {
+      return (w.failureEndedAt.getTime() - w.failureStartedAt.getTime()) / 60000;
+    }
+    if (w.startedAt && w.completedAt) {
+      const minutos = (w.completedAt.getTime() - w.startedAt.getTime()) / 60000;
+      // Menos de um minuto = ninguem apertou Iniciar; nao e' um reparo instantaneo.
+      return minutos >= 1 ? minutos : null;
+    }
+    return null;
+  }
 
-  // Sem OS concluida nao ha MTTR. Zero aqui seria lido como "conserta na hora"; null vira
+  const completed = workOrders.filter((w) => w.completedAt);
+  const corrective = workOrders.filter((w) => w.type === "CORRECTIVE" && w.completedAt);
+
+  const reparos = completed.map(minutosDeReparo).filter((m): m is number => m != null);
+  // Sem reparo medido nao ha MTTR. Zero aqui seria lido como "conserta na hora"; null vira
   // "dados insuficientes" na tela, que e' a verdade.
-  const mttrMinutes = completed.length
-    ? completed.reduce((sum, w) => sum + (w.completedAt!.getTime() - w.startedAt!.getTime()), 0) / completed.length / 60000
-    : null;
+  const mttrMinutes = reparos.length ? reparos.reduce((a, b) => a + b, 0) / reparos.length : null;
 
   // MTBF: intervalo medio entre conclusoes de corretivas consecutivas, por ativo.
   const byInstrument = new Map<string, Date[]>();
@@ -955,11 +979,14 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
   // isso e' null - zero significaria "quebra o tempo todo", o oposto do que se sabe.
   const mtbfHours = gapsHours.length ? gapsHours.reduce((a, b) => a + b, 0) / gapsHours.length : null;
 
-  const downtimeMinutes = corrective.reduce((sum, w) => sum + (w.completedAt!.getTime() - w.startedAt!.getTime()), 0) / 60000;
+  // Indisponibilidade: a janela da falha quando informada (o tempo que a producao ficou
+  // parada de verdade), caindo para Iniciar->Concluir quando nao ha registro de falha.
+  const paradas = corrective.map(minutosDeReparo).filter((m): m is number => m != null);
+  const downtimeMinutes = paradas.reduce((a, b) => a + b, 0);
   const periodMinutes = Math.max(1, (periodEnd.getTime() - periodStart.getTime()) / 60000);
-  // Disponibilidade so faz sentido tendo corretiva concluida no periodo; sem nenhuma, o
-  // calculo daria 100% - o que nao e' "otimo desempenho", e' ausencia de informacao.
-  const availability = corrective.length ? Math.max(0, 1 - downtimeMinutes / periodMinutes) : null;
+  // Disponibilidade so faz sentido tendo parada medida no periodo; sem nenhuma, o calculo
+  // daria 100% - o que nao e' "otimo desempenho", e' ausencia de informacao.
+  const availability = paradas.length ? Math.max(0, 1 - downtimeMinutes / periodMinutes) : null;
 
   const plans = await prisma.maintenancePlan.findMany({
     where: { deletedAt: null, active: true, ...clientScopeFilter(req), ...(clientId ? { clientId } : {}), ...(instrumentId ? { instrumentId } : {}) },

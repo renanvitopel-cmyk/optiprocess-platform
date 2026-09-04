@@ -19,6 +19,8 @@ import { getApiErrorMessage } from "../../../api/client";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { useCmms } from "../../../lib/cmms";
 
+const MESES = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
 const PRIORITY_LABELS: Record<string, string> = { LOW: "Baixa", MEDIUM: "Media", HIGH: "Alta", CRITICAL: "Critica" };
 
 const schema = z.object({
@@ -26,10 +28,25 @@ const schema = z.object({
   instrumentId: z.string().uuid("Selecione o ativo."),
   name: z.string().min(2, "Informe o nome do plano."),
   description: z.string().optional(),
-  triggerType: z.enum(["TIME", "METER"]),
+  triggerType: z.enum(["TIME", "METER", "CONDITION"]),
   frequencyDays: z.coerce.number().int().positive().optional(),
   meterId: z.string().uuid().optional().or(z.literal("")),
   meterInterval: z.coerce.number().positive().optional(),
+  // Agendamento
+  frequencyUnit: z.enum(["DAY", "WEEK", "MONTH", "YEAR"]),
+  frequencyEvery: z.coerce.number().int().positive().optional(),
+  baseDate: z.string().optional(),
+  dayOfWeek: z.coerce.number().int().min(0).max(6).optional().or(z.literal("")),
+  dayOfMonth: z.coerce.number().int().min(1).max(31).optional().or(z.literal("")),
+  monthOfYear: z.coerce.number().int().min(1).max(12).optional().or(z.literal("")),
+  operationalCalendar: z.enum(["ALL_DAYS", "BUSINESS_DAYS"]),
+  generateAdvanceDays: z.coerce.number().int().nonnegative().optional(),
+  meterBaseReading: z.coerce.number().optional(),
+  generateAdvanceMeterUnits: z.coerce.number().nonnegative().optional(),
+  toleranceMeterBefore: z.coerce.number().nonnegative().optional(),
+  toleranceMeterAfter: z.coerce.number().nonnegative().optional(),
+  meterResetRule: z.enum(["CONTINUE", "RESET_BASE"]),
+  conditionMeterId: z.string().uuid().optional().or(z.literal("")),
   responsibleId: z.string().uuid().optional().or(z.literal("")),
   status: z.enum(["DRAFT", "ACTIVE", "SUSPENDED", "CLOSED"]),
   planType: z.enum(["PREVENTIVE", "INSPECTION", "LUBRICATION", "CALIBRATION", "REGULATORY", "OTHER"]),
@@ -65,6 +82,9 @@ export default function MaintenancePlanForm() {
       clientId: ownClientId ?? searchParams.get("clientId") ?? "",
       instrumentId: searchParams.get("instrumentId") ?? "",
       triggerType: "TIME",
+      frequencyUnit: "DAY",
+      operationalCalendar: "ALL_DAYS",
+      meterResetRule: "CONTINUE",
       status: "ACTIVE",
       planType: "PREVENTIVE",
       scope: "SINGLE_ASSET",
@@ -78,11 +98,12 @@ export default function MaintenancePlanForm() {
   const clientId = watch("clientId");
   const instrumentId = watch("instrumentId");
   const triggerType = watch("triggerType");
+  const frequencyUnit = watch("frequencyUnit");
 
   const { data: meters } = useQuery({
     queryKey: ["meters-picker", instrumentId],
     queryFn: () => listMeters({ instrumentId }),
-    enabled: !!instrumentId && triggerType === "METER",
+    enabled: !!instrumentId && (triggerType === "METER" || triggerType === "CONDITION"),
   });
 
   const { data: spareParts } = useQuery({
@@ -104,7 +125,7 @@ export default function MaintenancePlanForm() {
   const [step, setStep] = useState(0);
   const STEP_FIELDS: (keyof FormValues)[][] = [
     ["clientId", "instrumentId", "name", "planType", "scope", "defaultPriority", "status"],
-    ["triggerType", "frequencyDays", "meterId", "meterInterval", "toleranceDaysBefore", "toleranceDaysAfter"],
+    ["triggerType", "frequencyEvery", "frequencyUnit", "meterId", "meterInterval", "conditionMeterId", "toleranceDaysBefore", "toleranceDaysAfter"],
     ["estimatedLaborHours", "procedure", "parts", "checklistTemplate"],
   ];
   async function goToStep(next: number) {
@@ -132,6 +153,20 @@ export default function MaintenancePlanForm() {
         scope: existing.scope ?? "SINGLE_ASSET",
         defaultPriority: existing.defaultPriority ?? "MEDIUM",
         specialtyId: existing.specialtyId ?? "",
+        frequencyUnit: existing.frequencyUnit ?? "DAY",
+        frequencyEvery: existing.frequencyEvery ?? existing.frequencyDays ?? undefined,
+        baseDate: existing.baseDate?.slice(0, 10) ?? "",
+        dayOfWeek: existing.dayOfWeek ?? "",
+        dayOfMonth: existing.dayOfMonth ?? "",
+        monthOfYear: existing.monthOfYear ?? "",
+        operationalCalendar: existing.operationalCalendar ?? "ALL_DAYS",
+        generateAdvanceDays: existing.generateAdvanceDays ?? undefined,
+        meterBaseReading: existing.meterBaseReading ?? undefined,
+        generateAdvanceMeterUnits: existing.generateAdvanceMeterUnits ?? undefined,
+        toleranceMeterBefore: existing.toleranceMeterBefore ?? undefined,
+        toleranceMeterAfter: existing.toleranceMeterAfter ?? undefined,
+        meterResetRule: existing.meterResetRule ?? "CONTINUE",
+        conditionMeterId: existing.conditionMeterId ?? "",
         checklistTemplate: existing.checklistTemplate.length ? existing.checklistTemplate : [{ description: "" }],
         toleranceDaysBefore: existing.toleranceDaysBefore ?? undefined,
         toleranceDaysAfter: existing.toleranceDaysAfter ?? undefined,
@@ -149,6 +184,16 @@ export default function MaintenancePlanForm() {
         meterId: values.meterId || null,
         responsibleId: values.responsibleId || null,
         specialtyId: values.specialtyId || null,
+        conditionMeterId: values.conditionMeterId || null,
+        baseDate: values.baseDate || null,
+        dayOfWeek: values.dayOfWeek === "" ? null : values.dayOfWeek,
+        dayOfMonth: values.dayOfMonth === "" ? null : values.dayOfMonth,
+        monthOfYear: values.monthOfYear === "" ? null : values.monthOfYear,
+        generateAdvanceDays: values.generateAdvanceDays ?? null,
+        meterBaseReading: values.meterBaseReading ?? null,
+        generateAdvanceMeterUnits: values.generateAdvanceMeterUnits ?? null,
+        toleranceMeterBefore: values.toleranceMeterBefore ?? null,
+        toleranceMeterAfter: values.toleranceMeterAfter ?? null,
         checklistTemplate: values.checklistTemplate.filter((c) => c.description.trim()),
         toleranceDaysBefore: values.toleranceDaysBefore ?? null,
         toleranceDaysAfter: values.toleranceDaysAfter ?? null,
@@ -320,70 +365,207 @@ export default function MaintenancePlanForm() {
             label="Tipo de disparo"
             required
             options={[
-              { value: "TIME", label: "Por tempo (periodicidade em dias)" },
-              { value: "METER", label: "Por medidor (horimetro, odometro, etc.)" },
+              { value: "TIME", label: "Por tempo / calendario" },
+              { value: "METER", label: "Por medidor, ciclo ou contador" },
+              { value: "CONDITION", label: "Por condicao (preditiva)" },
             ]}
             {...register("triggerType")}
           />
-          {triggerType === "TIME" ? (
-            <TextInput
-              label="Periodicidade (dias)"
-              type="number"
-              required
-              hint="Ex.: 30 para mensal, 7 para semanal."
-              error={errors.frequencyDays?.message}
-              {...register("frequencyDays")}
-            />
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <SelectInput
-                label="Medidor"
-                required
-                placeholder={instrumentId ? "Selecione o medidor" : "Selecione o ativo primeiro"}
-                disabled={!instrumentId}
-                options={(meters ?? []).map((m) => ({ value: m.id, label: `${m.name} (${m.unit}) - atual: ${m.currentValue}` }))}
-                error={errors.meterId?.message}
-                {...register("meterId")}
-              />
+
+          {triggerType === "TIME" && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextInput
+                  label="A cada"
+                  type="number"
+                  required
+                  placeholder="Ex.: 3"
+                  error={errors.frequencyEvery?.message}
+                  {...register("frequencyEvery")}
+                />
+                <SelectInput
+                  label="Unidade"
+                  required
+                  options={[
+                    { value: "DAY", label: "Dia(s)" },
+                    { value: "WEEK", label: "Semana(s)" },
+                    { value: "MONTH", label: "Mes(es)" },
+                    { value: "YEAR", label: "Ano(s)" },
+                  ]}
+                  {...register("frequencyUnit")}
+                />
+              </div>
+
               <TextInput
-                label="Intervalo"
+                label="Data-base do ciclo"
+                type="date"
+                hint="De onde a contagem parte. Em branco, comeca hoje."
+                {...register("baseDate")}
+              />
+
+              {/* Ancoragem no calendario: so aparece quando a unidade pede. */}
+              {frequencyUnit === "WEEK" && (
+                <SelectInput
+                  label="Dia da semana"
+                  placeholder="Qualquer dia"
+                  options={[
+                    { value: "1", label: "Segunda" },
+                    { value: "2", label: "Terca" },
+                    { value: "3", label: "Quarta" },
+                    { value: "4", label: "Quinta" },
+                    { value: "5", label: "Sexta" },
+                    { value: "6", label: "Sabado" },
+                    { value: "0", label: "Domingo" },
+                  ]}
+                  {...register("dayOfWeek")}
+                />
+              )}
+              {(frequencyUnit === "MONTH" || frequencyUnit === "YEAR") && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <TextInput
+                    label="Dia do mes"
+                    type="number"
+                    placeholder="Ex.: 15"
+                    hint="Mes mais curto cai no ultimo dia, nao vira o mes."
+                    {...register("dayOfMonth")}
+                  />
+                  {frequencyUnit === "YEAR" && (
+                    <SelectInput
+                      label="Mes do ano"
+                      placeholder="Mesmo mes da data-base"
+                      options={MESES.map((m, i) => ({ value: String(i + 1), label: m }))}
+                      {...register("monthOfYear")}
+                    />
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {triggerType === "METER" && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <SelectInput
+                  label="Medidor"
+                  required
+                  hint="Horimetro, odometro, ciclos, partidas, toneladas - a unidade vem do medidor."
+                  placeholder={instrumentId ? "Selecione o medidor" : "Selecione o ativo primeiro"}
+                  disabled={!instrumentId}
+                  options={(meters ?? []).map((m) => ({ value: m.id, label: `${m.name} (${m.unit}) - atual: ${m.currentValue}` }))}
+                  error={errors.meterId?.message}
+                  {...register("meterId")}
+                />
+                <TextInput
+                  label="Intervalo entre manutencoes"
+                  type="number"
+                  step="any"
+                  required
+                  hint="Na unidade do medidor."
+                  error={errors.meterInterval?.message}
+                  {...register("meterInterval")}
+                />
+              </div>
+              <TextInput
+                label="Leitura-base"
                 type="number"
                 step="any"
-                required
-                hint="Gera nova OS a cada X unidades do medidor."
-                error={errors.meterInterval?.message}
-                {...register("meterInterval")}
+                hint="Leitura em que o ciclo atual comecou. Em branco, usa a leitura da ultima geracao."
+                {...register("meterBaseReading")}
               />
-            </div>
+            </>
+          )}
+
+          {triggerType === "CONDITION" && (
+            <SelectInput
+              label="Ponto de medicao"
+              required
+              hint="A OS nasce quando este ponto entra em alarme. Configure os limites em Ativos > Medidores."
+              placeholder={instrumentId ? "Selecione o ponto" : "Selecione o ativo primeiro"}
+              disabled={!instrumentId}
+              options={(meters ?? []).map((m) => ({ value: m.id, label: `${m.name} (${m.unit})` }))}
+              error={errors.conditionMeterId?.message}
+              {...register("conditionMeterId")}
+            />
           )}
         </div>
         <div className="card space-y-4 p-5">
-          <h2 className="font-semibold text-navy-900">Tolerancia e execucao</h2>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <TextInput
-              label="Tolerancia antes do vencimento (dias, opcional)"
-              type="number"
-              hint="Pode antecipar a execucao ate X dias antes."
-              error={errors.toleranceDaysBefore?.message}
-              {...register("toleranceDaysBefore")}
-            />
-            <TextInput
-              label="Tolerancia apos o vencimento (dias, opcional)"
-              type="number"
-              hint="Pode atrasar a execucao ate X dias depois."
-              error={errors.toleranceDaysAfter?.message}
-              {...register("toleranceDaysAfter")}
-            />
-            <TextInput
-              label="HH prevista (opcional)"
-              type="number"
-              step="any"
-              hint="Copiada para a OS gerada."
-              error={errors.estimatedLaborHours?.message}
-              {...register("estimatedLaborHours")}
-            />
-          </div>
-          <TextareaInput label="Procedimento padrao (opcional)" rows={3} hint="Como executar o servico - diferente do checklist, que sao itens marcaveis." {...register("procedure")} />
+          <h2 className="font-semibold text-navy-900">Configuracoes avancadas</h2>
+          <p className="text-sm text-graphite-500">
+            Valem para quem precisa apertar o controle. Em branco, o plano vence na data calculada e a OS
+            nasce no proprio vencimento.
+          </p>
+
+          {triggerType === "TIME" && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <TextInput
+                  label="Gerar a OS com antecedencia (dias)"
+                  type="number"
+                  hint="Da tempo do PCM planejar antes de vencer."
+                  error={errors.generateAdvanceDays?.message}
+                  {...register("generateAdvanceDays")}
+                />
+                <TextInput
+                  label="Janela para antecipar (dias)"
+                  type="number"
+                  hint="Pode executar ate X dias antes do vencimento."
+                  error={errors.toleranceDaysBefore?.message}
+                  {...register("toleranceDaysBefore")}
+                />
+                <TextInput
+                  label="Tolerancia apos vencer (dias)"
+                  type="number"
+                  hint="Ainda conta como no prazo ate X dias depois."
+                  error={errors.toleranceDaysAfter?.message}
+                  {...register("toleranceDaysAfter")}
+                />
+              </div>
+              <SelectInput
+                label="Calendario operacional"
+                hint="Em dias uteis, um vencimento que cair no fim de semana anda para a segunda."
+                options={[
+                  { value: "ALL_DAYS", label: "Todos os dias" },
+                  { value: "BUSINESS_DAYS", label: "Somente dias uteis" },
+                ]}
+                {...register("operationalCalendar")}
+              />
+            </>
+          )}
+
+          {triggerType === "METER" && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <TextInput
+                  label="Antecedencia (unidades do medidor)"
+                  type="number"
+                  step="any"
+                  hint="Abre a OS X unidades antes de vencer."
+                  {...register("generateAdvanceMeterUnits")}
+                />
+                <TextInput
+                  label="Tolerancia antes (unidades)"
+                  type="number"
+                  step="any"
+                  {...register("toleranceMeterBefore")}
+                />
+                <TextInput
+                  label="Tolerancia depois (unidades)"
+                  type="number"
+                  step="any"
+                  {...register("toleranceMeterAfter")}
+                />
+              </div>
+              <SelectInput
+                label="Se o medidor for trocado ou zerado"
+                hint="Define se a contagem continua de onde estava ou recomeca."
+                options={[
+                  { value: "CONTINUE", label: "Continuar somando (leitura acumulada do ativo)" },
+                  { value: "RESET_BASE", label: "Recomecar do zero na troca" },
+                ]}
+                {...register("meterResetRule")}
+              />
+            </>
+          )}
         </div>
         </div>
 

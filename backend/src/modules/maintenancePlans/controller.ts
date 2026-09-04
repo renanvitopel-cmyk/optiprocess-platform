@@ -1,13 +1,14 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority } from "@prisma/client";
+import { MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority, MaintenanceFrequencyUnit, OperationalCalendar, MeterResetRule, MaintenanceTriggerMode } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId } from "../../middleware/rbac";
-import { deriveDueStatus, computeNextDueDateFromDays } from "../../utils/status";
+import { deriveDueStatus } from "../../utils/status";
+import { computeNextDue, computeGenerationDate, frequencyToDays, forecastMeterDue, type TimeScheduleConfig } from "../../lib/planSchedule";
 import { nextClientMaintenanceOrderNumber, nextClientMaintenancePlanCode } from "../../utils/sequence";
 import { reserveSparePart } from "../../lib/inventory";
 
@@ -85,7 +86,32 @@ export const getMaintenancePlan = asyncHandler(async (req: Request, res: Respons
     },
   });
   if (!plan) throw new NotFoundError("Plano de manutencao");
-  res.json(withDerivedStatus(plan));
+
+  // Datas derivadas do agendamento - calculadas na hora, nunca gravadas, para nao existir
+  // uma copia que envelhece.
+  const nextGenerationDate = plan.nextDueDate
+    ? computeGenerationDate(plan.nextDueDate, plan.generateAdvanceDays)
+    : null;
+
+  // Previsao por consumo medio: so faz sentido no disparo por medidor.
+  let meterForecast = null;
+  if (plan.meterId && plan.meterInterval != null) {
+    const readings = await prisma.meterReading.findMany({
+      where: { meterId: plan.meterId },
+      orderBy: { readAt: "desc" },
+      take: 30,
+      select: { value: true, readAt: true },
+    });
+    const meter = await prisma.meter.findUnique({ where: { id: plan.meterId }, select: { currentValue: true } });
+    meterForecast = forecastMeterDue(
+      readings,
+      plan.meterBaseReading ?? plan.lastMeterAtGeneration,
+      plan.meterInterval,
+      meter?.currentValue ?? 0,
+    );
+  }
+
+  res.json({ ...withDerivedStatus(plan), schedule: { nextGenerationDate, meterForecast } });
 });
 
 const checklistItemSchema = z.object({ description: z.string().min(1) });
@@ -107,6 +133,23 @@ const planSchema = z.object({
   defaultPriority: z.nativeEnum(MaintenancePriority).optional(),
   specialtyId: z.string().uuid().nullish(),
   responsibleId: z.string().uuid().nullish(),
+  // Agendamento
+  frequencyUnit: z.nativeEnum(MaintenanceFrequencyUnit).optional(),
+  frequencyEvery: z.coerce.number().int().positive().nullish(),
+  baseDate: z.coerce.date().nullish(),
+  dayOfWeek: z.coerce.number().int().min(0).max(6).nullish(),
+  dayOfMonth: z.coerce.number().int().min(1).max(31).nullish(),
+  monthOfYear: z.coerce.number().int().min(1).max(12).nullish(),
+  operationalCalendar: z.nativeEnum(OperationalCalendar).optional(),
+  blockedDates: z.array(z.coerce.date()).optional(),
+  generateAdvanceDays: z.coerce.number().int().nonnegative().nullish(),
+  meterBaseReading: z.coerce.number().nullish(),
+  generateAdvanceMeterUnits: z.coerce.number().nonnegative().nullish(),
+  toleranceMeterBefore: z.coerce.number().nonnegative().nullish(),
+  toleranceMeterAfter: z.coerce.number().nonnegative().nullish(),
+  meterResetRule: z.nativeEnum(MeterResetRule).optional(),
+  triggerMode: z.nativeEnum(MaintenanceTriggerMode).optional(),
+  conditionMeterId: z.string().uuid().nullish(),
   checklistTemplate: z.array(checklistItemSchema).optional(),
   // Tolerancia informativa (nao reescreve deriveDueStatus, so exibida na tela do plano);
   // procedimento/HH prevista/materiais previstos alimentam o backlog do PCM e a OS gerada.
@@ -117,6 +160,38 @@ const planSchema = z.object({
   templateId: z.string().uuid().nullish(),
   parts: z.array(planPartSchema).optional(),
 });
+
+/** Monta a config de calendario que o motor de agendamento espera. */
+function scheduleConfigOf(plan: {
+  frequencyUnit: MaintenanceFrequencyUnit;
+  frequencyEvery: number | null;
+  frequencyDays: number | null;
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  monthOfYear: number | null;
+  operationalCalendar: OperationalCalendar;
+  blockedDates: Date[];
+}): TimeScheduleConfig {
+  return {
+    frequencyUnit: plan.frequencyUnit,
+    frequencyEvery: plan.frequencyEvery,
+    frequencyDays: plan.frequencyDays,
+    dayOfWeek: plan.dayOfWeek,
+    dayOfMonth: plan.dayOfMonth,
+    monthOfYear: plan.monthOfYear,
+    operationalCalendar: plan.operationalCalendar,
+    blockedDates: plan.blockedDates ?? [],
+  };
+}
+
+/** Campos cuja mudanca desloca o ciclo do plano - o pedido e' que cada alteracao desses
+ * fique registrada na auditoria e recalcule o vencimento sem apagar o historico. */
+const CAMPOS_DE_AGENDAMENTO = [
+  "triggerType", "frequencyUnit", "frequencyEvery", "frequencyDays", "baseDate", "dayOfWeek",
+  "dayOfMonth", "monthOfYear", "operationalCalendar", "generateAdvanceDays", "toleranceDaysBefore",
+  "toleranceDaysAfter", "meterId", "meterInterval", "meterBaseReading", "toleranceMeterBefore",
+  "toleranceMeterAfter", "meterResetRule", "triggerMode", "conditionMeterId",
+] as const;
 
 async function assertPartsBelongToClient(parts: { sparePartId: string }[], clientId: string) {
   const ids = [...new Set(parts.map((p) => p.sparePartId))];
@@ -143,7 +218,26 @@ export const createMaintenancePlan = asyncHandler(async (req: Request, res: Resp
   if (data.parts?.length) await assertPartsBelongToClient(data.parts, clientId);
 
   const { checklistTemplate, parts, ...planData } = data;
-  const nextDueDate = data.triggerType === "TIME" ? computeNextDueDateFromDays(new Date(), data.frequencyDays!) : null;
+  // Periodicidade em dias e' derivada da unidade escolhida - "a cada 3 meses" vira 90
+  // dias para quem ainda pensa em dias, sem o usuario ter que fazer essa conta.
+  const frequencyUnit = planData.frequencyUnit ?? "DAY";
+  const frequencyEvery = planData.frequencyEvery ?? planData.frequencyDays ?? null;
+  const frequencyDays = frequencyEvery ? frequencyToDays(frequencyUnit, frequencyEvery) : null;
+  const baseDate = planData.baseDate ?? new Date();
+
+  const nextDueDate =
+    data.triggerType === "TIME"
+      ? computeNextDue(baseDate, {
+          frequencyUnit,
+          frequencyEvery,
+          frequencyDays,
+          dayOfWeek: planData.dayOfWeek ?? null,
+          dayOfMonth: planData.dayOfMonth ?? null,
+          monthOfYear: planData.monthOfYear ?? null,
+          operationalCalendar: planData.operationalCalendar ?? "ALL_DAYS",
+          blockedDates: planData.blockedDates ?? [],
+        })
+      : null;
 
   const code = await nextClientMaintenancePlanCode(clientId);
   // "active" continua no banco por compatibilidade, mas quem manda e' o status: manter
@@ -157,6 +251,10 @@ export const createMaintenancePlan = asyncHandler(async (req: Request, res: Resp
       status,
       active: status === "ACTIVE",
       clientId,
+      frequencyUnit,
+      frequencyEvery,
+      frequencyDays,
+      baseDate,
       nextDueDate,
       createdById: req.user?.sub,
       checklistTemplate: { create: (checklistTemplate ?? []).map((c, i) => ({ description: c.description, sortOrder: i })) },
@@ -187,10 +285,35 @@ export const updateMaintenancePlan = asyncHandler(async (req: Request, res: Resp
 
   const { checklistTemplate, parts, ...planData } = data;
   if (req.user?.role === "CLIENT") delete planData.clientId;
-  const frequencyDays = data.frequencyDays ?? existing.frequencyDays;
   const triggerType = data.triggerType ?? existing.triggerType;
+  const frequencyUnit = planData.frequencyUnit ?? existing.frequencyUnit;
+  const frequencyEvery = planData.frequencyEvery ?? existing.frequencyEvery ?? existing.frequencyDays;
+  const frequencyDays = frequencyEvery ? frequencyToDays(frequencyUnit, frequencyEvery) : existing.frequencyDays;
+  const baseDate = planData.baseDate ?? existing.baseDate ?? existing.createdAt;
+
+  // Mudou algo que desloca o ciclo? Entao recalcula o vencimento a partir da data-base -
+  // e registra o que mudou, sem apagar o historico anterior do plano.
+  const mudancasDeAgendamento = CAMPOS_DE_AGENDAMENTO.filter((campo) => {
+    const novo = (planData as Record<string, unknown>)[campo];
+    if (novo === undefined) return false;
+    const atual = (existing as Record<string, unknown>)[campo];
+    if (novo instanceof Date && atual instanceof Date) return novo.getTime() !== atual.getTime();
+    return novo !== atual;
+  });
+
   const nextDueDate =
-    triggerType === "TIME" && frequencyDays ? computeNextDueDateFromDays(new Date(), frequencyDays) : existing.nextDueDate;
+    triggerType === "TIME" && frequencyEvery
+      ? computeNextDue(baseDate, {
+          frequencyUnit,
+          frequencyEvery,
+          frequencyDays,
+          dayOfWeek: planData.dayOfWeek ?? existing.dayOfWeek,
+          dayOfMonth: planData.dayOfMonth ?? existing.dayOfMonth,
+          monthOfYear: planData.monthOfYear ?? existing.monthOfYear,
+          operationalCalendar: planData.operationalCalendar ?? existing.operationalCalendar,
+          blockedDates: planData.blockedDates ?? existing.blockedDates,
+        })
+      : existing.nextDueDate;
 
   const statusFinal = planData.status ?? existing.status;
 
@@ -200,6 +323,10 @@ export const updateMaintenancePlan = asyncHandler(async (req: Request, res: Resp
       ...planData,
       status: statusFinal,
       active: statusFinal === "ACTIVE",
+      frequencyUnit,
+      frequencyEvery,
+      frequencyDays,
+      baseDate,
       nextDueDate,
       ...(checklistTemplate
         ? {
@@ -228,6 +355,18 @@ export const updateMaintenancePlan = asyncHandler(async (req: Request, res: Resp
     entityId: plan.id,
     description: `Plano de manutencao "${plan.name}" atualizado`,
   });
+
+  if (mudancasDeAgendamento.length > 0) {
+    await writeAuditLog({
+      userId: req.user?.sub,
+      action: "UPDATE",
+      entityType: "MaintenancePlan",
+      entityId: plan.id,
+      description:
+        `Agendamento do plano ${plan.code ?? plan.name} alterado (${mudancasDeAgendamento.join(", ")}). ` +
+        `Proximo vencimento recalculado para ${plan.nextDueDate ? plan.nextDueDate.toISOString().slice(0, 10) : "nao aplicavel"}.`,
+    });
+  }
 
   res.json(withDerivedStatus(plan));
 });
@@ -296,7 +435,13 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
     data: {
       lastGeneratedAt: new Date(),
       lastMeterAtGeneration: plan.meter?.currentValue,
-      nextDueDate: plan.triggerType === "TIME" && plan.frequencyDays ? computeNextDueDateFromDays(new Date(), plan.frequencyDays) : plan.nextDueDate,
+      // O proximo ciclo conta a partir do vencimento que acabou de ser atendido (nao de
+      // hoje): plano atrasado nao empurra o calendario inteiro para frente.
+      baseDate: plan.nextDueDate ?? new Date(),
+      nextDueDate:
+        plan.triggerType === "TIME" && plan.frequencyEvery
+          ? computeNextDue(plan.nextDueDate ?? new Date(), scheduleConfigOf(plan))
+          : plan.nextDueDate,
     },
   });
 

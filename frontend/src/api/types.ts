@@ -652,7 +652,7 @@ export interface FailureCode {
   active: boolean;
 }
 
-export type MaintenanceTriggerType = "TIME" | "METER";
+export type MaintenanceTriggerType = "TIME" | "METER" | "CONDITION";
 export type MaintenanceOrderType = "PREVENTIVE" | "CORRECTIVE" | "PREDICTIVE";
 export type MaintenancePriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type MaintenanceOrderStatus =
@@ -686,6 +686,10 @@ export interface MaintenancePlanPart {
 export type MaintenancePlanStatus = "DRAFT" | "ACTIVE" | "SUSPENDED" | "CLOSED";
 export type MaintenancePlanType = "PREVENTIVE" | "INSPECTION" | "LUBRICATION" | "CALIBRATION" | "REGULATORY" | "OTHER";
 export type MaintenancePlanScope = "SINGLE_ASSET" | "ASSET_FAMILY";
+export type MaintenanceFrequencyUnit = "DAY" | "WEEK" | "MONTH" | "YEAR";
+export type OperationalCalendar = "ALL_DAYS" | "BUSINESS_DAYS";
+export type MeterResetRule = "CONTINUE" | "RESET_BASE";
+export type MaintenanceTriggerMode = "FIRST_DUE" | "ALL_DUE";
 
 export interface MaintenancePlan {
   id: string;
@@ -699,6 +703,34 @@ export interface MaintenancePlan {
   defaultPriority: MaintenancePriority;
   specialtyId: string | null;
   specialty?: { id: string; name: string } | null;
+  // Agendamento
+  frequencyUnit: MaintenanceFrequencyUnit;
+  frequencyEvery: number | null;
+  baseDate: string | null;
+  lastExecutionAt: string | null;
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  monthOfYear: number | null;
+  operationalCalendar: OperationalCalendar;
+  blockedDates?: string[];
+  generateAdvanceDays: number | null;
+  meterBaseReading: number | null;
+  generateAdvanceMeterUnits: number | null;
+  toleranceMeterBefore: number | null;
+  toleranceMeterAfter: number | null;
+  meterResetRule: MeterResetRule;
+  triggerMode: MaintenanceTriggerMode;
+  conditionMeterId: string | null;
+  /** Datas derivadas do agendamento, calculadas pelo backend a cada leitura. */
+  schedule?: {
+    nextGenerationDate: string | null;
+    meterForecast: {
+      dueAtReading: number | null;
+      remaining: number | null;
+      dailyAverage: number | null;
+      forecastDate: string | null;
+    } | null;
+  };
   client?: ClientRef;
   instrumentId: string;
   instrument?: InstrumentRef;

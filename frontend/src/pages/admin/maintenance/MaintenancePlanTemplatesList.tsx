@@ -30,7 +30,7 @@ const templateSchema = z.object({
   clientId: z.string().uuid().optional().or(z.literal("")),
   name: z.string().min(2, "Informe o nome do modelo."),
   applicableAssetFamily: z.string().optional(),
-  triggerType: z.enum(["TIME", "METER"]),
+  triggerType: z.enum(["TIME", "METER", "CONDITION"]),
   frequencyDays: z.coerce.number().int().positive().optional(),
   meterInterval: z.coerce.number().positive().optional(),
   toleranceDaysBefore: z.coerce.number().int().nonnegative().optional(),

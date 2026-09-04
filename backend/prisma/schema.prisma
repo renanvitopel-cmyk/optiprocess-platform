@@ -48,6 +48,37 @@ enum ServiceCategory {
 enum MaintenanceTriggerType {
   TIME
   METER
+  // Dispara quando um ponto de medicao entra em zona de alarme/critico. Ciclo de producao
+  // e contador de partidas nao viram tipos proprios: sao METER com a unidade do medidor
+  // (ciclos, partidas, toneladas) - mesma mecanica, evita tres jeitos de contar a mesma coisa.
+  CONDITION
+}
+
+// Periodicidade do plano por tempo. frequencyDays continua no banco (compatibilidade e
+// consultas antigas), calculado a partir daqui.
+enum MaintenanceFrequencyUnit {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+// Em que dias a manutencao pode cair.
+enum OperationalCalendar {
+  ALL_DAYS
+  BUSINESS_DAYS
+}
+
+// O que fazer quando o medidor e' trocado ou zerado.
+enum MeterResetRule {
+  CONTINUE    // segue somando: leitura acumulada do ativo, nao do medidor
+  RESET_BASE  // zera a base na troca: conta a partir da nova leitura
+}
+
+// Com mais de um gatilho, o que faz a OS nascer.
+enum MaintenanceTriggerMode {
+  FIRST_DUE // o primeiro que vencer
+  ALL_DUE   // so quando todos vencerem
 }
 
 // Ciclo de vida do plano. Substitui o boolean "active" como fonte da verdade (o boolean
@@ -1005,6 +1036,7 @@ model Meter {
 
   readings MeterReading[]
   plans    MaintenancePlan[]
+  conditionPlans MaintenancePlan[] @relation("PlanConditionMeter")
   triggeredWorkOrders MaintenanceWorkOrder[]
 
   @@index([instrumentId])
@@ -1453,6 +1485,35 @@ model MaintenancePlan {
   // deriveDueStatus/computeNextDueDate ja usado no Ativo para calibracao).
   frequencyDays Int?
   nextDueDate   DateTime?
+  // Periodicidade legivel: "a cada 3 MESES" em vez de "a cada 90 dias". frequencyDays
+  // acima e' derivado disto.
+  frequencyUnit  MaintenanceFrequencyUnit @default(DAY)
+  frequencyEvery Int?
+  // Data-base do ciclo e ultima execucao concluida de verdade (nao a ultima geracao).
+  baseDate        DateTime?
+  lastExecutionAt DateTime?
+  // Ancoragem no calendario, quando a periodicidade pede: dia da semana (0=domingo),
+  // dia do mes e mes do ano.
+  dayOfWeek   Int?
+  dayOfMonth  Int?
+  monthOfYear Int?
+  operationalCalendar OperationalCalendar @default(ALL_DAYS)
+  // Feriados, parada programada, shutdown - datas em que a OS nao pode cair.
+  blockedDates DateTime[]
+  // Quantos dias antes do vencimento a OS ja e' criada (para o PCM planejar).
+  generateAdvanceDays Int?
+  // Disparo por medidor: leitura-base do ciclo, antecedencia e tolerancia em unidades do
+  // medidor, e o que fazer quando o medidor e' trocado/zerado.
+  meterBaseReading         Float?
+  generateAdvanceMeterUnits Float?
+  toleranceMeterBefore     Float?
+  toleranceMeterAfter      Float?
+  meterResetRule           MeterResetRule @default(CONTINUE)
+  // Com mais de um gatilho configurado, quando a OS nasce.
+  triggerMode MaintenanceTriggerMode @default(FIRST_DUE)
+  // Gatilho por condicao: ponto de medicao que, ao entrar em alarme, gera a OS do plano.
+  conditionMeterId String?
+  conditionMeter   Meter? @relation("PlanConditionMeter", fields: [conditionMeterId], references: [id])
   // Disparo por medidor: gera quando (leitura atual - leitura na ultima geracao) >= intervalo.
   meterId       String?
   meter         Meter?                 @relation(fields: [meterId], references: [id])

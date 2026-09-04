@@ -181,6 +181,23 @@ export default function WorkOrderDetail() {
     }
   }
 
+  /** Grava medicao ou texto do item. O backend decide sozinho se a medicao ficou fora da
+   * faixa e, nesse caso, abre a corretiva - mesma regra do "Nao OK". */
+  async function handleChecklistValue(
+    itemId: string,
+    valores: { numericValue?: number | null; textValue?: string | null; result?: ChecklistItemResult },
+  ) {
+    try {
+      const { spawnedWorkOrder } = await updateChecklistItem(id, itemId, valores);
+      if (spawnedWorkOrder) {
+        notify("success", `Medicao fora da faixa - OS corretiva ${spawnedWorkOrder.number} aberta automaticamente.`);
+      }
+      invalidate();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    }
+  }
+
   async function handleAddPart() {
     if (!partSparePartId || partQty < 1) return;
     setBusy(true);
@@ -534,26 +551,95 @@ export default function WorkOrderDetail() {
             <p className="text-sm text-graphite-500">Nenhum item de checklist.</p>
           ) : (
             <ul className="divide-y divide-gray-100">
-              {workOrder.checklist.map((item) => (
-                <li key={item.id} className="flex items-center justify-between gap-3 py-2.5">
-                  <span className="text-sm text-graphite-800">{item.description}</span>
-                  <div className="flex shrink-0 gap-1.5">
-                    {RESULT_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        disabled={!canManage || isCompleted}
-                        onClick={() => handleChecklistResult(item.id, opt.value)}
-                        className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-opacity disabled:opacity-40 ${
-                          item.result === opt.value ? opt.tone : "border-gray-200 bg-white text-graphite-400"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </li>
-              ))}
+              {workOrder.checklist.map((item, index) => {
+                const secaoAnterior = index > 0 ? workOrder.checklist![index - 1].section : null;
+                const abreSecao = item.section && item.section !== secaoAnterior;
+                return (
+                  <li key={item.id} className="py-2.5">
+                    {abreSecao && (
+                      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-graphite-400">{item.section}</p>
+                    )}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="text-sm text-graphite-800">
+                          {item.description}
+                          {item.required && <span className="ml-1 text-safety-red">*</span>}
+                        </span>
+                        {item.reference && (
+                          <p className="text-xs text-graphite-400">Ref.: {item.reference}</p>
+                        )}
+                        {item.responseType === "NUMBER" && (item.minValue != null || item.maxValue != null) && (
+                          <p className="text-xs text-graphite-400">
+                            Faixa aceitavel: {item.minValue ?? "-"} a {item.maxValue ?? "-"}
+                            {item.unit ? ` ${item.unit}` : ""}
+                            {item.targetValue != null ? ` (alvo ${item.targetValue})` : ""}
+                          </p>
+                        )}
+                        {item.requiresPhoto && (
+                          <p className="text-xs text-safety-yellow-dark">Exige foto - anexe na aba Anexos.</p>
+                        )}
+                      </div>
+
+                      {/* Medicao numerica: o valor e' a resposta. Fora da faixa vira anomalia
+                          sozinho, sem depender de alguem lembrar de marcar "Nao OK". */}
+                      {item.responseType === "NUMBER" ? (
+                        <div className="flex shrink-0 items-center gap-2">
+                          <input
+                            type="number"
+                            step="any"
+                            defaultValue={item.numericValue ?? ""}
+                            disabled={!canManage || isCompleted}
+                            placeholder={item.unit ?? "valor"}
+                            className="input h-9 w-32 py-1 text-sm"
+                            onBlur={(e) => {
+                              const valor = e.target.value === "" ? null : Number(e.target.value);
+                              if (valor !== (item.numericValue ?? null)) handleChecklistValue(item.id, { numericValue: valor });
+                            }}
+                          />
+                          {item.result !== "PENDING" && (
+                            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
+                              item.result === "NOT_OK"
+                                ? "border-red-200 bg-red-50 text-safety-red"
+                                : "border-green-200 bg-green-50 text-safety-green-dark"
+                            }`}>
+                              {item.result === "NOT_OK" ? "Fora da faixa" : "Na faixa"}
+                            </span>
+                          )}
+                        </div>
+                      ) : item.responseType === "TEXT" ? (
+                        <input
+                          type="text"
+                          defaultValue={item.textValue ?? ""}
+                          disabled={!canManage || isCompleted}
+                          placeholder="Resposta"
+                          className="input h-9 w-56 py-1 text-sm"
+                          onBlur={(e) => {
+                            if (e.target.value !== (item.textValue ?? "")) {
+                              handleChecklistValue(item.id, { textValue: e.target.value || null, result: "OK" });
+                            }
+                          }}
+                        />
+                      ) : (
+                        <div className="flex shrink-0 gap-1.5">
+                          {RESULT_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              disabled={!canManage || isCompleted}
+                              onClick={() => handleChecklistResult(item.id, opt.value)}
+                              className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-opacity disabled:opacity-40 ${
+                                item.result === opt.value ? opt.tone : "border-gray-200 bg-white text-graphite-400"
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

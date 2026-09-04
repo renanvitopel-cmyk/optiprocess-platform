@@ -672,10 +672,22 @@ export type MaintenanceOrderStatus =
 export type ChecklistItemResult = "PENDING" | "OK" | "NOT_OK" | "NA";
 export type DerivedDueStatus = "VALID" | "DUE_SOON" | "EXPIRED";
 
+export type ChecklistResponseType = "YES_NO_NA" | "TEXT" | "NUMBER" | "PHOTO" | "SIGNATURE";
+
 export interface MaintenancePlanChecklistItem {
   id?: string;
   description: string;
   sortOrder?: number;
+  /** Agrupa itens em etapas ("Preparacao", "Execucao", "Encerramento"). */
+  section?: string | null;
+  required?: boolean;
+  responseType?: ChecklistResponseType;
+  unit?: string | null;
+  minValue?: number | null;
+  maxValue?: number | null;
+  targetValue?: number | null;
+  requiresPhoto?: boolean;
+  reference?: string | null;
 }
 
 export interface MaintenancePlanPart {
@@ -808,6 +820,22 @@ export interface MaintenanceWorkOrderChecklistItem {
   result: ChecklistItemResult;
   notes: string | null;
   sortOrder: number;
+  // Regra copiada do plano na geracao - o item executado guarda a propria regra, para o
+  // historico nao mudar se o plano for editado depois.
+  section: string | null;
+  required: boolean;
+  responseType: ChecklistResponseType;
+  unit: string | null;
+  minValue: number | null;
+  maxValue: number | null;
+  targetValue: number | null;
+  requiresPhoto: boolean;
+  reference: string | null;
+  // O que o executante preencheu.
+  numericValue: number | null;
+  textValue: string | null;
+  signedBy: string | null;
+  signedAt: string | null;
 }
 
 export interface LaborType {

@@ -232,6 +232,16 @@ enum ServiceRequestStatus {
   CLOSED
 }
 
+// O que o executante preenche em cada item do checklist. YES_NO_NA e' o padrao (o que
+// existia); os outros permitem medicao com faixa, foto obrigatoria e assinatura.
+enum ChecklistResponseType {
+  YES_NO_NA
+  TEXT
+  NUMBER
+  PHOTO
+  SIGNATURE
+}
+
 enum ChecklistItemResult {
   PENDING
   OK
@@ -1640,12 +1650,25 @@ model MaintenancePlanTemplateChecklistItem {
   @@map("maintenance_plan_template_checklist_items")
 }
 
+// Item do checklist padrao do plano - copiado para a OS a cada geracao.
 model MaintenancePlanChecklistItem {
   id          String          @id @default(uuid())
   planId      String
   plan        MaintenancePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
   description String
   sortOrder   Int             @default(0)
+  // Agrupa itens em etapas ("Preparacao", "Execucao", "Encerramento").
+  section      String?
+  required     Boolean               @default(true)
+  responseType ChecklistResponseType @default(YES_NO_NA)
+  // Para responseType NUMBER: unidade e faixa aceitavel da medicao.
+  unit         String?
+  minValue     Float?
+  maxValue     Float?
+  targetValue  Float?
+  requiresPhoto Boolean              @default(false)
+  // Procedimento, desenho, manual ou video que apoia este item.
+  reference    String?
 
   @@index([planId])
   @@map("maintenance_plan_checklist_items")
@@ -1769,6 +1792,22 @@ model MaintenanceWorkOrderChecklistItem {
   result      ChecklistItemResult  @default(PENDING)
   notes       String?
   sortOrder   Int                  @default(0)
+  // Copiados do plano na geracao da OS - o item executado guarda a propria regra, para o
+  // historico nao mudar se o plano for editado depois.
+  section      String?
+  required     Boolean               @default(true)
+  responseType ChecklistResponseType @default(YES_NO_NA)
+  unit         String?
+  minValue     Float?
+  maxValue     Float?
+  targetValue  Float?
+  requiresPhoto Boolean              @default(false)
+  reference    String?
+  // O que o executante preencheu, conforme o tipo de resposta.
+  numericValue Float?
+  textValue    String?
+  signedBy     String?
+  signedAt     DateTime?
   // Corretiva aberta automaticamente quando este item foi marcado "Nao OK" - lado inverso
   // de MaintenanceWorkOrder.originChecklistItemId.
   spawnedCorrectiveOrder MaintenanceWorkOrder? @relation("ChecklistItemOrigin")

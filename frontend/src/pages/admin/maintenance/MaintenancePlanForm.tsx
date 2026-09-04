@@ -61,7 +61,20 @@ const schema = z.object({
   scope: z.enum(["SINGLE_ASSET", "ASSET_FAMILY"]),
   defaultPriority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
   specialtyId: z.string().uuid().optional().or(z.literal("")),
-  checklistTemplate: z.array(z.object({ description: z.string().min(1, "Descreva o item.") })),
+  checklistTemplate: z.array(
+    z.object({
+      description: z.string().min(1, "Descreva o item."),
+      section: z.string().optional(),
+      required: z.boolean().optional(),
+      responseType: z.enum(["YES_NO_NA", "TEXT", "NUMBER", "PHOTO", "SIGNATURE"]).optional(),
+      unit: z.string().optional(),
+      minValue: z.coerce.number().optional(),
+      maxValue: z.coerce.number().optional(),
+      targetValue: z.coerce.number().optional(),
+      requiresPhoto: z.boolean().optional(),
+      reference: z.string().optional(),
+    }),
+  ),
   toleranceDaysBefore: z.coerce.number().int().nonnegative().optional(),
   toleranceDaysAfter: z.coerce.number().int().nonnegative().optional(),
   procedure: z.string().optional(),
@@ -107,7 +120,7 @@ export default function MaintenancePlanForm() {
       planType: "PREVENTIVE",
       scope: "SINGLE_ASSET",
       defaultPriority: "MEDIUM",
-      checklistTemplate: [{ description: "" }],
+      checklistTemplate: [{ description: "", required: true, responseType: "YES_NO_NA" }],
       parts: [],
     },
   });
@@ -199,7 +212,20 @@ export default function MaintenancePlanForm() {
         requiresApproval: existing.requiresApproval ?? false,
         groupWorkOrder: existing.groupWorkOrder ?? false,
         materialPolicy: existing.materialPolicy ?? "RESERVE_AUTO",
-        checklistTemplate: existing.checklistTemplate.length ? existing.checklistTemplate : [{ description: "" }],
+        checklistTemplate: existing.checklistTemplate.length
+          ? existing.checklistTemplate.map((c) => ({
+              description: c.description,
+              section: c.section ?? "",
+              required: c.required ?? true,
+              responseType: c.responseType ?? "YES_NO_NA",
+              unit: c.unit ?? "",
+              minValue: c.minValue ?? undefined,
+              maxValue: c.maxValue ?? undefined,
+              targetValue: c.targetValue ?? undefined,
+              requiresPhoto: c.requiresPhoto ?? false,
+              reference: c.reference ?? "",
+            }))
+          : [{ description: "", required: true, responseType: "YES_NO_NA" as const }],
         toleranceDaysBefore: existing.toleranceDaysBefore ?? undefined,
         toleranceDaysAfter: existing.toleranceDaysAfter ?? undefined,
         procedure: existing.procedure ?? "",
@@ -232,7 +258,9 @@ export default function MaintenancePlanForm() {
         generateAdvanceMeterUnits: values.generateAdvanceMeterUnits ?? null,
         toleranceMeterBefore: values.toleranceMeterBefore ?? null,
         toleranceMeterAfter: values.toleranceMeterAfter ?? null,
-        checklistTemplate: values.checklistTemplate.filter((c) => c.description.trim()),
+        checklistTemplate: values.checklistTemplate
+          .filter((c) => c.description.trim())
+          .map((c) => ({ ...c, section: c.section || null, unit: c.unit || null, reference: c.reference || null })),
         toleranceDaysBefore: values.toleranceDaysBefore ?? null,
         toleranceDaysAfter: values.toleranceDaysAfter ?? null,
         procedure: values.procedure || null,
@@ -709,25 +737,54 @@ export default function MaintenancePlanForm() {
         <div className="card space-y-4 p-5">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-navy-900">Checklist padrao</h2>
-            <button type="button" className="btn-ghost btn-sm" onClick={() => append({ description: "" })}>
+            <button type="button" className="btn-ghost btn-sm" onClick={() => append({ description: "", required: true, responseType: "YES_NO_NA" })}>
               <Plus className="h-4 w-4" /> Adicionar item
             </button>
           </div>
           <p className="text-xs text-graphite-500">Copiado para cada ordem de manutencao gerada a partir deste plano.</p>
           <div className="space-y-2">
             {fields.map((field, index) => (
-              <div key={field.id} className="flex items-center gap-2">
-                <TextInput
-                  className="flex-1"
-                  placeholder={`Item ${index + 1}`}
-                  error={errors.checklistTemplate?.[index]?.description?.message}
-                  {...register(`checklistTemplate.${index}.description`)}
-                />
-                {fields.length > 1 && (
-                  <button type="button" onClick={() => remove(index)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover item">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+              <div key={field.id} className="rounded-lg border border-gray-200 p-3">
+                <div className="flex items-center gap-2">
+                  <TextInput
+                    className="flex-1"
+                    placeholder={`Item ${index + 1}`}
+                    error={errors.checklistTemplate?.[index]?.description?.message}
+                    {...register(`checklistTemplate.${index}.description`)}
+                  />
+                  {fields.length > 1 && (
+                    <button type="button" onClick={() => remove(index)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover item">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                  <TextInput label="Secao" placeholder="Ex.: Preparacao" {...register(`checklistTemplate.${index}.section`)} />
+                  <SelectInput
+                    label="Tipo de resposta"
+                    options={[
+                      { value: "YES_NO_NA", label: "Sim / Nao / N.A." },
+                      { value: "NUMBER", label: "Medicao numerica" },
+                      { value: "TEXT", label: "Texto" },
+                      { value: "PHOTO", label: "Foto" },
+                      { value: "SIGNATURE", label: "Assinatura" },
+                    ]}
+                    {...register(`checklistTemplate.${index}.responseType`)}
+                  />
+                  <TextInput label="Referencia" placeholder="Procedimento, desenho, manual" {...register(`checklistTemplate.${index}.reference`)} />
+                </div>
+                {watch(`checklistTemplate.${index}.responseType`) === "NUMBER" && (
+                  <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                    <TextInput label="Unidade" placeholder="mm/s, °C, bar" {...register(`checklistTemplate.${index}.unit`)} />
+                    <TextInput label="Minimo" type="number" step="any" {...register(`checklistTemplate.${index}.minValue`)} />
+                    <TextInput label="Alvo" type="number" step="any" {...register(`checklistTemplate.${index}.targetValue`)} />
+                    <TextInput label="Maximo" type="number" step="any" {...register(`checklistTemplate.${index}.maxValue`)} />
+                  </div>
                 )}
+                <div className="mt-2 flex flex-wrap gap-4">
+                  <CheckboxInput label="Item obrigatorio" {...register(`checklistTemplate.${index}.required`)} />
+                  <CheckboxInput label="Exige foto" {...register(`checklistTemplate.${index}.requiresPhoto`)} />
+                </div>
               </div>
             ))}
           </div>

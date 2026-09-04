@@ -274,6 +274,15 @@ export const completeMaintenanceWorkOrder = asyncHandler(async (req: Request, re
     description: `OS ${workOrder.number} concluida`,
   });
 
+  // Plano so sabe que foi executado de verdade quando a OS dele conclui - "ultima
+  // geracao" nao e' a mesma coisa que "ultima execucao".
+  if (workOrder.planId) {
+    await prisma.maintenancePlan.update({
+      where: { id: workOrder.planId },
+      data: { lastExecutionAt: workOrder.completedAt ?? new Date() },
+    });
+  }
+
   // Se a OS veio de uma Solicitacao de Servico, a conclusao da OS fecha a solicitacao -
   // e' o "conclusao da OS atualiza a SS" do fluxo pedido.
   await prisma.serviceRequest.updateMany({
@@ -287,6 +296,9 @@ export const completeMaintenanceWorkOrder = asyncHandler(async (req: Request, re
 const checklistUpdateSchema = z.object({
   result: z.nativeEnum(ChecklistItemResult).optional(),
   notes: z.string().nullish(),
+  // Preenchimento conforme o tipo de resposta do item.
+  numericValue: z.coerce.number().nullish(),
+  textValue: z.string().nullish(),
 });
 
 export const updateChecklistItem = asyncHandler(async (req: Request, res: Response) => {
@@ -303,7 +315,17 @@ export const updateChecklistItem = asyncHandler(async (req: Request, res: Respon
   });
   if (!item) throw new NotFoundError("Item do checklist");
 
-  const updated = await prisma.maintenanceWorkOrderChecklistItem.update({ where: { id: item.id }, data });
+  // Medicao fora da faixa e' anomalia do mesmo jeito que marcar "Nao OK" - senao o
+  // ponto sairia da faixa e ninguem abriria corretiva.
+  let dadosFinais = { ...data };
+  if (data.numericValue != null && item.responseType === "NUMBER") {
+    const foraDaFaixa =
+      (item.minValue != null && data.numericValue < item.minValue) ||
+      (item.maxValue != null && data.numericValue > item.maxValue);
+    dadosFinais = { ...dadosFinais, result: foraDaFaixa ? "NOT_OK" : "OK" };
+  }
+
+  const updated = await prisma.maintenanceWorkOrderChecklistItem.update({ where: { id: item.id }, data: dadosFinais });
 
   // Anomalia encontrada na inspecao: abre corretiva automaticamente, vinculada a OS e ao
   // item que revelou o problema - melhor esforco, no maximo uma corretiva por item (a
@@ -318,7 +340,12 @@ export const updateChecklistItem = asyncHandler(async (req: Request, res: Respon
       spawnedWorkOrder = alreadySpawned;
     } else {
       const number = await nextClientMaintenanceOrderNumber(workOrder.clientId);
-      const description = `Anomalia identificada na inspecao da OS ${workOrder.number}: "${updated.description}"${updated.notes ? ` - ${updated.notes}` : ""}`;
+      const medicao =
+        updated.responseType === "NUMBER" && updated.numericValue != null
+          ? ` (medido ${updated.numericValue}${updated.unit ? ` ${updated.unit}` : ""}` +
+            `${updated.minValue != null || updated.maxValue != null ? `, faixa ${updated.minValue ?? "-"} a ${updated.maxValue ?? "-"}` : ""})`
+          : "";
+      const description = `Anomalia identificada na inspecao da OS ${workOrder.number}: "${updated.description}"${medicao}${updated.notes ? ` - ${updated.notes}` : ""}`;
       const corrective = await prisma.maintenanceWorkOrder.create({
         data: {
           number,

@@ -1,6 +1,6 @@
 import { api } from "./client";
 import type { PagedResult } from "./client";
-import type { MaintenancePlan, MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority } from "./types";
+import type { MaintenanceOrderStatus, MaintenancePlan, MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority } from "./types";
 
 export interface ListMaintenancePlansParams {
   page?: number;
@@ -85,5 +85,37 @@ export async function deleteMaintenancePlan(id: string): Promise<void> {
 
 export async function generateWorkOrderFromPlan(id: string): Promise<{ id: string; number: string }> {
   const { data } = await api.post(`/maintenance-plans/${id}/generate`);
+  return data;
+}
+
+
+export interface PlanIndicators {
+  lastExecutionAt: string | null;
+  nextDueDate: string | null;
+  nextGenerationDate: string | null;
+  totals: { generated: number; completed: number; open: number; overdue: number };
+  /** null = sem OS concluida ainda; a tela mostra "Dados insuficientes", nao 0%. */
+  compliancePct: number | null;
+  laborHours: { planned: number | null; actual: number | null };
+  cost: { parts: number; labor: number; thirdParty: number; total: number; tracked: boolean };
+  materialUsage: { name: string; unit: string; quantity: number }[];
+  failuresFound: number;
+  workOrders: {
+    id: string;
+    number: string;
+    status: MaintenanceOrderStatus;
+    scheduledDate: string | null;
+    completedAt: string | null;
+    createdAt: string;
+  }[];
+}
+
+export async function getMaintenancePlanIndicators(id: string): Promise<PlanIndicators> {
+  const { data } = await api.get<PlanIndicators>(`/maintenance-plans/${id}/indicators`);
+  return data;
+}
+
+export async function duplicateMaintenancePlan(id: string): Promise<MaintenancePlan> {
+  const { data } = await api.post<MaintenancePlan>(`/maintenance-plans/${id}/duplicate`);
   return data;
 }

@@ -93,7 +93,12 @@ export interface UpdateChecklistItemResult {
 export async function updateChecklistItem(
   workOrderId: string,
   itemId: string,
-  input: { result?: ChecklistItemResult; notes?: string | null },
+  input: {
+    result?: ChecklistItemResult;
+    notes?: string | null;
+    numericValue?: number | null;
+    textValue?: string | null;
+  },
 ): Promise<UpdateChecklistItemResult> {
   const { data } = await api.patch<UpdateChecklistItemResult>(`/maintenance-work-orders/${workOrderId}/checklist/${itemId}`, input);
   return data;

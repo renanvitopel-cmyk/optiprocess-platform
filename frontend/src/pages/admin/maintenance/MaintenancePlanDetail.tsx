@@ -1,8 +1,15 @@
 import { useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Pencil, Trash2, PlayCircle } from "lucide-react";
-import { getMaintenancePlan, deleteMaintenancePlan, generateWorkOrderFromPlan } from "../../../api/maintenancePlans";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil, Trash2, PlayCircle, Copy, PauseCircle, CheckCircle2 } from "lucide-react";
+import {
+  getMaintenancePlan,
+  deleteMaintenancePlan,
+  generateWorkOrderFromPlan,
+  getMaintenancePlanIndicators,
+  duplicateMaintenancePlan,
+  updateMaintenancePlan,
+} from "../../../api/maintenancePlans";
 import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -11,19 +18,52 @@ import { EmptyState } from "../../../components/EmptyState";
 import { useCmms } from "../../../lib/cmms";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
-import { clientDisplayName, formatDate } from "../../../lib/format";
+import { clientDisplayName, formatDate, formatCurrency } from "../../../lib/format";
 
 export default function MaintenancePlanDetail() {
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { notify } = useToast();
   const { canManage, isClient, base } = useCmms();
+  const queryClient = useQueryClient();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const { data: plan, isLoading } = useQuery({ queryKey: ["maintenance-plan", id], queryFn: () => getMaintenancePlan(id) });
+  const { data: indicators } = useQuery({
+    queryKey: ["maintenance-plan-indicators", id],
+    queryFn: () => getMaintenancePlanIndicators(id),
+  });
+
+  async function handleStatus(status: "ACTIVE" | "SUSPENDED" | "CLOSED", mensagem: string) {
+    setBusy(true);
+    try {
+      await updateMaintenancePlan(id, { status });
+      notify("success", mensagem);
+      queryClient.invalidateQueries({ queryKey: ["maintenance-plan", id] });
+      queryClient.invalidateQueries({ queryKey: ["maintenance-plan-indicators", id] });
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDuplicate() {
+    setBusy(true);
+    try {
+      const copia = await duplicateMaintenancePlan(id);
+      notify("success", `Plano ${copia.code ?? ""} criado como copia - ajuste e ative quando quiser.`);
+      navigate(`${base}/planos/${copia.id}`);
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleDelete() {
     setDeleting(true);
@@ -68,7 +108,7 @@ export default function MaintenancePlanDetail() {
         actions={
           canManage && (
             <>
-              {due && plan.active && (
+              {due && plan.status === "ACTIVE" && (
                 <button className="btn-primary" onClick={handleGenerate} disabled={generating}>
                   <PlayCircle className="h-4 w-4" /> {generating ? "Gerando..." : "Gerar OS"}
                 </button>
@@ -76,6 +116,18 @@ export default function MaintenancePlanDetail() {
               <button className="btn-outline" onClick={() => navigate(`${base}/planos/${id}/editar`)}>
                 <Pencil className="h-4 w-4" /> Editar
               </button>
+              <button className="btn-outline" onClick={handleDuplicate} disabled={busy}>
+                <Copy className="h-4 w-4" /> Duplicar
+              </button>
+              {plan.status === "ACTIVE" ? (
+                <button className="btn-outline" onClick={() => handleStatus("SUSPENDED", "Plano suspenso - para de gerar OS.")} disabled={busy}>
+                  <PauseCircle className="h-4 w-4" /> Suspender
+                </button>
+              ) : plan.status !== "CLOSED" ? (
+                <button className="btn-outline" onClick={() => handleStatus("ACTIVE", "Plano reativado.")} disabled={busy}>
+                  <CheckCircle2 className="h-4 w-4" /> Reativar
+                </button>
+              ) : null}
               <button className="btn-danger" onClick={() => setConfirmDelete(true)}>
                 <Trash2 className="h-4 w-4" /> Remover
               </button>
@@ -83,6 +135,77 @@ export default function MaintenancePlanDetail() {
           )
         }
       />
+
+      {indicators && (
+        <div className="mb-6 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <IndicadorCard
+              rotulo="Cumprimento do plano"
+              valor={indicators.compliancePct != null ? `${indicators.compliancePct}%` : "Dados insuficientes"}
+              detalhe={
+                indicators.totals.completed > 0
+                  ? `${indicators.totals.completed} OS concluida(s)`
+                  : "Nenhuma OS concluida ainda"
+              }
+            />
+            <IndicadorCard
+              rotulo="Atrasadas"
+              valor={String(indicators.totals.overdue)}
+              detalhe={`${indicators.totals.open} em aberto`}
+              alerta={indicators.totals.overdue > 0}
+            />
+            <IndicadorCard
+              rotulo="HH planejada x realizada"
+              valor={
+                indicators.laborHours.actual != null
+                  ? `${indicators.laborHours.planned ?? "-"}h / ${indicators.laborHours.actual}h`
+                  : "Sem apontamento"
+              }
+            />
+            <IndicadorCard
+              rotulo="Falhas achadas na preventiva"
+              valor={String(indicators.failuresFound)}
+              detalhe="Corretivas abertas por anomalia"
+              alerta={indicators.failuresFound > 0}
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <IndicadorCard rotulo="Ultima execucao" valor={formatDate(indicators.lastExecutionAt) || "Nunca executado"} />
+            <IndicadorCard rotulo="Proxima geracao da OS" valor={formatDate(indicators.nextGenerationDate) || "-"} />
+            <IndicadorCard rotulo="Proximo vencimento" valor={formatDate(indicators.nextDueDate) || "-"} />
+          </div>
+
+          <div className="card p-5">
+            <h2 className="mb-3 font-semibold text-navy-900">Custo planejado x realizado</h2>
+            {indicators.cost.tracked ? (
+              <dl className="grid gap-3 text-sm sm:grid-cols-4">
+                <div><dt className="text-xs text-graphite-400">Pecas</dt><dd className="font-medium">{formatCurrency(indicators.cost.parts)}</dd></div>
+                <div><dt className="text-xs text-graphite-400">Mao de obra</dt><dd className="font-medium">{formatCurrency(indicators.cost.labor)}</dd></div>
+                <div><dt className="text-xs text-graphite-400">Terceiros</dt><dd className="font-medium">{formatCurrency(indicators.cost.thirdParty)}</dd></div>
+                <div><dt className="text-xs text-graphite-400">Total realizado</dt><dd className="font-semibold text-navy-900">{formatCurrency(indicators.cost.total)}</dd></div>
+              </dl>
+            ) : (
+              <p className="text-sm text-graphite-500">
+                Sem OS concluida com custo apontado - o custo aparece quando a primeira execucao for encerrada.
+              </p>
+            )}
+            {indicators.materialUsage.length > 0 && (
+              <div className="mt-4">
+                <p className="mb-1.5 text-xs uppercase tracking-wide text-graphite-400">Consumo de material acumulado</p>
+                <ul className="divide-y divide-gray-100 text-sm">
+                  {indicators.materialUsage.map((m) => (
+                    <li key={m.name} className="flex justify-between py-1.5">
+                      <span className="text-graphite-700">{m.name}</span>
+                      <span className="font-medium text-navy-900">{m.quantity} {m.unit}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="card space-y-4 p-5 lg:col-span-2">
@@ -171,6 +294,26 @@ export default function MaintenancePlanDetail() {
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}
       />
+    </div>
+  );
+}
+
+function IndicadorCard({
+  rotulo,
+  valor,
+  detalhe,
+  alerta,
+}: {
+  rotulo: string;
+  valor: string;
+  detalhe?: string;
+  alerta?: boolean;
+}) {
+  return (
+    <div className={`card p-5 ${alerta ? "border-safety-yellow/40 bg-amber-50/30" : ""}`}>
+      <p className="text-xs uppercase tracking-wide text-graphite-400">{rotulo}</p>
+      <p className={`mt-1 text-xl font-bold ${alerta ? "text-safety-yellow-dark" : "text-navy-900"}`}>{valor}</p>
+      {detalhe && <p className="mt-0.5 text-xs text-graphite-400">{detalhe}</p>}
     </div>
   );
 }

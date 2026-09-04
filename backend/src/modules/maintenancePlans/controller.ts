@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority, MaintenanceFrequencyUnit, OperationalCalendar, MeterResetRule, MaintenanceTriggerMode, MaintenanceOrderStatus, MaterialPolicy } from "@prisma/client";
+import { MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority, MaintenanceFrequencyUnit, OperationalCalendar, MeterResetRule, MaintenanceTriggerMode, MaintenanceOrderStatus, MaterialPolicy, ChecklistResponseType } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -119,7 +119,18 @@ export const getMaintenancePlan = asyncHandler(async (req: Request, res: Respons
   res.json({ ...withDerivedStatus(plan), schedule: { nextGenerationDate, meterForecast } });
 });
 
-const checklistItemSchema = z.object({ description: z.string().min(1) });
+const checklistItemSchema = z.object({
+  description: z.string().min(1),
+  section: z.string().nullish(),
+  required: z.boolean().optional(),
+  responseType: z.nativeEnum(ChecklistResponseType).optional(),
+  unit: z.string().nullish(),
+  minValue: z.coerce.number().nullish(),
+  maxValue: z.coerce.number().nullish(),
+  targetValue: z.coerce.number().nullish(),
+  requiresPhoto: z.boolean().optional(),
+  reference: z.string().nullish(),
+});
 const planPartSchema = z.object({
   sparePartId: z.string().uuid(),
   quantity: z.coerce.number().int().positive(),
@@ -278,7 +289,7 @@ export const createMaintenancePlan = asyncHandler(async (req: Request, res: Resp
       baseDate,
       nextDueDate,
       createdById: req.user?.sub,
-      checklistTemplate: { create: (checklistTemplate ?? []).map((c, i) => ({ description: c.description, sortOrder: i })) },
+      checklistTemplate: { create: (checklistTemplate ?? []).map((c, i) => ({ ...c, sortOrder: i })) },
       parts: { create: (parts ?? []).map((p) => ({ ...p })) },
     },
     include: detailInclude,
@@ -353,7 +364,7 @@ export const updateMaintenancePlan = asyncHandler(async (req: Request, res: Resp
         ? {
             checklistTemplate: {
               deleteMany: {},
-              create: checklistTemplate.map((c, i) => ({ description: c.description, sortOrder: i })),
+              create: checklistTemplate.map((c, i) => ({ ...c, sortOrder: i })),
             },
           }
         : {}),
@@ -532,7 +543,23 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
       laborHours: plan.estimatedLaborHours,
       observations: observacoesDeGeracao || null,
       createdById: req.user?.sub,
-      checklist: { create: plan.checklistTemplate.map((c, i) => ({ description: c.description, sortOrder: i })) },
+      // O item da OS leva a regra junto (tipo de resposta, faixa, foto): se o plano for
+      // editado depois, a OS ja executada continua contando a historia que valia na epoca.
+      checklist: {
+        create: plan.checklistTemplate.map((c, i) => ({
+          description: c.description,
+          sortOrder: i,
+          section: c.section,
+          required: c.required,
+          responseType: c.responseType,
+          unit: c.unit,
+          minValue: c.minValue,
+          maxValue: c.maxValue,
+          targetValue: c.targetValue,
+          requiresPhoto: c.requiresPhoto,
+          reference: c.reference,
+        })),
+      },
     },
   });
 
@@ -595,4 +622,161 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
   });
 
   res.status(201).json(workOrder);
+});
+
+
+/**
+ * Indicadores do plano: cumprimento, atraso, HH e custo planejado x realizado, consumo de
+ * material e falhas encontradas durante a preventiva. Tudo calculado a partir das OS que o
+ * plano gerou - nada guardado em campo separado, que envelheceria.
+ */
+export const getMaintenancePlanIndicators = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const plan = await prisma.maintenancePlan.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: {
+      id: true,
+      estimatedLaborHours: true,
+      nextDueDate: true,
+      lastExecutionAt: true,
+      generateAdvanceDays: true,
+    },
+  });
+  if (!plan) throw new NotFoundError("Plano de manutencao");
+
+  const workOrders = await prisma.maintenanceWorkOrder.findMany({
+    where: { planId: plan.id, deletedAt: null },
+    select: {
+      id: true,
+      number: true,
+      status: true,
+      scheduledDate: true,
+      completedAt: true,
+      createdAt: true,
+      partsUsed: { select: { quantity: true, unitCost: true, sparePart: { select: { name: true, unit: true } } } },
+      laborEntries: { select: { hours: true, hourlyRateSnapshot: true } },
+      thirdPartyServices: { select: { cost: true } },
+      spawnedWorkOrders: { select: { id: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const concluidas = workOrders.filter((w) => w.status === "COMPLETED" && w.completedAt);
+  const noPrazo = concluidas.filter((w) => !w.scheduledDate || (w.completedAt && w.completedAt <= w.scheduledDate));
+  const emAberto = workOrders.filter((w) => !["COMPLETED", "CANCELED"].includes(w.status));
+  const agora = new Date();
+  const atrasadas = emAberto.filter((w) => w.scheduledDate && w.scheduledDate < agora);
+
+  const hhRealizada = concluidas.reduce((soma, w) => soma + w.laborEntries.reduce((t, l) => t + l.hours, 0), 0);
+  const custoPecas = concluidas.reduce(
+    (soma, w) => soma + w.partsUsed.reduce((t, x) => t + (x.unitCost ?? 0) * x.quantity, 0),
+    0,
+  );
+  const custoMaoDeObra = concluidas.reduce(
+    (soma, w) => soma + w.laborEntries.reduce((t, l) => t + (l.hourlyRateSnapshot ?? 0) * l.hours, 0),
+    0,
+  );
+  const custoTerceiros = concluidas.reduce((soma, w) => soma + w.thirdPartyServices.reduce((t, x) => t + x.cost, 0), 0);
+
+  const consumo = new Map<string, { name: string; unit: string; quantity: number }>();
+  for (const w of concluidas) {
+    for (const x of w.partsUsed) {
+      const chave = x.sparePart?.name ?? "Peca";
+      const atual = consumo.get(chave) ?? { name: chave, unit: x.sparePart?.unit ?? "un", quantity: 0 };
+      atual.quantity += x.quantity;
+      consumo.set(chave, atual);
+    }
+  }
+
+  // Falhas encontradas na preventiva = corretivas que nasceram de anomalia no checklist
+  // destas OS. E' o indicador que diz se a preventiva esta pegando problema de verdade.
+  const falhasEncontradas = workOrders.reduce((soma, w) => soma + w.spawnedWorkOrders.length, 0);
+
+  res.json({
+    lastExecutionAt: plan.lastExecutionAt,
+    nextDueDate: plan.nextDueDate,
+    nextGenerationDate: plan.nextDueDate ? computeGenerationDate(plan.nextDueDate, plan.generateAdvanceDays) : null,
+    totals: {
+      generated: workOrders.length,
+      completed: concluidas.length,
+      open: emAberto.length,
+      overdue: atrasadas.length,
+    },
+    // Sem OS concluida nao ha cumprimento - null vira "Dados insuficientes" na tela, em
+    // vez de um 0% que pareceria desempenho ruim.
+    compliancePct: concluidas.length > 0 ? Math.round((noPrazo.length / concluidas.length) * 100) : null,
+    laborHours: {
+      planned: plan.estimatedLaborHours != null ? plan.estimatedLaborHours * concluidas.length : null,
+      actual: concluidas.length > 0 ? Math.round(hhRealizada * 10) / 10 : null,
+    },
+    cost: {
+      parts: custoPecas,
+      labor: custoMaoDeObra,
+      thirdParty: custoTerceiros,
+      total: custoPecas + custoMaoDeObra + custoTerceiros,
+      tracked: concluidas.length > 0,
+    },
+    materialUsage: [...consumo.values()].sort((a, b) => b.quantity - a.quantity),
+    failuresFound: falhasEncontradas,
+    workOrders: workOrders.slice(0, 20).map((w) => ({
+      id: w.id,
+      number: w.number,
+      status: w.status,
+      scheduledDate: w.scheduledDate,
+      completedAt: w.completedAt,
+      createdAt: w.createdAt,
+    })),
+  });
+});
+
+/** Duplica o plano: copia tudo menos codigo, historico e datas de execucao. Nasce como
+ * Rascunho, para o usuario ajustar o que muda antes de ativar. */
+export const duplicateMaintenancePlan = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const origem = await prisma.maintenancePlan.findFirst({
+    where: { id: req.params.id, deletedAt: null },
+    include: { checklistTemplate: { orderBy: { sortOrder: "asc" } }, parts: true },
+  });
+  if (!origem) throw new NotFoundError("Plano de manutencao");
+  assertOwnClient(req, origem.clientId);
+
+  const {
+    id: _id,
+    code: _code,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    deletedAt: _deletedAt,
+    lastGeneratedAt: _lastGeneratedAt,
+    lastExecutionAt: _lastExecutionAt,
+    lastMeterAtGeneration: _lastMeter,
+    checklistTemplate,
+    parts,
+    ...dados
+  } = origem;
+
+  const novoCodigo = await nextClientMaintenancePlanCode(origem.clientId);
+
+  const copia = await prisma.maintenancePlan.create({
+    data: {
+      ...dados,
+      code: novoCodigo,
+      name: origem.name + " (copia)",
+      status: "DRAFT",
+      active: false,
+      createdById: req.user?.sub,
+      checklistTemplate: { create: checklistTemplate.map(({ id: _i, planId: _p, ...c }) => c) },
+      parts: { create: parts.map(({ id: _i, planId: _p, ...x }) => x) },
+    },
+    include: detailInclude,
+  });
+
+  await writeAuditLog({
+    userId: req.user?.sub,
+    action: "CREATE",
+    entityType: "MaintenancePlan",
+    entityId: copia.id,
+    description: "Plano " + copia.code + " criado como copia de " + (origem.code ?? origem.name),
+  });
+
+  res.status(201).json(copia);
 });

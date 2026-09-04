@@ -28,8 +28,12 @@ serviceRequestsRouter.post("/", requireRole("ADMIN", "TECHNICIAN", "COMMERCIAL",
 serviceRequestsRouter.patch("/:id", requireRole("ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT"), updateServiceRequest);
 serviceRequestsRouter.delete("/:id", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), deleteServiceRequest);
 
-serviceRequestsRouter.post("/:id/triage", requireRole("ADMIN", "TECHNICIAN"), triageServiceRequest);
-serviceRequestsRouter.post("/:id/convert", requireRole("ADMIN", "TECHNICIAN"), convertServiceRequest);
+// O CMMS e' vendido como programa independente: cada cliente opera a propria manutencao,
+// entao a triagem e a conversao em OS sao feitas pelo proprio cliente (igual a todo o
+// resto do modulo - plano, OS, checklist, almoxarifado). Equipe interna da OptiProcess
+// continua podendo fazer por eles (suporte), mas nao e' mais obrigatorio.
+serviceRequestsRouter.post("/:id/triage", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), triageServiceRequest);
+serviceRequestsRouter.post("/:id/convert", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), convertServiceRequest);
 
 serviceRequestsRouter.get("/:id/attachments", listServiceRequestAttachmentsRoute);
 serviceRequestsRouter.get("/:id/attachments/:attachmentId/url", getServiceRequestAttachmentUrl);

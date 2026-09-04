@@ -28,7 +28,10 @@ export default function ServiceRequestDetail() {
   const { user } = useAuth();
   const { notify } = useToast();
   const { base } = useCmms();
-  const isStaffTriage = user?.role === "ADMIN" || user?.role === "TECHNICIAN";
+  // O CMMS e' operado pelo proprio cliente (programa independente) - o backend ja
+  // restringe cada um a propria empresa, entao o cliente triagem/converte a propria
+  // solicitacao do mesmo jeito que ja gerencia planos, OS e checklist.
+  const canTriageOrConvert = user?.role === "ADMIN" || user?.role === "TECHNICIAN" || user?.role === "CLIENT";
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -93,8 +96,8 @@ export default function ServiceRequestDetail() {
 
   if (isLoading || !request) return <FullPageSpinner />;
 
-  const canTriage = isStaffTriage && ["OPEN", "IN_TRIAGE", "AWAITING_INFO"].includes(request.status);
-  const canConvert = isStaffTriage && request.status === "PLANNED";
+  const canTriage = canTriageOrConvert && ["OPEN", "IN_TRIAGE", "AWAITING_INFO"].includes(request.status);
+  const canConvert = canTriageOrConvert && request.status === "PLANNED";
   const isConverted = request.status === "CONVERTED";
   const canDelete = !isConverted || user?.role === "ADMIN";
 

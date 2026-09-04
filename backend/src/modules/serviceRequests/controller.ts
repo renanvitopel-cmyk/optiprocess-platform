@@ -198,6 +198,7 @@ export const triageServiceRequest = asyncHandler(async (req: Request, res: Respo
   const data = triageSchema.parse(req.body);
   const existing = await prisma.serviceRequest.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Solicitacao de servico");
+  assertOwnClient(req, existing.clientId);
   if (["CONVERTED", "REJECTED", "CLOSED"].includes(existing.status)) {
     throw new ValidationError("Esta solicitacao ja foi decidida.");
   }
@@ -236,6 +237,7 @@ export const convertServiceRequest = asyncHandler(async (req: Request, res: Resp
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const existing = await prisma.serviceRequest.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Solicitacao de servico");
+  assertOwnClient(req, existing.clientId);
   if (existing.status !== "PLANNED") {
     throw new ValidationError("So e' possivel gerar OS de uma solicitacao Planejada (aprovada na triagem).");
   }

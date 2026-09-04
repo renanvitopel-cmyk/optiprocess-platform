@@ -50,6 +50,34 @@ enum MaintenanceTriggerType {
   METER
 }
 
+// Tecnicas de manutencao preditiva. COUNTER e' o caso a parte: nao mede condicao, mede
+// uso acumulado (horimetro/odometro) e serve ao plano preventivo por uso.
+enum PredictiveTechnique {
+  COUNTER
+  VIBRATION
+  THERMOGRAPHY
+  OIL_ANALYSIS
+  ULTRASOUND
+  MOTOR_CURRENT
+  VISUAL
+  OTHER
+}
+
+enum MeasurementDirection {
+  UPPER // quanto maior, pior (vibracao, temperatura, dB, particulas)
+  LOWER // quanto menor, pior (pressao, espessura, resistencia de isolamento)
+  RANGE // ruim fora da faixa min/max (contador, variavel de processo)
+}
+
+// Zonas de condicao, na linha do que a ISO 10816/20816 faz com as faixas A/B/C/D: cada
+// zona tem uma acao diferente, e e' isso que separa preditiva de simples alarme.
+enum ConditionSeverity {
+  NORMAL   // opera normalmente
+  WARNING  // degradacao comecou: monitorar mais de perto, sem abrir OS
+  ALARM    // programar intervencao na proxima oportunidade
+  CRITICAL // agir imediatamente
+}
+
 enum MaintenanceOrderType {
   PREVENTIVE
   CORRECTIVE
@@ -912,17 +940,35 @@ model OrderStatusHistory {
 // (Instrument/TAG) ja existente - nao duplica cadastro de equipamento.
 // ---------------------------------------------------------------------------
 
+// Ponto de medicao do ativo. Serve para dois usos que nao se misturam:
+// - COUNTER (horimetro/odometro): mede USO acumulado e alimenta plano preventivo por uso.
+// - demais tecnicas (vibracao, termografia, oleo...): medem CONDICAO e alimentam a
+//   manutencao preditiva, com zonas de severidade e acao diferente por zona.
 model Meter {
   id           String    @id @default(uuid())
   instrumentId String
   instrument   Instrument @relation(fields: [instrumentId], references: [id])
-  name         String    // ex.: "Horimetro", "Odometro"
-  unit         String    // ex.: "h", "km", "ciclos"
+  name         String    // ex.: "Horimetro", "Mancal LA - vibracao"
+  unit         String    // ex.: "h", "km", "mm/s", "°C", "dB"
   currentValue Float     @default(0)
-  // Faixa normal de operacao: uma leitura fora disso e' manutencao preditiva de
-  // verdade (condicao medida ultrapassou o limite), nao so um rotulo escolhido a mao.
+  // Tecnica preditiva usada neste ponto - define unidade, criterio e periodicidade tipicas.
+  technique    PredictiveTechnique  @default(COUNTER)
+  // Como ler os limites: quanto maior pior (vibracao), quanto menor pior (pressao,
+  // isolamento) ou fora da faixa (contador/processo).
+  direction    MeasurementDirection @default(RANGE)
+  // Zonas de severidade. minThreshold/maxThreshold sao a zona de ALARME (mantidos com o
+  // nome antigo para nao quebrar o que ja esta cadastrado); warning e' o aviso antecipado
+  // e critical e' o ponto de parar a maquina.
   minThreshold Float?
   maxThreshold Float?
+  warningLimit  Float?
+  criticalLimit Float?
+  // Norma/criterio que sustenta os limites (ex.: "ISO 10816-3 Classe II") - auditoria pede.
+  criterion     String?
+  // De quanto em quanto tempo este ponto deve ser medido. Sem coleta na frequencia, o
+  // painel preditivo acusa "coleta atrasada" - ponto que parou de ser medido nao protege.
+  frequencyDays Int?
+  lastReadingAt DateTime?
   createdById  String?
   createdAt    DateTime  @default(now())
   deletedAt    DateTime?
@@ -944,6 +990,10 @@ model MeterReading {
   // Ficou fora do min/maxThreshold vigente no momento do registro - guardado na leitura
   // (nao recalculado depois) porque o limite do medidor pode mudar com o tempo.
   alertTriggered Boolean @default(false)
+  // Zona em que a leitura caiu, congelada no momento do registro pelo mesmo motivo do
+  // campo acima: e' o historico da condicao, nao pode mudar quando o limite mudar.
+  severity     ConditionSeverity @default(NORMAL)
+  notes        String?
   recordedById String?
   createdAt    DateTime @default(now())
 

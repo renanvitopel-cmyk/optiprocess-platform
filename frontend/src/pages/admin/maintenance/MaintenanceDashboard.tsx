@@ -77,7 +77,7 @@ export default function MaintenanceDashboard() {
         <Link to={`${base}/arvore${clientId ? `?clientId=${clientId}` : ""}`} className="inline-flex items-center gap-1.5 text-graphite-600 hover:text-navy-700">
           <GitBranch className="h-4 w-4" /> Arvore de ativos
         </Link>
-        <Link to={`${base}/ordens?type=PREDICTIVE${clientId ? `&clientId=${clientId}` : ""}`} className="inline-flex items-center gap-1.5 text-graphite-600 hover:text-navy-700">
+        <Link to={`${base}/preditiva${clientId ? `?clientId=${clientId}` : ""}`} className="inline-flex items-center gap-1.5 text-graphite-600 hover:text-navy-700">
           <Radar className="h-4 w-4" /> Manutencao preditiva
         </Link>
         <Link to={`${laborBase}${!isClient && clientId ? `?clientId=${clientId}` : ""}`} className="inline-flex items-center gap-1.5 text-graphite-600 hover:text-navy-700">

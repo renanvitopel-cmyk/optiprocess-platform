@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { Meter, MeterReading, MaintenanceWorkOrder } from "./types";
+import type { Meter, MeterReading, MaintenanceWorkOrder, PredictivePanelData, PredictiveTechnique, MeasurementDirection, ConditionSeverity } from "./types";
 
 export async function listMeters(params: { instrumentId?: string } = {}): Promise<Meter[]> {
   const { data } = await api.get<Meter[]>("/meters", { params });
@@ -16,8 +16,14 @@ export interface MeterInput {
   name: string;
   unit: string;
   currentValue?: number;
+  technique?: PredictiveTechnique;
+  direction?: MeasurementDirection;
   minThreshold?: number | null;
   maxThreshold?: number | null;
+  warningLimit?: number | null;
+  criticalLimit?: number | null;
+  criterion?: string | null;
+  frequencyDays?: number | null;
 }
 
 export async function createMeter(input: MeterInput): Promise<Meter> {
@@ -34,10 +40,19 @@ export async function deleteMeter(id: string): Promise<void> {
   await api.delete(`/meters/${id}`);
 }
 
-export async function addMeterReading(
-  id: string,
-  value: number,
-): Promise<MeterReading & { triggeredWorkOrder: MaintenanceWorkOrder | null }> {
-  const { data } = await api.post<MeterReading & { triggeredWorkOrder: MaintenanceWorkOrder | null }>(`/meters/${id}/readings`, { value });
+export interface ReadingResult extends MeterReading {
+  severity: ConditionSeverity;
+  severityLabel: string;
+  recommendedAction: string;
+  triggeredWorkOrder: MaintenanceWorkOrder | null;
+}
+
+export async function addMeterReading(id: string, value: number, notes?: string): Promise<ReadingResult> {
+  const { data } = await api.post<ReadingResult>(`/meters/${id}/readings`, { value, notes });
+  return data;
+}
+
+export async function getPredictivePanel(params: { clientId?: string } = {}): Promise<PredictivePanelData> {
+  const { data } = await api.get<PredictivePanelData>("/meters/predictive-panel", { params });
   return data;
 }

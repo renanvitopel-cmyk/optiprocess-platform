@@ -467,12 +467,26 @@ export interface NotificationItem {
 // CMMS - RLP Maintenance CMMS (gestao de manutencao, pacote opcional)
 // ---------------------------------------------------------------------------
 
+export type PredictiveTechnique =
+  | "COUNTER"
+  | "VIBRATION"
+  | "THERMOGRAPHY"
+  | "OIL_ANALYSIS"
+  | "ULTRASOUND"
+  | "MOTOR_CURRENT"
+  | "VISUAL"
+  | "OTHER";
+export type MeasurementDirection = "UPPER" | "LOWER" | "RANGE";
+export type ConditionSeverity = "NORMAL" | "WARNING" | "ALARM" | "CRITICAL";
+
 export interface MeterReading {
   id: string;
   meterId: string;
   value: number;
   readAt: string;
   alertTriggered: boolean;
+  severity: ConditionSeverity;
+  notes: string | null;
   recordedById: string | null;
   createdAt: string;
 }
@@ -483,10 +497,52 @@ export interface Meter {
   name: string;
   unit: string;
   currentValue: number;
+  technique: PredictiveTechnique;
+  direction: MeasurementDirection;
   minThreshold: number | null;
   maxThreshold: number | null;
+  warningLimit: number | null;
+  criticalLimit: number | null;
+  criterion: string | null;
+  frequencyDays: number | null;
+  lastReadingAt: string | null;
   createdAt: string;
   readings?: MeterReading[];
+}
+
+/** Um ponto de medicao no painel preditivo, com tendencia recente. */
+export interface PredictivePoint {
+  id: string;
+  name: string;
+  unit: string;
+  technique: PredictiveTechnique;
+  direction: MeasurementDirection;
+  criterion: string | null;
+  frequencyDays: number | null;
+  lastReadingAt: string | null;
+  neverMeasured: boolean;
+  collectionOverdue: boolean;
+  dueInDays: number | null;
+  severity: ConditionSeverity | null;
+  lastValue: number | null;
+  limits: { warning: number | null; alarm: number | null; critical: number | null };
+  instrument: { id: string; tag: string | null; type: string; description: string | null; criticality: MaintenancePriority };
+  trend: { value: number; readAt: string; severity: ConditionSeverity }[];
+}
+
+export interface PredictivePanelData {
+  totals: {
+    points: number;
+    critical: number;
+    alarm: number;
+    warning: number;
+    normal: number;
+    neverMeasured: number;
+    collectionOverdue: number;
+  };
+  needsAttention: PredictivePoint[];
+  collectionOverdue: PredictivePoint[];
+  points: PredictivePoint[];
 }
 
 export type AssetHierarchyLevel = "PLANT" | "AREA" | "MACHINE" | "SUBASSEMBLY" | "PART";

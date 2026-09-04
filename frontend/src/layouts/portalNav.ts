@@ -15,6 +15,7 @@ import {
   CalendarDays,
   BarChart3,
   SlidersHorizontal,
+  Radar,
 } from "lucide-react";
 import type { ServiceCategory } from "../api/types";
 
@@ -66,6 +67,7 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
       { to: "/portal/manutencao/planos", label: "Planos preventivos", icon: ShieldCheck, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/instrumentos", label: "Meus ativos", icon: Gauge, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
       { to: "/portal/almoxarifado", label: "Almoxarifado", icon: Boxes, requires: ["CMMS_MAINTENANCE"] },
+      { to: "/portal/manutencao/preditiva", label: "Preditiva", icon: Radar, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/pareto", label: "Analise de falhas", icon: BarChart3, requires: ["CMMS_MAINTENANCE"] },
     ],
   },

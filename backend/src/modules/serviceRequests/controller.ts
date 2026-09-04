@@ -162,8 +162,11 @@ export const deleteServiceRequest = asyncHandler(async (req: Request, res: Respo
   const existing = await prisma.serviceRequest.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Solicitacao de servico");
   assertOwnClient(req, existing.clientId);
-  if (existing.status === "CONVERTED") {
-    throw new ValidationError("Esta solicitacao ja virou uma OS e nao pode ser removida.");
+  // Uma vez convertida em OS, a solicitacao normalmente e' historico permanente - so o
+  // ADMIN pode forcar a remocao (ex.: dado de teste). A OS gerada nao e' afetada, so o
+  // vinculo a partir da solicitacao some.
+  if (existing.status === "CONVERTED" && req.user?.role !== "ADMIN") {
+    throw new ValidationError("Esta solicitacao ja virou uma OS e nao pode ser removida. So um administrador pode forcar a remocao.");
   }
 
   await prisma.serviceRequest.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
@@ -173,7 +176,10 @@ export const deleteServiceRequest = asyncHandler(async (req: Request, res: Respo
     action: "DELETE",
     entityType: "ServiceRequest",
     entityId: existing.id,
-    description: `Solicitacao de servico ${existing.number} removida`,
+    description:
+      existing.status === "CONVERTED"
+        ? `Solicitacao de servico ${existing.number} removida por administrador (ja convertida em OS - a OS nao foi afetada)`
+        : `Solicitacao de servico ${existing.number} removida`,
   });
 
   res.status(204).send();

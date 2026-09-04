@@ -95,7 +95,8 @@ export default function ServiceRequestDetail() {
 
   const canTriage = isStaffTriage && ["OPEN", "IN_TRIAGE", "AWAITING_INFO"].includes(request.status);
   const canConvert = isStaffTriage && request.status === "PLANNED";
-  const canDelete = request.status !== "CONVERTED";
+  const isConverted = request.status === "CONVERTED";
+  const canDelete = !isConverted || user?.role === "ADMIN";
 
   return (
     <div>
@@ -218,7 +219,11 @@ export default function ServiceRequestDetail() {
       <ConfirmDialog
         open={confirmDelete}
         title="Remover solicitacao"
-        description="Tem certeza que deseja remover esta solicitacao de servico?"
+        description={
+          isConverted
+            ? "Esta solicitacao ja foi convertida em OS. Remove-la apaga so o registro da solicitacao (a OS gerada continua existindo normalmente, sem vinculo com ela). Tem certeza?"
+            : "Tem certeza que deseja remover esta solicitacao de servico?"
+        }
         confirmLabel="Remover"
         danger
         loading={deleting}

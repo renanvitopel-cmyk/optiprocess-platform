@@ -119,6 +119,9 @@ export const InstrumentPicker = forwardRef<HTMLInputElement, InstrumentPickerPro
 
       {selecionadoId && !aberto ? (
         <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
+          {selecionado?.photoUrl && (
+            <img src={selecionado.photoUrl} alt="" className="h-8 w-8 shrink-0 rounded border border-gray-200 object-cover" />
+          )}
           <span className="min-w-0 flex-1 truncate text-sm text-graphite-800">
             {rotuloDoSelecionado || "Carregando..."}
           </span>
@@ -168,12 +171,17 @@ export const InstrumentPicker = forwardRef<HTMLInputElement, InstrumentPickerPro
                 <li key={i.id}>
                   <button
                     type="button"
-                    className="block w-full px-3 py-2 text-left hover:bg-gray-50"
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50"
                     onClick={() => escolher(i.id)}
                   >
-                    <span className="block text-sm font-medium text-navy-900">{i.tag ?? i.type}</span>
-                    <span className="block truncate text-xs text-graphite-400">
-                      {[i.description || i.model, i.area?.name, i.plant?.name].filter(Boolean).join(" - ") || i.type}
+                    {i.photoUrl && (
+                      <img src={i.photoUrl} alt="" className="h-8 w-8 shrink-0 rounded border border-gray-200 object-cover" />
+                    )}
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-navy-900">{i.tag ?? i.type}</span>
+                      <span className="block truncate text-xs text-graphite-400">
+                        {[i.description || i.model, i.area?.name, i.plant?.name].filter(Boolean).join(" - ") || i.type}
+                      </span>
                     </span>
                   </button>
                 </li>

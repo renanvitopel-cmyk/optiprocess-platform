@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2, Plus, AlertTriangle } from "lucide-react";
-import { deleteInstrument, getInstrument, listAssetParts, addAssetPart, removeAssetPart, getInstrumentPartsHistory, getInstrumentCostSummary } from "../../../api/instruments";
+import { Pencil, Trash2, Plus, AlertTriangle, Camera } from "lucide-react";
+import { deleteInstrument, getInstrument, listAssetParts, addAssetPart, removeAssetPart, getInstrumentPartsHistory, getInstrumentCostSummary, uploadInstrumentPhoto } from "../../../api/instruments";
 import { listServiceOrders } from "../../../api/serviceOrders";
 import { listMeters, addMeterReading } from "../../../api/meters";
 import { listMaintenancePlans } from "../../../api/maintenancePlans";
@@ -53,7 +53,7 @@ export default function InstrumentDetail() {
   const [meterModalOpen, setMeterModalOpen] = useState(false);
   const [selectedSparePartId, setSelectedSparePartId] = useState("");
 
-  const { data: instrument, isLoading } = useQuery({ queryKey: ["instrument", id], queryFn: () => getInstrument(id) });
+  const { data: instrument, isLoading, refetch } = useQuery({ queryKey: ["instrument", id], queryFn: () => getInstrument(id) });
   const { data: serviceOrders } = useQuery({
     queryKey: ["instrument-service-orders", id],
     queryFn: () => listServiceOrders({ instrumentId: id, pageSize: 20 }),
@@ -185,12 +185,46 @@ export default function InstrumentDetail() {
       )}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        {instrument.photoUrl && (
-          <img
-            src={instrument.photoUrl}
-            alt={`Foto do ativo ${instrument.tag ?? ""}`}
-            className="h-14 w-14 rounded-lg border border-gray-200 object-cover"
-          />
+        {/* Foto direto na ficha: da para adicionar ou trocar sem abrir o formulario de
+            edicao - e' a coisa que se faz com o celular na mao, na frente da maquina. */}
+        {canManage ? (
+          <label className="group relative cursor-pointer" title={instrument.photoUrl ? "Trocar a foto" : "Adicionar uma foto"}>
+            {instrument.photoUrl ? (
+              <img
+                src={instrument.photoUrl}
+                alt={`Foto do ativo ${instrument.tag ?? ""}`}
+                className="h-14 w-14 rounded-lg border border-gray-200 object-cover group-hover:opacity-80"
+              />
+            ) : (
+              <span className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-graphite-300 group-hover:border-navy-400">
+                <Camera className="h-5 w-5" />
+              </span>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const arquivo = e.target.files?.[0];
+                if (!arquivo) return;
+                try {
+                  await uploadInstrumentPhoto(instrument.id, arquivo);
+                  notify("success", "Foto atualizada.");
+                  refetch();
+                } catch (error) {
+                  notify("error", getApiErrorMessage(error));
+                }
+              }}
+            />
+          </label>
+        ) : (
+          instrument.photoUrl && (
+            <img
+              src={instrument.photoUrl}
+              alt={`Foto do ativo ${instrument.tag ?? ""}`}
+              className="h-14 w-14 rounded-lg border border-gray-200 object-cover"
+            />
+          )
         )}
         <StatusBadge status={instrument.derivedStatus ?? instrument.status} />
         <StatusBadge status={instrument.criticality} label={`Criticidade: ${PRIORITY_LABELS[instrument.criticality]}`} />

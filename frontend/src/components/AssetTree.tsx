@@ -90,9 +90,26 @@ function TreeRow({ node, linkBase, depth, defaultOpen = false }: { node: TreeNod
         ) : (
           <span className="h-5 w-5 shrink-0" />
         )}
-        <LevelIcon className="h-4 w-4 shrink-0 text-navy-500" />
+        {/* Foto no lugar do icone quando existe: reconhecer o equipamento pela imagem e' mais
+            rapido do que ler o TAG, e o icone generico nao acrescenta nada quando ha foto. */}
+        {instrument.photoUrl ? (
+          <img
+            src={instrument.photoUrl}
+            alt=""
+            className="h-7 w-7 shrink-0 rounded border border-gray-200 object-cover"
+          />
+        ) : (
+          <LevelIcon className="h-4 w-4 shrink-0 text-navy-500" />
+        )}
         <span className="font-mono text-sm font-semibold text-navy-900">{instrument.tag ?? "sem TAG"}</span>
-        <span className="text-xs text-graphite-400">– {instrument.type} · {instrument.model}</span>
+        {/* A descricao e' o nome em linguagem de gente - e' por ela que a equipe reconhece o
+            ativo. O tipo/modelo ficam depois, e so aparecem se existirem (antes saia "· null"). */}
+        {instrument.description && (
+          <span className="truncate text-sm text-graphite-700">{instrument.description}</span>
+        )}
+        <span className="shrink-0 text-xs text-graphite-400">
+          {[instrument.type, instrument.model].filter(Boolean).join(" · ")}
+        </span>
         {alert && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-safety-red" aria-label="Atencao: critico ou vencido" />}
         <span className="ml-auto flex shrink-0 gap-1.5">
           {(instrument.criticality === "CRITICAL" || instrument.criticality === "HIGH") && (

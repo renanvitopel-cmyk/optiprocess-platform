@@ -50,6 +50,33 @@ enum MaintenanceTriggerType {
   METER
 }
 
+// Ciclo de vida do plano. Substitui o boolean "active" como fonte da verdade (o boolean
+// continua no banco, sincronizado, para nao quebrar consultas antigas): Rascunho e' o
+// plano em montagem, Suspenso para de gerar OS mas volta, Encerrado e' aposentado.
+enum MaintenancePlanStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+// Natureza do trabalho do plano - muda o que se espera do checklist e entra nos
+// indicadores (ex.: quanto da carga e' inspecao x lubrificacao x legal).
+enum MaintenancePlanType {
+  PREVENTIVE
+  INSPECTION
+  LUBRICATION
+  CALIBRATION
+  REGULATORY
+  OTHER
+}
+
+// Plano de um ativo so, ou modelo aplicavel a varios ativos do mesmo tipo/familia.
+enum MaintenancePlanScope {
+  SINGLE_ASSET
+  ASSET_FAMILY
+}
+
 // Tecnicas de manutencao preditiva. COUNTER e' o caso a parte: nao mede condicao, mede
 // uso acumulado (horimetro/odometro) e serve ao plano preventivo por uso.
 enum PredictiveTechnique {
@@ -1016,6 +1043,8 @@ model LaborType {
   active   Boolean @default(true)
   createdAt DateTime @default(now())
 
+  maintenancePlans MaintenancePlan[]
+
   @@unique([clientId, name])
   @@index([clientId])
   @@map("labor_types")
@@ -1404,6 +1433,17 @@ model MaintenancePlan {
   id            String                 @id @default(uuid())
   clientId      String
   client        Client                 @relation(fields: [clientId], references: [id])
+  // Codigo legivel por cliente ("PM-0001") - o que aparece em documento e conversa.
+  code          String?
+  status        MaintenancePlanStatus  @default(ACTIVE)
+  planType      MaintenancePlanType    @default(PREVENTIVE)
+  scope         MaintenancePlanScope   @default(SINGLE_ASSET)
+  // Prioridade que a OS gerada por este plano recebe.
+  defaultPriority MaintenancePriority  @default(MEDIUM)
+  // Especialidade sugerida (Mecanica, Eletrica, Instrumentacao...) - reaproveita o
+  // catalogo LaborType em vez de criar mais uma lista de texto livre.
+  specialtyId   String?
+  specialty     LaborType?             @relation(fields: [specialtyId], references: [id])
   instrumentId  String
   instrument    Instrument             @relation(fields: [instrumentId], references: [id])
   name          String
@@ -1447,6 +1487,7 @@ model MaintenancePlan {
   @@index([clientId])
   @@index([instrumentId])
   @@index([nextDueDate])
+  @@index([status])
   @@map("maintenance_plans")
 }
 

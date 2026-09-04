@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { MaintenanceTriggerType } from "@prisma/client";
+import { MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -8,14 +8,15 @@ import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId } from "../../middleware/rbac";
 import { deriveDueStatus, computeNextDueDateFromDays } from "../../utils/status";
-import { nextClientMaintenanceOrderNumber } from "../../utils/sequence";
+import { nextClientMaintenanceOrderNumber, nextClientMaintenancePlanCode } from "../../utils/sequence";
 import { reserveSparePart } from "../../lib/inventory";
 
 const detailInclude = {
   client: { select: { id: true, companyName: true, tradeName: true } },
-  instrument: { select: { id: true, type: true, model: true, serialNumber: true, tag: true } },
+  instrument: { select: { id: true, type: true, model: true, serialNumber: true, tag: true, description: true, criticality: true } },
   meter: { select: { id: true, name: true, unit: true, currentValue: true } },
   responsible: { select: { id: true, name: true } },
+  specialty: { select: { id: true, name: true } },
   checklistTemplate: { orderBy: { sortOrder: "asc" as const } },
   template: { select: { id: true, name: true } },
   parts: { include: { sparePart: { select: { id: true, name: true, code: true, unit: true, stockQty: true, reservedQty: true } } } },
@@ -100,6 +101,11 @@ const planSchema = z.object({
   meterId: z.string().uuid().nullish(),
   meterInterval: z.coerce.number().positive().nullish(),
   active: z.boolean().optional(),
+  status: z.nativeEnum(MaintenancePlanStatus).optional(),
+  planType: z.nativeEnum(MaintenancePlanType).optional(),
+  scope: z.nativeEnum(MaintenancePlanScope).optional(),
+  defaultPriority: z.nativeEnum(MaintenancePriority).optional(),
+  specialtyId: z.string().uuid().nullish(),
   responsibleId: z.string().uuid().nullish(),
   checklistTemplate: z.array(checklistItemSchema).optional(),
   // Tolerancia informativa (nao reescreve deriveDueStatus, so exibida na tela do plano);
@@ -139,9 +145,17 @@ export const createMaintenancePlan = asyncHandler(async (req: Request, res: Resp
   const { checklistTemplate, parts, ...planData } = data;
   const nextDueDate = data.triggerType === "TIME" ? computeNextDueDateFromDays(new Date(), data.frequencyDays!) : null;
 
+  const code = await nextClientMaintenancePlanCode(clientId);
+  // "active" continua no banco por compatibilidade, mas quem manda e' o status: manter
+  // os dois em sincronia evita um plano Suspenso continuar gerando OS.
+  const status = planData.status ?? "ACTIVE";
+
   const plan = await prisma.maintenancePlan.create({
     data: {
       ...planData,
+      code,
+      status,
+      active: status === "ACTIVE",
       clientId,
       nextDueDate,
       createdById: req.user?.sub,
@@ -178,10 +192,14 @@ export const updateMaintenancePlan = asyncHandler(async (req: Request, res: Resp
   const nextDueDate =
     triggerType === "TIME" && frequencyDays ? computeNextDueDateFromDays(new Date(), frequencyDays) : existing.nextDueDate;
 
+  const statusFinal = planData.status ?? existing.status;
+
   const plan = await prisma.maintenancePlan.update({
     where: { id: existing.id },
     data: {
       ...planData,
+      status: statusFinal,
+      active: statusFinal === "ACTIVE",
       nextDueDate,
       ...(checklistTemplate
         ? {
@@ -244,7 +262,14 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
   });
   if (!plan) throw new NotFoundError("Plano de manutencao");
   assertOwnClient(req, plan.clientId);
-  if (!plan.active) throw new ValidationError("Plano inativo nao pode gerar ordem de manutencao.");
+  if (plan.status !== "ACTIVE") {
+    const motivo: Record<string, string> = {
+      DRAFT: "Este plano ainda e' um rascunho.",
+      SUSPENDED: "Este plano esta suspenso.",
+      CLOSED: "Este plano foi encerrado.",
+    };
+    throw new ValidationError(`${motivo[plan.status] ?? "Plano inativo."} So plano Ativo gera ordem de manutencao.`);
+  }
 
   const number = await nextClientMaintenanceOrderNumber(plan.clientId);
 
@@ -256,6 +281,7 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
       planId: plan.id,
       type: "PREVENTIVE",
       status: "OPEN",
+      priority: plan.defaultPriority,
       description: plan.name,
       technicianId: plan.responsibleId,
       meterReadingAtExecution: plan.meter?.currentValue,

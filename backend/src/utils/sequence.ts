@@ -56,3 +56,18 @@ export async function nextClientServiceRequestNumber(clientId: string): Promise<
 
   return `SS-${counter.value}`;
 }
+
+/** Codigo do plano de manutencao por cliente ("PM-0001", "PM-0002"...). Diferente da OS,
+ * usa 4 digitos com zero a esquerda: plano e' cadastro estavel, aparece em documento e
+ * fica mais legivel alinhado. */
+export async function nextClientMaintenancePlanCode(clientId: string): Promise<string> {
+  const counterKey = `maintenancePlan:${clientId}`;
+
+  const counter = await prisma.counter.upsert({
+    where: { key: counterKey },
+    create: { key: counterKey, value: 1 },
+    update: { value: { increment: 1 } },
+  });
+
+  return `PM-${String(counter.value).padStart(4, "0")}`;
+}

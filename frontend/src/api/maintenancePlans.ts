@@ -1,6 +1,6 @@
 import { api } from "./client";
 import type { PagedResult } from "./client";
-import type { MaintenancePlan, MaintenanceTriggerType } from "./types";
+import type { MaintenancePlan, MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority } from "./types";
 
 export interface ListMaintenancePlansParams {
   page?: number;
@@ -30,6 +30,11 @@ export interface MaintenancePlanInput {
   meterId?: string | null;
   meterInterval?: number | null;
   active?: boolean;
+  status?: MaintenancePlanStatus;
+  planType?: MaintenancePlanType;
+  scope?: MaintenancePlanScope;
+  defaultPriority?: MaintenancePriority;
+  specialtyId?: string | null;
   responsibleId?: string | null;
   checklistTemplate?: { description: string }[];
   toleranceDaysBefore?: number | null;

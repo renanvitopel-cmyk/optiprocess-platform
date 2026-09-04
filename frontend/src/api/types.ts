@@ -117,6 +117,8 @@ export interface InstrumentRef {
   serialNumber: string | null;
   tag: string | null;
   description?: string | null;
+  /** Vem junto onde a tela precisa mostrar a criticidade herdada do ativo. */
+  criticality?: MaintenancePriority;
 }
 
 export interface ServiceOrder {
@@ -681,9 +683,22 @@ export interface MaintenancePlanPart {
   quantity: number;
 }
 
+export type MaintenancePlanStatus = "DRAFT" | "ACTIVE" | "SUSPENDED" | "CLOSED";
+export type MaintenancePlanType = "PREVENTIVE" | "INSPECTION" | "LUBRICATION" | "CALIBRATION" | "REGULATORY" | "OTHER";
+export type MaintenancePlanScope = "SINGLE_ASSET" | "ASSET_FAMILY";
+
 export interface MaintenancePlan {
   id: string;
   clientId: string;
+  /** Codigo legivel por cliente ("PM-0001"). */
+  code: string | null;
+  status: MaintenancePlanStatus;
+  planType: MaintenancePlanType;
+  scope: MaintenancePlanScope;
+  /** Prioridade que a OS gerada por este plano recebe. */
+  defaultPriority: MaintenancePriority;
+  specialtyId: string | null;
+  specialty?: { id: string; name: string } | null;
   client?: ClientRef;
   instrumentId: string;
   instrument?: InstrumentRef;

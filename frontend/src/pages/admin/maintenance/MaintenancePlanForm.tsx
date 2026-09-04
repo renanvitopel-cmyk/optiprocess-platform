@@ -1,10 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Check } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
 import { TextInput, TextareaInput, SelectInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
@@ -13,10 +13,13 @@ import { UserPicker } from "../../../components/UserPicker";
 import { listMeters } from "../../../api/meters";
 import { createMaintenancePlan, getMaintenancePlan, updateMaintenancePlan } from "../../../api/maintenancePlans";
 import { listSpareParts } from "../../../api/spareParts";
+import { listLaborTypes } from "../../../api/laborTypes";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { useCmms } from "../../../lib/cmms";
+
+const PRIORITY_LABELS: Record<string, string> = { LOW: "Baixa", MEDIUM: "Media", HIGH: "Alta", CRITICAL: "Critica" };
 
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
@@ -28,7 +31,11 @@ const schema = z.object({
   meterId: z.string().uuid().optional().or(z.literal("")),
   meterInterval: z.coerce.number().positive().optional(),
   responsibleId: z.string().uuid().optional().or(z.literal("")),
-  active: z.boolean().optional(),
+  status: z.enum(["DRAFT", "ACTIVE", "SUSPENDED", "CLOSED"]),
+  planType: z.enum(["PREVENTIVE", "INSPECTION", "LUBRICATION", "CALIBRATION", "REGULATORY", "OTHER"]),
+  scope: z.enum(["SINGLE_ASSET", "ASSET_FAMILY"]),
+  defaultPriority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+  specialtyId: z.string().uuid().optional().or(z.literal("")),
   checklistTemplate: z.array(z.object({ description: z.string().min(1, "Descreva o item.") })),
   toleranceDaysBefore: z.coerce.number().int().nonnegative().optional(),
   toleranceDaysAfter: z.coerce.number().int().nonnegative().optional(),
@@ -52,13 +59,16 @@ export default function MaintenancePlanForm() {
     enabled: isEdit,
   });
 
-  const { register, control, handleSubmit, watch, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, control, handleSubmit, watch, reset, trigger, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       clientId: ownClientId ?? searchParams.get("clientId") ?? "",
       instrumentId: searchParams.get("instrumentId") ?? "",
       triggerType: "TIME",
-      active: true,
+      status: "ACTIVE",
+      planType: "PREVENTIVE",
+      scope: "SINGLE_ASSET",
+      defaultPriority: "MEDIUM",
       checklistTemplate: [{ description: "" }],
       parts: [],
     },
@@ -81,6 +91,30 @@ export default function MaintenancePlanForm() {
     enabled: !!clientId,
   });
 
+  // Especialidade reaproveita o catalogo de tipos de mao de obra (Mecanica, Eletrica,
+  // Instrumentacao...) em vez de criar mais uma lista solta de texto.
+  const { data: specialties } = useQuery({
+    queryKey: ["labor-types-picker"],
+    queryFn: () => listLaborTypes({ active: true }),
+    staleTime: 60_000,
+  });
+
+  // Assistente em 3 etapas: cada etapa so libera a proxima quando os campos dela estao
+  // validos, para o usuario nao descobrir erro da etapa 1 ao clicar em salvar na 3.
+  const [step, setStep] = useState(0);
+  const STEP_FIELDS: (keyof FormValues)[][] = [
+    ["clientId", "instrumentId", "name", "planType", "scope", "defaultPriority", "status"],
+    ["triggerType", "frequencyDays", "meterId", "meterInterval", "toleranceDaysBefore", "toleranceDaysAfter"],
+    ["estimatedLaborHours", "procedure", "parts", "checklistTemplate"],
+  ];
+  async function goToStep(next: number) {
+    if (next > step) {
+      const ok = await trigger(STEP_FIELDS[step]);
+      if (!ok) return;
+    }
+    setStep(next);
+  }
+
   useEffect(() => {
     if (existing) {
       reset({
@@ -93,7 +127,11 @@ export default function MaintenancePlanForm() {
         meterId: existing.meterId ?? "",
         meterInterval: existing.meterInterval ?? undefined,
         responsibleId: existing.responsibleId ?? "",
-        active: existing.active,
+        status: existing.status ?? (existing.active ? "ACTIVE" : "SUSPENDED"),
+        planType: existing.planType ?? "PREVENTIVE",
+        scope: existing.scope ?? "SINGLE_ASSET",
+        defaultPriority: existing.defaultPriority ?? "MEDIUM",
+        specialtyId: existing.specialtyId ?? "",
         checklistTemplate: existing.checklistTemplate.length ? existing.checklistTemplate : [{ description: "" }],
         toleranceDaysBefore: existing.toleranceDaysBefore ?? undefined,
         toleranceDaysAfter: existing.toleranceDaysAfter ?? undefined,
@@ -110,6 +148,7 @@ export default function MaintenancePlanForm() {
         ...values,
         meterId: values.meterId || null,
         responsibleId: values.responsibleId || null,
+        specialtyId: values.specialtyId || null,
         checklistTemplate: values.checklistTemplate.filter((c) => c.description.trim()),
         toleranceDaysBefore: values.toleranceDaysBefore ?? null,
         toleranceDaysAfter: values.toleranceDaysAfter ?? null,
@@ -137,8 +176,37 @@ export default function MaintenancePlanForm() {
           { label: isEdit ? "Editar" : "Novo" },
         ]}
       />
+      {/* Assistente em 3 etapas: nem todo campo de uma vez. */}
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        {["Identificacao", "Disparo e geracao da OS", "Execucao, materiais e checklist"].map((label, index) => {
+          const done = index < step;
+          const current = index === step;
+          return (
+            <button
+              key={label}
+              type="button"
+              onClick={() => goToStep(index)}
+              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                current
+                  ? "border-navy-700 bg-navy-700 text-white"
+                  : done
+                    ? "border-navy-200 bg-navy-50 text-navy-700"
+                    : "border-gray-200 bg-white text-graphite-500"
+              }`}
+            >
+              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
+                current ? "bg-white text-navy-700" : done ? "bg-navy-700 text-white" : "bg-gray-100 text-graphite-500"
+              }`}>
+                {done ? <Check className="h-3 w-3" /> : index + 1}
+              </span>
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
+        <div className={step === 0 ? "space-y-6" : "hidden"}>
         <div className="card space-y-4 p-5">
           <h2 className="font-semibold text-navy-900">Identificacao</h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -151,11 +219,101 @@ export default function MaintenancePlanForm() {
           </div>
           <TextInput label="Nome do plano" required placeholder="Ex.: Manutencao preventiva mensal" error={errors.name?.message} {...register("name")} />
           <TextareaInput label="Descricao (opcional)" rows={2} {...register("description")} />
+
+          {/* Dados que o plano carrega mas nao se digita: codigo, origem e a criticidade
+              do proprio ativo. So leitura, para nao virar informacao repetida. */}
+          {(isEdit || instrumentId) && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-graphite-400">Dados do plano</p>
+              <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-3">
+                <div>
+                  <dt className="text-xs text-graphite-400">Codigo</dt>
+                  <dd className="font-medium text-graphite-800">{existing?.code ?? "Gerado ao salvar (PM-0001)"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-graphite-400">Origem</dt>
+                  <dd className="font-medium text-graphite-800">
+                    {existing?.template ? `Modelo: ${existing.template.name}` : "Plano proprio"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-graphite-400">Criticidade do ativo</dt>
+                  <dd className="font-medium text-graphite-800">
+                    {existing?.instrument?.criticality
+                      ? PRIORITY_LABELS[existing.instrument.criticality]
+                      : "Definida no cadastro do ativo"}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <SelectInput
+              label="Tipo de plano"
+              required
+              options={[
+                { value: "PREVENTIVE", label: "Preventiva" },
+                { value: "INSPECTION", label: "Inspecao" },
+                { value: "LUBRICATION", label: "Lubrificacao" },
+                { value: "CALIBRATION", label: "Calibracao" },
+                { value: "REGULATORY", label: "Legal / Normativa" },
+                { value: "OTHER", label: "Outro" },
+              ]}
+              {...register("planType")}
+            />
+            <SelectInput
+              label="Status"
+              required
+              hint="So plano Ativo gera OS."
+              options={[
+                { value: "DRAFT", label: "Rascunho" },
+                { value: "ACTIVE", label: "Ativo" },
+                { value: "SUSPENDED", label: "Suspenso" },
+                { value: "CLOSED", label: "Encerrado" },
+              ]}
+              {...register("status")}
+            />
+            <SelectInput
+              label="Prioridade da OS gerada"
+              required
+              options={[
+                { value: "LOW", label: "Baixa" },
+                { value: "MEDIUM", label: "Media" },
+                { value: "HIGH", label: "Alta" },
+                { value: "CRITICAL", label: "Critica" },
+              ]}
+              {...register("defaultPriority")}
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SelectInput
+              label="Aplicacao"
+              required
+              hint="Familia sinaliza um plano que serve varios ativos do mesmo tipo."
+              options={[
+                { value: "SINGLE_ASSET", label: "Ativo individual" },
+                { value: "ASSET_FAMILY", label: "Familia de ativos" },
+              ]}
+              {...register("scope")}
+            />
+            <SelectInput
+              label="Especialidade sugerida (opcional)"
+              placeholder="Nenhuma"
+              hint="Vem do catalogo de tipos de mao de obra."
+              options={(specialties ?? []).map((t) => ({ value: t.id, label: t.name }))}
+              {...register("specialtyId")}
+            />
+          </div>
+
           {!isClient && (
-            <UserPicker label="Responsavel" roles={["ADMIN", "TECHNICIAN"]} error={errors.responsibleId?.message} {...register("responsibleId")} />
+            <UserPicker label="Responsavel pelo plano" roles={["ADMIN", "TECHNICIAN"]} error={errors.responsibleId?.message} {...register("responsibleId")} />
           )}
         </div>
+        </div>
 
+        <div className={step === 1 ? "space-y-6" : "hidden"}>
         <div className="card space-y-4 p-5">
           <h2 className="font-semibold text-navy-900">Disparo da manutencao</h2>
           <SelectInput
@@ -199,7 +357,6 @@ export default function MaintenancePlanForm() {
             </div>
           )}
         </div>
-
         <div className="card space-y-4 p-5">
           <h2 className="font-semibold text-navy-900">Tolerancia e execucao</h2>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -228,7 +385,9 @@ export default function MaintenancePlanForm() {
           </div>
           <TextareaInput label="Procedimento padrao (opcional)" rows={3} hint="Como executar o servico - diferente do checklist, que sao itens marcaveis." {...register("procedure")} />
         </div>
+        </div>
 
+        <div className={step === 2 ? "space-y-6" : "hidden"}>
         <div className="card space-y-4 p-5">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-navy-900">Materiais previstos</h2>
@@ -266,7 +425,6 @@ export default function MaintenancePlanForm() {
             </div>
           )}
         </div>
-
         <div className="card space-y-4 p-5">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-navy-900">Checklist padrao</h2>
@@ -294,11 +452,21 @@ export default function MaintenancePlanForm() {
           </div>
         </div>
 
-        <div className="flex justify-end gap-3">
-          <button type="button" className="btn-outline" onClick={() => navigate(-1)}>Cancelar</button>
-          <button type="submit" className="btn-primary" disabled={isSubmitting}>
-            {isSubmitting ? "Salvando..." : "Salvar"}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button type="button" className="btn-outline" onClick={() => (step === 0 ? navigate(-1) : goToStep(step - 1))}>
+            {step === 0 ? "Cancelar" : "Voltar"}
           </button>
+          {step < 2 ? (
+            <button type="button" className="btn-primary" onClick={() => goToStep(step + 1)}>
+              Continuar
+            </button>
+          ) : (
+            <button type="submit" className="btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? "Salvando..." : "Salvar plano"}
+            </button>
+          )}
         </div>
       </form>
     </div>

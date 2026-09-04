@@ -70,6 +70,9 @@ export default function SchedulingBoard() {
   const { isClient, base, laborBase } = useCmms();
 
   const [clientId, setClientId] = useState("");
+  // "" = todos. Filtrar por uma pessoa mostra so a semana dela, sem perder a fila de OS
+  // a programar (que continua servindo de origem para o arrasta-e-solta).
+  const [resourceId, setResourceId] = useState("");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [dragging, setDragging] = useState<ScheduleCard | null>(null);
   const [hoverKey, setHoverKey] = useState<string | null>(null);
@@ -159,16 +162,37 @@ export default function SchedulingBoard() {
         }
       />
 
-      {!isClient && (
-        <div className="mb-4">
-          <select className="input sm:w-80" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        {!isClient && (
+          <select
+            className="input sm:w-72"
+            value={clientId}
+            onChange={(e) => {
+              setClientId(e.target.value);
+              setResourceId(""); // a equipe e' outra quando muda a empresa
+            }}
+          >
             <option value="">Selecione a empresa...</option>
             {(clients?.items ?? []).map((c) => (
               <option key={c.id} value={c.id}>{clientDisplayName(c)}</option>
             ))}
           </select>
-        </div>
-      )}
+        )}
+        {(data?.resources.length ?? 0) > 0 && (
+          <select className="input sm:w-64" value={resourceId} onChange={(e) => setResourceId(e.target.value)}>
+            <option value="">Todos os tecnicos</option>
+            {(data?.resources ?? []).map((r) => (
+              <option key={r.id} value={r.id}>{r.name} ({r.type})</option>
+            ))}
+            <option value="unassigned">Sem responsavel definido</option>
+          </select>
+        )}
+        {resourceId && (
+          <button type="button" className="btn-ghost btn-sm" onClick={() => setResourceId("")}>
+            Limpar filtro
+          </button>
+        )}
+      </div>
 
       {needsClient ? (
         <EmptyState title="Selecione a empresa" description="A programacao e' por empresa - escolha acima para montar o quadro." />
@@ -229,7 +253,12 @@ export default function SchedulingBoard() {
                     </div>
                   ))}
 
-                  {[...data.resources.map((r) => ({ id: r.id, name: r.name, type: r.type })), { id: null, name: "Sem responsavel", type: "definir depois" }].map(
+                  {[
+                    ...data.resources.map((r) => ({ id: r.id as string | null, name: r.name, type: r.type })),
+                    { id: null as string | null, name: "Sem responsavel", type: "definir depois" },
+                  ]
+                    .filter((r) => !resourceId || (resourceId === "unassigned" ? r.id === null : r.id === resourceId))
+                    .map(
                     (resource) => (
                       <Row
                         key={resource.id ?? "unassigned"}

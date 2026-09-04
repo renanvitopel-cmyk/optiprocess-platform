@@ -22,6 +22,7 @@ import {
   FlaskConical,
   TrendingUp,
   History,
+  ReceiptText,
 } from "lucide-react";
 import type { ServiceCategory } from "../api/types";
 
@@ -116,6 +117,7 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
     title: "Configuracao",
     items: [
       { to: "/portal/instrumentos/cadastros", label: "Cadastros", icon: SlidersHorizontal, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
+      { to: "/portal/contrato", label: "Meu contrato", icon: ReceiptText },
       { to: "/portal/perfil", label: "Meu perfil", icon: User },
     ],
   },

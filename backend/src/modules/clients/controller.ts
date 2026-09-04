@@ -50,10 +50,23 @@ export const getOwnClient = asyncHandler(async (req: Request, res: Response) => 
 
   const client = await prisma.client.findFirst({
     where: { id: req.user.clientId, deletedAt: null },
-    include: { contacts: true },
+    include: {
+      contacts: true,
+      // O cliente precisa enxergar o proprio contrato: qual plano, quantos acessos e
+      // ativos ele tem direito, quem ja esta usando e quanto ainda cabe. Sem isso ele so
+      // descobre o limite quando o cadastro e' recusado.
+      plan: true,
+      users: {
+        where: { deletedAt: null },
+        select: { id: true, name: true, email: true, active: true, lastLoginAt: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      },
+    },
   });
   if (!client) throw new NotFoundError("Cliente");
-  res.json(client);
+
+  const usage = await getClientPlanUsage(client.id);
+  res.json({ ...client, planUsage: { users: usage.users, instruments: usage.instruments } });
 });
 
 export const getClient = asyncHandler(async (req: Request, res: Response) => {

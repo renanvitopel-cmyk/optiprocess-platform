@@ -75,7 +75,7 @@ export interface Client {
   status: ClientStatus;
   contractedServices: ServiceCategory[];
   planId: string | null;
-  plan?: Plan | { id: string; name: string } | null;
+  plan?: Plan | null;
   planStartedAt: string | null;
   planUsage?: { users: PlanUsage; instruments: PlanUsage };
   notes: string | null;

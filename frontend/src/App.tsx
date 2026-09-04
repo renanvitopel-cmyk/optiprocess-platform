@@ -76,6 +76,7 @@ const LubricationPointsList = lazy(() => import("./pages/admin/lubrication/Lubri
 const LubricationRoutesList = lazy(() => import("./pages/admin/lubrication/LubricationRoutesList"));
 const LubricantsList = lazy(() => import("./pages/admin/lubrication/LubricantsList"));
 const LubricationForecast = lazy(() => import("./pages/admin/lubrication/LubricationForecast"));
+const PortalContract = lazy(() => import("./pages/portal/PortalContract"));
 const LubricationHistory = lazy(() => import("./pages/admin/lubrication/LubricationHistory"));
 const FailureAnalysis = lazy(() => import("./pages/admin/maintenance/FailureAnalysis"));
 const WorkOrderForm = lazy(() => import("./pages/admin/maintenance/WorkOrderForm"));
@@ -128,6 +129,7 @@ export default function App() {
             <Route element={<ProtectedRoute roles={["ADMIN", "TECHNICIAN", "COMMERCIAL"]} />}>
               <Route path="/gestao" element={<AdminLayout />}>
                 <Route index element={<Dashboard />} />
+                <Route path="contrato" element={<PortalContract />} />
                 <Route path="perfil" element={<AdminProfile />} />
 
                 <Route path="clientes" element={<ClientsList />} />

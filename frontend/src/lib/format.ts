@@ -70,3 +70,10 @@ export function clientDisplayName(client: { companyName: string; tradeName?: str
   if (!client) return "-";
   return client.tradeName || client.companyName;
 }
+
+/** Indicador que pode nao ter base de calculo. Zero e' um numero com significado (MTBF 0h
+ * = quebra o tempo todo); ausencia de dado precisa parecer ausencia de dado. */
+export function formatKpi(valor: number | null | undefined, sufixo = ""): string {
+  if (valor == null) return "sem dados";
+  return `${valor}${sufixo}`;
+}

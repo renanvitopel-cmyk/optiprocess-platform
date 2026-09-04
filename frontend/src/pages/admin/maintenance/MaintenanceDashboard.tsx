@@ -8,7 +8,7 @@ import { listClients } from "../../../api/clients";
 import { CmmsLogo } from "../../../components/CmmsLogo";
 import { StatCard } from "../../../components/StatCard";
 import { FullPageSpinner } from "../../../components/Spinner";
-import { clientDisplayName } from "../../../lib/format";
+import { clientDisplayName, formatKpi } from "../../../lib/format";
 import { useCmms } from "../../../lib/cmms";
 
 export default function MaintenanceDashboard() {
@@ -95,10 +95,10 @@ export default function MaintenanceDashboard() {
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="MTTR (horas)" value={data.kpis.mttrHours} icon={TimerReset} tone="navy" />
-            <StatCard label="MTBF (horas)" value={data.kpis.mtbfHours} icon={Activity} tone="navy" />
-            <StatCard label="Disponibilidade" value={`${data.kpis.availabilityPct}%`} icon={Gauge} tone="green" />
-            <StatCard label="Cumprimento do plano" value={`${data.kpis.planComplianceRatePct}%`} icon={Wrench} tone="yellow" />
+            <StatCard label="MTTR (horas)" value={formatKpi(data.kpis.mttrHours)} icon={TimerReset} tone="navy" />
+            <StatCard label="MTBF (horas)" value={formatKpi(data.kpis.mtbfHours)} icon={Activity} tone="navy" />
+            <StatCard label="Disponibilidade" value={formatKpi(data.kpis.availabilityPct, "%")} icon={Gauge} tone="green" />
+            <StatCard label="Cumprimento do plano" value={formatKpi(data.kpis.planComplianceRatePct, "%")} icon={Wrench} tone="yellow" />
           </div>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

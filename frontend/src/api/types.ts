@@ -1207,10 +1207,11 @@ export interface MaintenanceDashboardData {
     predictiveAutoOpened: number;
   };
   kpis: {
-    mttrHours: number;
-    mtbfHours: number;
-    availabilityPct: number;
-    planComplianceRatePct: number;
+    /** null quando nao ha base de calculo - a tela mostra "sem dados", nunca zero. */
+    mttrHours: number | null;
+    mtbfHours: number | null;
+    availabilityPct: number | null;
+    planComplianceRatePct: number | null;
   };
   pcm: {
     backlogHours: number;

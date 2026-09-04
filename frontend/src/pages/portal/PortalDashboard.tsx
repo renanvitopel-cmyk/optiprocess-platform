@@ -7,7 +7,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { FullPageSpinner } from "../../components/Spinner";
 import { StatCard } from "../../components/StatCard";
 import { StatusBadge } from "../../components/StatusBadge";
-import { clientDisplayName, formatDate, formatReportCategory } from "../../lib/format";
+import { clientDisplayName, formatDate, formatReportCategory, formatKpi } from "../../lib/format";
 import { EmptyState } from "../../components/EmptyState";
 
 import { TIPOS_DE_OS as TYPE_LABELS } from "../../lib/maintenanceLabels";
@@ -64,10 +64,10 @@ export default function PortalDashboard() {
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="MTTR (horas)" value={cmmsDashboard!.kpis.mttrHours} icon={TimerReset} tone="navy" to="/portal/manutencao" />
-          <StatCard label="MTBF (horas)" value={cmmsDashboard!.kpis.mtbfHours} icon={Activity} tone="navy" to="/portal/manutencao" />
-          <StatCard label="Disponibilidade" value={`${cmmsDashboard!.kpis.availabilityPct}%`} icon={Gauge} tone="green" to="/portal/manutencao" />
-          <StatCard label="Cumprimento do plano" value={`${cmmsDashboard!.kpis.planComplianceRatePct}%`} icon={Wrench} tone="yellow" to="/portal/manutencao" />
+          <StatCard label="MTTR (horas)" value={formatKpi(cmmsDashboard!.kpis.mttrHours)} icon={TimerReset} tone="navy" to="/portal/manutencao" />
+          <StatCard label="MTBF (horas)" value={formatKpi(cmmsDashboard!.kpis.mtbfHours)} icon={Activity} tone="navy" to="/portal/manutencao" />
+          <StatCard label="Disponibilidade" value={formatKpi(cmmsDashboard!.kpis.availabilityPct, "%")} icon={Gauge} tone="green" to="/portal/manutencao" />
+          <StatCard label="Cumprimento do plano" value={formatKpi(cmmsDashboard!.kpis.planComplianceRatePct, "%")} icon={Wrench} tone="yellow" to="/portal/manutencao" />
         </div>
 
         <div className="mt-6 card p-5">

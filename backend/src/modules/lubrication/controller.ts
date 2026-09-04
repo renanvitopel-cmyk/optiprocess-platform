@@ -512,8 +512,13 @@ export const getLubricationForecast = asyncHandler(async (req: Request, res: Res
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const { clientId, dateFrom, dateTo } = req.query as { clientId?: string; dateFrom?: string; dateTo?: string };
 
+  // "De 01/09 a 30/11" inclui o dia 30 inteiro. Sem isso, uma data sem hora vira meia-noite
+  // e o ultimo dia do periodo fica de fora - some uma aplicacao de cada ponto que vence
+  // justamente nele.
   const de = dateFrom ? new Date(dateFrom) : new Date();
+  de.setHours(0, 0, 0, 0);
   const ate = dateTo ? new Date(dateTo) : somaDias(de, 90);
+  ate.setHours(23, 59, 59, 999);
   if (ate < de) throw new ValidationError("A data final da previsao nao pode ser antes da inicial.");
 
   const pontos = await prisma.lubricationPoint.findMany({

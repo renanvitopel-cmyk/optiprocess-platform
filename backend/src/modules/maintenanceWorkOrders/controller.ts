@@ -931,9 +931,11 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
   const completed = workOrders.filter((w) => w.completedAt && w.startedAt);
   const corrective = workOrders.filter((w) => w.type === "CORRECTIVE" && w.completedAt && w.startedAt);
 
+  // Sem OS concluida nao ha MTTR. Zero aqui seria lido como "conserta na hora"; null vira
+  // "dados insuficientes" na tela, que e' a verdade.
   const mttrMinutes = completed.length
     ? completed.reduce((sum, w) => sum + (w.completedAt!.getTime() - w.startedAt!.getTime()), 0) / completed.length / 60000
-    : 0;
+    : null;
 
   // MTBF: intervalo medio entre conclusoes de corretivas consecutivas, por ativo.
   const byInstrument = new Map<string, Date[]>();
@@ -949,11 +951,15 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
       gapsHours.push((sorted[i].getTime() - sorted[i - 1].getTime()) / 3600000);
     }
   }
-  const mtbfHours = gapsHours.length ? gapsHours.reduce((a, b) => a + b, 0) / gapsHours.length : 0;
+  // MTBF precisa de pelo menos duas falhas no mesmo ativo para existir um intervalo. Sem
+  // isso e' null - zero significaria "quebra o tempo todo", o oposto do que se sabe.
+  const mtbfHours = gapsHours.length ? gapsHours.reduce((a, b) => a + b, 0) / gapsHours.length : null;
 
   const downtimeMinutes = corrective.reduce((sum, w) => sum + (w.completedAt!.getTime() - w.startedAt!.getTime()), 0) / 60000;
   const periodMinutes = Math.max(1, (periodEnd.getTime() - periodStart.getTime()) / 60000);
-  const availability = Math.max(0, 1 - downtimeMinutes / periodMinutes);
+  // Disponibilidade so faz sentido tendo corretiva concluida no periodo; sem nenhuma, o
+  // calculo daria 100% - o que nao e' "otimo desempenho", e' ausencia de informacao.
+  const availability = corrective.length ? Math.max(0, 1 - downtimeMinutes / periodMinutes) : null;
 
   const plans = await prisma.maintenancePlan.findMany({
     where: { deletedAt: null, active: true, ...clientScopeFilter(req), ...(clientId ? { clientId } : {}), ...(instrumentId ? { instrumentId } : {}) },
@@ -961,7 +967,7 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
   });
   const now = new Date();
   const onTime = plans.filter((p) => !p.nextDueDate || p.nextDueDate >= now).length;
-  const complianceRate = plans.length ? onTime / plans.length : 1;
+  const complianceRate = plans.length ? onTime / plans.length : null;
 
   // ---------------------------------------------------------------------------
   // PCM: backlog, atrasadas/emergenciais, aguardando X, HH planejada x realizada
@@ -974,11 +980,14 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
 
   const openOrders = await prisma.maintenanceWorkOrder.findMany({
     where: { ...clientScopedWhere, status: { notIn: ["COMPLETED", "CANCELED"] } },
-    select: { id: true, status: true, priority: true, scheduledDate: true, laborHours: true },
+    select: { id: true, status: true, priority: true, scheduledDate: true, estimatedHours: true },
   });
 
-  const withEstimate = openOrders.filter((w) => w.laborHours != null);
-  const backlogHours = withEstimate.reduce((sum, w) => sum + (w.laborHours ?? 0), 0);
+  // Backlog e' HH que ainda falta executar: soma a ESTIMATIVA das OS abertas. Antes somava
+  // laborHours, que passou a ser o apontamento do que ja foi trabalhado - o backlog ficava
+  // vazio justamente nas OS que ninguem comecou.
+  const withEstimate = openOrders.filter((w) => w.estimatedHours != null);
+  const backlogHours = withEstimate.reduce((sum, w) => sum + (w.estimatedHours ?? 0), 0);
 
   const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
   const overdue = openOrders.filter((w) => w.scheduledDate && w.scheduledDate < now && !sameDay(w.scheduledDate, now)).length;
@@ -986,9 +995,9 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
 
   const completedInPeriod = await prisma.maintenanceWorkOrder.findMany({
     where: { ...clientScopedWhere, status: "COMPLETED", completedAt: { gte: periodStart, lte: periodEnd } },
-    select: { id: true, scheduledDate: true, completedAt: true, laborHours: true, laborEntries: { select: { hours: true } } },
+    select: { id: true, scheduledDate: true, completedAt: true, estimatedHours: true, laborEntries: { select: { hours: true } } },
   });
-  const plannedHoursCompleted = completedInPeriod.reduce((sum, w) => sum + (w.laborHours ?? 0), 0);
+  const plannedHoursCompleted = completedInPeriod.reduce((sum, w) => sum + (w.estimatedHours ?? 0), 0);
   const actualHoursCompleted = completedInPeriod.reduce((sum, w) => sum + w.laborEntries.reduce((s, l) => s + l.hours, 0), 0);
 
   const scheduledCompleted = completedInPeriod.filter((w) => w.scheduledDate);
@@ -1013,10 +1022,10 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
       predictiveAutoOpened: workOrders.filter((w) => w.type === "PREDICTIVE" && w.triggeredByMeterId).length,
     },
     kpis: {
-      mttrHours: Number((mttrMinutes / 60).toFixed(1)),
-      mtbfHours: Number(mtbfHours.toFixed(1)),
-      availabilityPct: Number((availability * 100).toFixed(1)),
-      planComplianceRatePct: Number((complianceRate * 100).toFixed(1)),
+      mttrHours: mttrMinutes == null ? null : Number((mttrMinutes / 60).toFixed(1)),
+      mtbfHours: mtbfHours == null ? null : Number(mtbfHours.toFixed(1)),
+      availabilityPct: availability == null ? null : Number((availability * 100).toFixed(1)),
+      planComplianceRatePct: complianceRate == null ? null : Number((complianceRate * 100).toFixed(1)),
     },
     // PCM: estado atual da fila (nao filtrado pelo periodo escolhido acima).
     pcm: {

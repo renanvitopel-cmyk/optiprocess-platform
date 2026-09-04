@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus, Trash2, Check } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
-import { TextInput, TextareaInput, SelectInput } from "../../../components/form/Field";
+import { TextInput, TextareaInput, SelectInput, CheckboxInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
@@ -47,6 +47,14 @@ const schema = z.object({
   toleranceMeterAfter: z.coerce.number().nonnegative().optional(),
   meterResetRule: z.enum(["CONTINUE", "RESET_BASE"]),
   conditionMeterId: z.string().uuid().optional().or(z.literal("")),
+  initialWorkOrderStatus: z.enum(["IN_TRIAGE", "PLANNED", "PROGRAMMED"]),
+  requiresShutdown: z.boolean().optional(),
+  estimatedShutdownHours: z.coerce.number().nonnegative().optional(),
+  requiresOperationalRelease: z.boolean().optional(),
+  requiresLoto: z.boolean().optional(),
+  requiresApproval: z.boolean().optional(),
+  groupWorkOrder: z.boolean().optional(),
+  materialPolicy: z.enum(["RESERVE_AUTO", "BLOCK_AWAITING_MATERIAL", "ALERT_ONLY", "DO_NOT_GENERATE"]),
   responsibleId: z.string().uuid().optional().or(z.literal("")),
   status: z.enum(["DRAFT", "ACTIVE", "SUSPENDED", "CLOSED"]),
   planType: z.enum(["PREVENTIVE", "INSPECTION", "LUBRICATION", "CALIBRATION", "REGULATORY", "OTHER"]),
@@ -58,7 +66,15 @@ const schema = z.object({
   toleranceDaysAfter: z.coerce.number().int().nonnegative().optional(),
   procedure: z.string().optional(),
   estimatedLaborHours: z.coerce.number().nonnegative().optional(),
-  parts: z.array(z.object({ sparePartId: z.string(), quantity: z.coerce.number().int().positive() })),
+  parts: z.array(
+    z.object({
+      sparePartId: z.string(),
+      quantity: z.coerce.number().int().positive(),
+      required: z.boolean().optional(),
+      alternativeSparePartId: z.string().optional(),
+      suggestedSupplier: z.string().optional(),
+    }),
+  ),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -85,6 +101,8 @@ export default function MaintenancePlanForm() {
       frequencyUnit: "DAY",
       operationalCalendar: "ALL_DAYS",
       meterResetRule: "CONTINUE",
+      initialWorkOrderStatus: "PROGRAMMED",
+      materialPolicy: "RESERVE_AUTO",
       status: "ACTIVE",
       planType: "PREVENTIVE",
       scope: "SINGLE_ASSET",
@@ -119,6 +137,12 @@ export default function MaintenancePlanForm() {
     queryFn: () => listLaborTypes({ active: true }),
     staleTime: 60_000,
   });
+
+  // Uma lista so de pecas, usada tanto no principal quanto no substituto.
+  const pecaOptions = (spareParts?.items ?? []).map((sp) => ({
+    value: sp.id,
+    label: `${sp.name}${sp.code ? ` (${sp.code})` : ""} - ${sp.stockQty - sp.reservedQty} ${sp.unit} disponivel`,
+  }));
 
   // Assistente em 3 etapas: cada etapa so libera a proxima quando os campos dela estao
   // validos, para o usuario nao descobrir erro da etapa 1 ao clicar em salvar na 3.
@@ -167,12 +191,26 @@ export default function MaintenancePlanForm() {
         toleranceMeterAfter: existing.toleranceMeterAfter ?? undefined,
         meterResetRule: existing.meterResetRule ?? "CONTINUE",
         conditionMeterId: existing.conditionMeterId ?? "",
+        initialWorkOrderStatus: (existing.initialWorkOrderStatus ?? "PROGRAMMED") as "IN_TRIAGE" | "PLANNED" | "PROGRAMMED",
+        requiresShutdown: existing.requiresShutdown ?? false,
+        estimatedShutdownHours: existing.estimatedShutdownHours ?? undefined,
+        requiresOperationalRelease: existing.requiresOperationalRelease ?? false,
+        requiresLoto: existing.requiresLoto ?? false,
+        requiresApproval: existing.requiresApproval ?? false,
+        groupWorkOrder: existing.groupWorkOrder ?? false,
+        materialPolicy: existing.materialPolicy ?? "RESERVE_AUTO",
         checklistTemplate: existing.checklistTemplate.length ? existing.checklistTemplate : [{ description: "" }],
         toleranceDaysBefore: existing.toleranceDaysBefore ?? undefined,
         toleranceDaysAfter: existing.toleranceDaysAfter ?? undefined,
         procedure: existing.procedure ?? "",
         estimatedLaborHours: existing.estimatedLaborHours ?? undefined,
-        parts: (existing.parts ?? []).map((p) => ({ sparePartId: p.sparePartId, quantity: p.quantity })),
+        parts: (existing.parts ?? []).map((p) => ({
+          sparePartId: p.sparePartId,
+          quantity: p.quantity,
+          required: p.required ?? true,
+          alternativeSparePartId: p.alternativeSparePartId ?? "",
+          suggestedSupplier: p.suggestedSupplier ?? "",
+        })),
       });
     }
   }, [existing, reset]);
@@ -199,7 +237,9 @@ export default function MaintenancePlanForm() {
         toleranceDaysAfter: values.toleranceDaysAfter ?? null,
         procedure: values.procedure || null,
         estimatedLaborHours: values.estimatedLaborHours ?? null,
-        parts: values.parts.filter((p) => p.sparePartId),
+        parts: values.parts
+          .filter((p) => p.sparePartId)
+          .map((p) => ({ ...p, alternativeSparePartId: p.alternativeSparePartId || null, suggestedSupplier: p.suggestedSupplier || null })),
       };
       const saved = isEdit ? await updateMaintenancePlan(id!, payload) : await createMaintenancePlan(payload);
       notify("success", isEdit ? "Plano atualizado." : "Plano criado.");
@@ -567,13 +607,58 @@ export default function MaintenancePlanForm() {
             </>
           )}
         </div>
+
+        <div className="card space-y-4 p-5">
+          <h2 className="font-semibold text-navy-900">Como a OS nasce</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SelectInput
+              label="Status inicial da OS"
+              required
+              hint="Programada ja entra no quadro com data; Planejada fica na fila do PCM."
+              options={[
+                { value: "IN_TRIAGE", label: "Em triagem" },
+                { value: "PLANNED", label: "Planejada" },
+                { value: "PROGRAMMED", label: "Programada" },
+              ]}
+              {...register("initialWorkOrderStatus")}
+            />
+            <TextInput
+              label="Tempo estimado de parada (h)"
+              type="number"
+              step="any"
+              hint="So se a manutencao exigir maquina parada."
+              {...register("estimatedShutdownHours")}
+            />
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <CheckboxInput label="Requer parada de maquina" {...register("requiresShutdown")} />
+            <CheckboxInput label="Requer liberacao operacional" {...register("requiresOperationalRelease")} />
+            <CheckboxInput label="Requer bloqueio/LOTO ou permissao de trabalho" {...register("requiresLoto")} />
+            <CheckboxInput label="Requer aprovacao antes de executar" {...register("requiresApproval")} />
+            <CheckboxInput label="Gerar uma OS agrupada para varios ativos" {...register("groupWorkOrder")} />
+          </div>
+
+          <SelectInput
+            label="Se faltar material na hora de gerar"
+            required
+            hint="Em qualquer opcao o motivo da falta fica registrado na OS - nunca falha em silencio."
+            options={[
+              { value: "RESERVE_AUTO", label: "Reservar o que houver e registrar o que faltou" },
+              { value: "BLOCK_AWAITING_MATERIAL", label: "Gerar a OS ja em Aguardando material" },
+              { value: "ALERT_ONLY", label: "Gerar sem reservar, apenas alertar" },
+              { value: "DO_NOT_GENERATE", label: "Nao gerar a OS se faltar material obrigatorio" },
+            ]}
+            {...register("materialPolicy")}
+          />
+        </div>
         </div>
 
         <div className={step === 2 ? "space-y-6" : "hidden"}>
         <div className="card space-y-4 p-5">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-navy-900">Materiais previstos</h2>
-            <button type="button" className="btn-ghost btn-sm" onClick={() => appendPart({ sparePartId: "", quantity: 1 })} disabled={!clientId}>
+            <button type="button" className="btn-ghost btn-sm" onClick={() => appendPart({ sparePartId: "", quantity: 1, required: true, alternativeSparePartId: "", suggestedSupplier: "" })} disabled={!clientId}>
               <Plus className="h-4 w-4" /> Adicionar material
             </button>
           </div>
@@ -583,24 +668,38 @@ export default function MaintenancePlanForm() {
           ) : (
             <div className="space-y-2">
               {partFields.map((field, index) => (
-                <div key={field.id} className="flex items-center gap-2">
-                  <SelectInput
-                    className="flex-1"
-                    placeholder="Selecione a peca"
-                    options={(spareParts?.items ?? []).map((s) => ({ value: s.id, label: `${s.name}${s.code ? ` (${s.code})` : ""} - ${s.stockQty} ${s.unit} em estoque` }))}
-                    error={errors.parts?.[index]?.sparePartId?.message}
-                    {...register(`parts.${index}.sparePartId`)}
-                  />
-                  <TextInput
-                    className="w-28"
-                    type="number"
-                    placeholder="Qtd."
-                    error={errors.parts?.[index]?.quantity?.message}
-                    {...register(`parts.${index}.quantity`)}
-                  />
-                  <button type="button" onClick={() => removePart(index)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover material">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                <div key={field.id} className="rounded-lg border border-gray-200 p-3">
+                  <div className="flex items-center gap-2">
+                    <SelectInput
+                      className="flex-1"
+                      placeholder="Selecione a peca"
+                      options={pecaOptions}
+                      error={errors.parts?.[index]?.sparePartId?.message}
+                      {...register(`parts.${index}.sparePartId`)}
+                    />
+                    <TextInput
+                      className="w-24"
+                      type="number"
+                      placeholder="Qtd."
+                      error={errors.parts?.[index]?.quantity?.message}
+                      {...register(`parts.${index}.quantity`)}
+                    />
+                    <button type="button" onClick={() => removePart(index)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover material">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    <SelectInput
+                      label="Substituto aceito"
+                      placeholder="Nenhum"
+                      options={pecaOptions}
+                      {...register(`parts.${index}.alternativeSparePartId`)}
+                    />
+                    <TextInput label="Fornecedor sugerido" placeholder="Opcional" {...register(`parts.${index}.suggestedSupplier`)} />
+                    <div className="flex items-end pb-2">
+                      <CheckboxInput label="Material obrigatorio" {...register(`parts.${index}.required`)} />
+                    </div>
+                  </div>
                 </div>
               ))}
               {partFields.length === 0 && <p className="text-sm text-graphite-500">Nenhum material previsto.</p>}

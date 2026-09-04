@@ -683,6 +683,12 @@ export interface MaintenancePlanPart {
   sparePartId: string;
   sparePart?: { id: string; name: string; code: string | null; unit: string; stockQty: number; reservedQty: number };
   quantity: number;
+  /** Falta de item obrigatorio e' o que aciona a politica de material do plano. */
+  required?: boolean;
+  alternativeSparePartId?: string | null;
+  alternativeSparePart?: { id: string; name: string; code: string | null; unit: string; stockQty: number; reservedQty: number } | null;
+  suggestedSupplier?: string | null;
+  notes?: string | null;
 }
 
 export type MaintenancePlanStatus = "DRAFT" | "ACTIVE" | "SUSPENDED" | "CLOSED";
@@ -692,6 +698,7 @@ export type MaintenanceFrequencyUnit = "DAY" | "WEEK" | "MONTH" | "YEAR";
 export type OperationalCalendar = "ALL_DAYS" | "BUSINESS_DAYS";
 export type MeterResetRule = "CONTINUE" | "RESET_BASE";
 export type MaintenanceTriggerMode = "FIRST_DUE" | "ALL_DUE";
+export type MaterialPolicy = "RESERVE_AUTO" | "BLOCK_AWAITING_MATERIAL" | "ALERT_ONLY" | "DO_NOT_GENERATE";
 
 export interface MaintenancePlan {
   id: string;
@@ -723,6 +730,15 @@ export interface MaintenancePlan {
   meterResetRule: MeterResetRule;
   triggerMode: MaintenanceTriggerMode;
   conditionMeterId: string | null;
+  // Como a OS gerada nasce
+  initialWorkOrderStatus: MaintenanceOrderStatus;
+  requiresShutdown: boolean;
+  estimatedShutdownHours: number | null;
+  requiresOperationalRelease: boolean;
+  requiresLoto: boolean;
+  requiresApproval: boolean;
+  groupWorkOrder: boolean;
+  materialPolicy: MaterialPolicy;
   /** Datas derivadas do agendamento, calculadas pelo backend a cada leitura. */
   schedule?: {
     nextGenerationDate: string | null;

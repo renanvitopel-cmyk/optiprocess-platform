@@ -51,6 +51,14 @@ export interface MaintenancePlanInput {
   meterResetRule?: string;
   triggerMode?: string;
   conditionMeterId?: string | null;
+  initialWorkOrderStatus?: string;
+  requiresShutdown?: boolean;
+  estimatedShutdownHours?: number | null;
+  requiresOperationalRelease?: boolean;
+  requiresLoto?: boolean;
+  requiresApproval?: boolean;
+  groupWorkOrder?: boolean;
+  materialPolicy?: string;
   responsibleId?: string | null;
   checklistTemplate?: { description: string }[];
   toleranceDaysBefore?: number | null;
@@ -58,7 +66,7 @@ export interface MaintenancePlanInput {
   procedure?: string | null;
   estimatedLaborHours?: number | null;
   templateId?: string | null;
-  parts?: { sparePartId: string; quantity: number }[];
+  parts?: { sparePartId: string; quantity: number; required?: boolean; alternativeSparePartId?: string | null; suggestedSupplier?: string | null; notes?: string | null }[];
 }
 
 export async function createMaintenancePlan(input: MaintenancePlanInput): Promise<MaintenancePlan> {

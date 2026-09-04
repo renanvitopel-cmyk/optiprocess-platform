@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority, MaintenanceFrequencyUnit, OperationalCalendar, MeterResetRule, MaintenanceTriggerMode } from "@prisma/client";
+import { MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority, MaintenanceFrequencyUnit, OperationalCalendar, MeterResetRule, MaintenanceTriggerMode, MaintenanceOrderStatus, MaterialPolicy } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -20,7 +20,12 @@ const detailInclude = {
   specialty: { select: { id: true, name: true } },
   checklistTemplate: { orderBy: { sortOrder: "asc" as const } },
   template: { select: { id: true, name: true } },
-  parts: { include: { sparePart: { select: { id: true, name: true, code: true, unit: true, stockQty: true, reservedQty: true } } } },
+  parts: {
+    include: {
+      sparePart: { select: { id: true, name: true, code: true, unit: true, stockQty: true, reservedQty: true } },
+      alternativeSparePart: { select: { id: true, name: true, code: true, unit: true, stockQty: true, reservedQty: true } },
+    },
+  },
 };
 
 /** Status derivado do plano: TIME usa a mesma janela de vencimento de calibracao/contrato;
@@ -115,7 +120,14 @@ export const getMaintenancePlan = asyncHandler(async (req: Request, res: Respons
 });
 
 const checklistItemSchema = z.object({ description: z.string().min(1) });
-const planPartSchema = z.object({ sparePartId: z.string().uuid(), quantity: z.coerce.number().int().positive() });
+const planPartSchema = z.object({
+  sparePartId: z.string().uuid(),
+  quantity: z.coerce.number().int().positive(),
+  required: z.boolean().optional(),
+  alternativeSparePartId: z.string().uuid().nullish(),
+  suggestedSupplier: z.string().nullish(),
+  notes: z.string().nullish(),
+});
 
 const planSchema = z.object({
   clientId: z.string().uuid().optional(),
@@ -150,6 +162,15 @@ const planSchema = z.object({
   meterResetRule: z.nativeEnum(MeterResetRule).optional(),
   triggerMode: z.nativeEnum(MaintenanceTriggerMode).optional(),
   conditionMeterId: z.string().uuid().nullish(),
+  // Como a OS gerada nasce
+  initialWorkOrderStatus: z.nativeEnum(MaintenanceOrderStatus).optional(),
+  requiresShutdown: z.boolean().optional(),
+  estimatedShutdownHours: z.coerce.number().nonnegative().nullish(),
+  requiresOperationalRelease: z.boolean().optional(),
+  requiresLoto: z.boolean().optional(),
+  requiresApproval: z.boolean().optional(),
+  groupWorkOrder: z.boolean().optional(),
+  materialPolicy: z.nativeEnum(MaterialPolicy).optional(),
   checklistTemplate: z.array(checklistItemSchema).optional(),
   // Tolerancia informativa (nao reescreve deriveDueStatus, so exibida na tela do plano);
   // procedimento/HH prevista/materiais previstos alimentam o backlog do PCM e a OS gerada.
@@ -258,7 +279,7 @@ export const createMaintenancePlan = asyncHandler(async (req: Request, res: Resp
       nextDueDate,
       createdById: req.user?.sub,
       checklistTemplate: { create: (checklistTemplate ?? []).map((c, i) => ({ description: c.description, sortOrder: i })) },
-      parts: { create: (parts ?? []).map((p) => ({ sparePartId: p.sparePartId, quantity: p.quantity })) },
+      parts: { create: (parts ?? []).map((p) => ({ ...p })) },
     },
     include: detailInclude,
   });
@@ -340,7 +361,7 @@ export const updateMaintenancePlan = asyncHandler(async (req: Request, res: Resp
         ? {
             parts: {
               deleteMany: {},
-              create: parts.map((p) => ({ sparePartId: p.sparePartId, quantity: p.quantity })),
+              create: parts.map((p) => ({ ...p })),
             },
           }
         : {}),
@@ -410,7 +431,89 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
     throw new ValidationError(`${motivo[plan.status] ?? "Plano inativo."} So plano Ativo gera ordem de manutencao.`);
   }
 
+  /**
+   * Material antes de criar a OS: a politica do plano pode ate impedir a geracao, entao
+   * a disponibilidade e' checada aqui. Para cada item previsto tenta o principal e, se
+   * faltar, o substituto - e guarda o motivo quando nenhum dos dois da.
+   */
+  const planoDeMaterial: {
+    partId: string;
+    sparePartId: string;
+    quantity: number;
+    required: boolean;
+    reason: string | null;
+  }[] = [];
+
+  for (const part of plan.parts) {
+    const candidatos = [part.sparePartId, part.alternativeSparePartId].filter(Boolean) as string[];
+    let escolhido: string | null = null;
+    let motivo: string | null = null;
+
+    for (const id of candidatos) {
+      const peca = await prisma.sparePart.findFirst({
+        where: { id, deletedAt: null },
+        select: { id: true, name: true, stockQty: true, reservedQty: true, active: true },
+      });
+      if (!peca) {
+        motivo = "Peca nao encontrada no almoxarifado.";
+        continue;
+      }
+      if (!peca.active) {
+        motivo = `Peca "${peca.name}" esta inativa.`;
+        continue;
+      }
+      const disponivel = peca.stockQty - peca.reservedQty;
+      if (disponivel < part.quantity) {
+        motivo = `Saldo insuficiente de "${peca.name}": precisa de ${part.quantity}, disponivel ${disponivel}.`;
+        continue;
+      }
+      escolhido = peca.id;
+      motivo = id === part.alternativeSparePartId ? "Reservado o substituto - o principal estava sem saldo." : null;
+      break;
+    }
+
+    planoDeMaterial.push({
+      partId: part.id,
+      sparePartId: escolhido ?? part.sparePartId,
+      quantity: part.quantity,
+      required: part.required,
+      reason: escolhido ? motivo : (motivo ?? "Sem saldo disponivel."),
+    });
+    if (!escolhido) planoDeMaterial[planoDeMaterial.length - 1].sparePartId = part.sparePartId;
+  }
+
+  const faltamObrigatorios = planoDeMaterial.filter(
+    (m) => m.required && m.reason != null && !m.reason.startsWith("Reservado o substituto"),
+  );
+
+  // "Nao gerar" e' a unica politica que recusa - e diz exatamente o que falta, em vez de
+  // falhar em silencio.
+  if (plan.materialPolicy === "DO_NOT_GENERATE" && faltamObrigatorios.length > 0) {
+    throw new ValidationError(
+      `OS nao gerada por falta de material obrigatorio: ${faltamObrigatorios.map((m) => m.reason).join(" ")}`,
+    );
+  }
+
   const number = await nextClientMaintenanceOrderNumber(plan.clientId);
+
+  // Falta material obrigatorio e a politica manda segurar? A OS ja nasce em "Aguardando
+  // material", em vez de entrar na fila como se estivesse pronta para executar.
+  const statusInicial =
+    plan.materialPolicy === "BLOCK_AWAITING_MATERIAL" && faltamObrigatorios.length > 0
+      ? "AWAITING_MATERIAL"
+      : plan.initialWorkOrderStatus;
+
+  const observacoesDeGeracao = [
+    plan.requiresShutdown
+      ? `Requer parada de maquina${plan.estimatedShutdownHours ? ` (~${plan.estimatedShutdownHours}h)` : ""}.`
+      : null,
+    plan.requiresOperationalRelease ? "Requer liberacao operacional." : null,
+    plan.requiresLoto ? "Requer bloqueio/LOTO ou permissao de trabalho." : null,
+    plan.requiresApproval ? "Requer aprovacao antes da execucao." : null,
+    faltamObrigatorios.length > 0 ? `Material pendente: ${faltamObrigatorios.map((m) => m.reason).join(" ")}` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const workOrder = await prisma.maintenanceWorkOrder.create({
     data: {
@@ -419,12 +522,15 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
       instrumentId: plan.instrumentId,
       planId: plan.id,
       type: "PREVENTIVE",
-      status: "OPEN",
+      status: statusInicial,
       priority: plan.defaultPriority,
       description: plan.name,
       technicianId: plan.responsibleId,
+      // Data programada sugerida: o vencimento do ciclo que esta sendo atendido.
+      scheduledDate: plan.nextDueDate,
       meterReadingAtExecution: plan.meter?.currentValue,
       laborHours: plan.estimatedLaborHours,
+      observations: observacoesDeGeracao || null,
       createdById: req.user?.sub,
       checklist: { create: plan.checklistTemplate.map((c, i) => ({ description: c.description, sortOrder: i })) },
     },
@@ -445,14 +551,39 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
     },
   });
 
-  // Reserva melhor-esforco dos materiais previstos no plano: falta de saldo nao impede a
-  // OS de ser criada, so deixa aquele item sem reserva (o tecnico ve isso na tela da OS).
-  for (const part of plan.parts) {
-    try {
-      await reserveSparePart({ sparePartId: part.sparePartId, workOrderId: workOrder.id, quantity: part.quantity, createdById: req.user?.sub });
-    } catch {
-      // saldo insuficiente - segue sem reservar este item
+  // Reserva conforme a politica do plano. ALERT_ONLY gera sem reservar; as demais tentam
+  // reservar. Em todos os casos fica registrado o que foi (ou nao foi) reservado e por que -
+  // o planejador nao descobre a falta so na hora da execucao.
+  const reservaAtiva = plan.materialPolicy !== "ALERT_ONLY";
+  for (const item of planoDeMaterial) {
+    let reservou = false;
+    let motivo = item.reason;
+
+    if (reservaAtiva && (motivo == null || motivo.startsWith("Reservado o substituto"))) {
+      try {
+        await reserveSparePart({
+          sparePartId: item.sparePartId,
+          workOrderId: workOrder.id,
+          quantity: item.quantity,
+          createdById: req.user?.sub,
+        });
+        reservou = true;
+      } catch (erro) {
+        motivo = erro instanceof Error ? erro.message : "Falha ao reservar.";
+      }
+    } else if (!reservaAtiva) {
+      motivo = "Politica do plano: gerar sem reservar, com alerta.";
     }
+
+    await prisma.workOrderMaterialLog.create({
+      data: {
+        workOrderId: workOrder.id,
+        sparePartId: item.sparePartId,
+        quantityNeeded: item.quantity,
+        reserved: reservou,
+        reason: reservou && !motivo ? null : motivo,
+      },
+    });
   }
 
   await writeAuditLog({

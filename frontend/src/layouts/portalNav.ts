@@ -6,8 +6,6 @@ import {
   FileWarning,
   ClipboardList,
   ClipboardPlus,
-  FileSignature,
-  ShoppingCart,
   User,
   Wrench,
   ShieldCheck,
@@ -40,6 +38,8 @@ export interface PortalNavSection {
   /** Titulo do grupo; vazio no primeiro bloco, que nao precisa de rotulo. */
   title?: string;
   items: PortalNavItem[];
+  /** Comeca recolhida. Serve para o que nao se usa todo dia nao competir com o que se usa. */
+  defaultCollapsed?: boolean;
 }
 
 const ALL_SERVICES: ServiceCategory[] = [
@@ -75,6 +75,7 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
       { to: "/portal/manutencao/ordens", label: "Ordens de manutencao", icon: ClipboardList, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/programacao", label: "Programacao", icon: CalendarDays, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/planos", label: "Planos preventivos", icon: ShieldCheck, requires: ["CMMS_MAINTENANCE"] },
+      { to: "/portal/manutencao/preditiva", label: "Preditiva", icon: Radar, requires: ["CMMS_MAINTENANCE"] },
     ],
   },
   {
@@ -82,6 +83,7 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
     // ponto -> rota -> aplicacao -> previsao de consumo), com rotina e responsavel proprios,
     // e nao um item solto dentro de manutencao.
     title: "Lubrificacao",
+    defaultCollapsed: true,
     items: [
       { to: "/portal/lubrificacao", label: "Painel", icon: Droplets, requires: ["CMMS_MAINTENANCE"], exact: true },
       { to: "/portal/lubrificacao/pontos", label: "Pontos", icon: MapPin, requires: ["CMMS_MAINTENANCE"] },
@@ -93,15 +95,16 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
   },
   {
     title: "Gestao",
+    defaultCollapsed: true,
     items: [
       { to: "/portal/instrumentos", label: "Meus ativos", icon: Gauge, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
       { to: "/portal/almoxarifado", label: "Almoxarifado", icon: Boxes, requires: ["CMMS_MAINTENANCE"] },
-      { to: "/portal/manutencao/preditiva", label: "Preditiva", icon: Radar, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/pareto", label: "Falhas e RCA", icon: BarChart3, requires: ["CMMS_MAINTENANCE"] },
     ],
   },
   {
     title: "Servicos OptiProcess",
+    defaultCollapsed: true,
     items: [
       // "Ordem de manutencao" (CMMS, executada pela propria equipe do cliente) e "ordens de
       // servico" (atendimento tecnico feito pela OptiProcess) sao coisas diferentes - o
@@ -109,8 +112,6 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
       { to: "/portal/ordens-servico", label: "Ordens de servico externas", icon: ClipboardList, requires: ALL_SERVICES },
       { to: "/portal/certificados", label: "Certificados", icon: BadgeCheck, requires: ["CALIBRATION"] },
       { to: "/portal/laudos", label: "Laudos tecnicos", icon: FileWarning, requires: ["TECHNICAL_REPORT"] },
-      { to: "/portal/contratos", label: "Contratos", icon: FileSignature, requires: ALL_SERVICES },
-      { to: "/portal/pedidos", label: "Pedidos e orcamentos", icon: ShoppingCart },
     ],
   },
   {
@@ -144,3 +145,9 @@ export function getPortalNav(contractedServices: ServiceCategory[], role?: strin
     items: section.items.filter((item) => !item.requires || item.requires.some((c) => contractedServices.includes(c))),
   })).filter((section) => section.items.length > 0);
 }
+
+/** Secoes que comecam recolhidas na primeira visita - o que nao se usa todo dia nao precisa
+ * competir por espaco com o que se usa. Depois vale a escolha do proprio usuario. */
+export const PORTAL_NAV_PADRAO_FECHADO: string[] = PORTAL_NAV_SECTIONS.filter((s) => s.defaultCollapsed && s.title).map(
+  (s) => s.title as string,
+);

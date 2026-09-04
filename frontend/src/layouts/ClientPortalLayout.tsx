@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
-import { Menu, X, LogOut } from "lucide-react";
+import { Menu, X, LogOut, ChevronDown } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
-import { getPortalNav } from "./portalNav";
+import { getPortalNav, PORTAL_NAV_PADRAO_FECHADO } from "./portalNav";
 import { CmmsLogo } from "../components/CmmsLogo";
 import { clientDisplayName } from "../lib/format";
 import { Logo } from "../components/Logo";
 
 const COLLAPSE_KEY = "optiprocess-portal-sidebar-collapsed";
+const SECOES_KEY = "optiprocess-portal-secoes-fechadas";
 
 export function ClientPortalLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -21,6 +22,30 @@ export function ClientPortalLayout() {
     }
   });
   const { user, logout } = useAuth();
+
+  // Quais secoes o usuario deixou fechadas. Guardado no navegador dele: cada um usa o
+  // sistema de um jeito, e reabrir tudo a cada visita e' trabalho repetido.
+  const [secoesFechadas, setSecoesFechadas] = useState<string[]>(() => {
+    try {
+      const salvo = localStorage.getItem(SECOES_KEY);
+      if (salvo) return JSON.parse(salvo) as string[];
+    } catch {
+      // Sem localStorage (aba anonima, etc.): usa o padrao de cada secao.
+    }
+    return PORTAL_NAV_PADRAO_FECHADO;
+  });
+
+  function alternarSecao(titulo: string) {
+    setSecoesFechadas((atual) => {
+      const proximo = atual.includes(titulo) ? atual.filter((t) => t !== titulo) : [...atual, titulo];
+      try {
+        localStorage.setItem(SECOES_KEY, JSON.stringify(proximo));
+      } catch {
+        // Sem localStorage: funciona na sessao, so nao persiste.
+      }
+      return proximo;
+    });
+  }
   const contractedServices = user?.client?.contractedServices ?? [];
   const portalNav = getPortalNav(contractedServices, user?.role);
   // Quem assinou o CMMS esta usando o RLP Maintenance - a marca do portal dele e' a do
@@ -40,15 +65,28 @@ export function ClientPortalLayout() {
 
   const nav = (isCollapsed: boolean) => (
     <nav className="flex flex-col gap-0.5 px-3 py-4">
-      {portalNav.map((section, index) => (
+      {portalNav.map((section, index) => {
+        // Com a barra estreita nao ha titulo para clicar, entao tudo fica aberto - senao os
+        // itens some sem nada que explique como traze-los de volta.
+        const aberta = isCollapsed || !section.title || !secoesFechadas.includes(section.title);
+        return (
         <div key={section.title ?? `section-${index}`} className={index > 0 ? "mt-4" : ""}>
           {section.title &&
             (isCollapsed ? (
               <div className="mx-3 mb-1 border-t border-navy-800" />
             ) : (
-              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-navy-400">{section.title}</p>
+              <button
+                type="button"
+                onClick={() => alternarSecao(section.title!)}
+                aria-expanded={aberta}
+                className="flex w-full items-center gap-1 px-3 pb-1 text-left text-[10px] font-semibold uppercase tracking-wider text-navy-400 hover:text-navy-200"
+              >
+                <ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${aberta ? "" : "-rotate-90"}`} />
+                {section.title}
+                {!aberta && <span className="ml-auto font-normal normal-case tracking-normal">{section.items.length}</span>}
+              </button>
             ))}
-          <div className="flex flex-col gap-0.5">
+          <div className={`flex flex-col gap-0.5 ${aberta ? "" : "hidden"}`}>
             {section.items.map((item) => (
               <NavLink
                 key={item.to}
@@ -68,7 +106,8 @@ export function ClientPortalLayout() {
             ))}
           </div>
         </div>
-      ))}
+        );
+      })}
       <button
         type="button"
         onClick={() => logout()}

@@ -393,10 +393,15 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
   const isAdmin = req.user?.role === "ADMIN";
   const costCenterOverride = isAdmin && !!data.costCenterId && data.costCenterId !== context.costCenterId;
 
-  // Ativo cadastrado pela equipe da OptiProcess nasce calibravel - e' o motivo de ela
-  // estar cadastrando. Preencher periodicidade de calibracao tambem marca.
-  const calibratable =
-    data.calibratable ?? (req.user?.role !== "CLIENT" || data.calibrationFrequencyMonths != null);
+  // Calibravel e' o que a OptiProcess presta servico sobre - e' o que separa a lista dela
+  // da arvore do CMMS do cliente. Por isso a marca e' explicita: ou o usuario marcou, ou
+  // informou periodicidade de calibracao (o que so faz sentido em item calibravel).
+  //
+  // Antes bastava ser da equipe interna para o ativo nascer calibravel. Como o ADMIN agora
+  // tambem cadastra o parque do cliente pelo acesso master, e o cadastro rapido nem
+  // pergunta isso, cada maquina cadastrada por ele entrava na lista de calibracao - que e'
+  // justamente o que nao se queria ver ali.
+  const calibratable = data.calibratable ?? data.calibrationFrequencyMonths != null;
 
   const instrument = await prisma.instrument.create({
     data: {

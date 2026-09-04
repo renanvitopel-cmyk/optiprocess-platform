@@ -411,6 +411,17 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
             <LocationPicker clientId={clientId} register={register} watch={watch} setValue={setValue} onlyCostCenter />
           </Section>
         )}
+        {/* A unica coisa que o cadastro rapido pergunta alem do essencial, e so para a
+            equipe interna: e' o que decide se o ativo entra na lista de calibracao da
+            OptiProcess ou fica so na arvore do CMMS do cliente. O cliente nao ve - o que
+            ele cadastra e' o parque dele. */}
+        {modoRapido && user?.role !== "CLIENT" && (
+          <CheckboxInput
+            label="Ativo calibravel - aparece na lista de Ativos da OptiProcess"
+            {...register("calibratable")}
+          />
+        )}
+
         {modoRapido && (
           <p className="rounded-lg bg-gray-50 px-4 py-3 text-xs text-graphite-500">
             Tipo do ativo, criticidade, ficha do fabricante e calibracao sao preenchidos depois, na ficha

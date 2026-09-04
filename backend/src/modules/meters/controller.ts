@@ -188,7 +188,32 @@ export const addMeterReading = asyncHandler(async (req: Request, res: Response) 
     const alreadyOpen = await prisma.maintenanceWorkOrder.findFirst({
       where: { triggeredByMeterId: meter.id, deletedAt: null, status: { notIn: ["COMPLETED", "CANCELED"] } },
     });
-    if (!alreadyOpen) {
+    if (alreadyOpen) {
+      // A condicao piorou com a OS anterior ainda aberta (ex.: Alarme virou Critico).
+      // Nao se abre uma segunda OS para a mesma causa - mas deixar a existente como estava
+      // seria pior: ela continuaria "programada, prioridade media" enquanto o equipamento
+      // entrou em risco de falha funcional. Entao a propria OS e' escalada.
+      const escalouParaCritico = severity === "CRITICAL" && alreadyOpen.priority !== "CRITICAL";
+      if (escalouParaCritico) {
+        triggeredWorkOrder = await prisma.maintenanceWorkOrder.update({
+          where: { id: alreadyOpen.id },
+          data: {
+            priority: "CRITICAL",
+            // Volta para Aberta: "programada para a proxima parada" nao vale mais.
+            status: alreadyOpen.status === "PROGRAMMED" || alreadyOpen.status === "PLANNED" ? "OPEN" : alreadyOpen.status,
+            observations: `${alreadyOpen.observations ? `${alreadyOpen.observations}
+` : ""}Condicao piorou para Critico: "${meter.name}" mediu ${data.value} ${meter.unit}. ${policy.action}`,
+          },
+        });
+        await writeAuditLog({
+          userId: req.user?.sub,
+          action: "UPDATE",
+          entityType: "MaintenanceWorkOrder",
+          entityId: alreadyOpen.id,
+          description: `OS ${alreadyOpen.number} escalada para Critica - zona Critico em "${meter.name}" (${data.value} ${meter.unit})`,
+        });
+      }
+    } else {
       const number = await nextClientMaintenanceOrderNumber(meter.instrument.clientId);
       // Zona critica sobrepoe a criticidade do ativo: nao existe "critico de baixa
       // prioridade" - a condicao medida ja diz que a falha funcional esta proxima.

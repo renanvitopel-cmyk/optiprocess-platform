@@ -1405,3 +1405,31 @@ export interface LubricationForecast {
   }[];
   totais: { pontosConsiderados: number; lubrificantes: number; aplicacoesPrevistas: number; itensAComprar: number };
 }
+
+/** Como o backlog do PCM e' quebrado na tela. */
+export type BacklogGroupBy = "plant" | "area" | "instrument" | "costCenter";
+
+export interface MaintenanceBacklogItem {
+  id: string;
+  nome: string;
+  ordens: number;
+  horas: number;
+  /** Quantas OS do grupo estao sem HH prevista - sem isso o total de horas engana. */
+  semEstimativa: number;
+  atrasadas: number;
+  emergenciais: number;
+  corretivas: number;
+  preventivas: number;
+}
+
+export interface MaintenanceBacklog {
+  groupBy: BacklogGroupBy;
+  itens: MaintenanceBacklogItem[];
+  totais: {
+    ordens: number;
+    horas: number;
+    semEstimativa: number;
+    /** Fracao da fila que entra na conta de horas; null quando nao ha OS aberta. */
+    coberturaPct: number | null;
+  };
+}

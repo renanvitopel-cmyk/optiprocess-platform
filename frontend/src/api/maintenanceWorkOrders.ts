@@ -24,6 +24,8 @@ import type {
   FailureRecord,
   FailureSeverity,
   CorrectiveType,
+  MaintenanceBacklog,
+  BacklogGroupBy,
 } from "./types";
 
 export interface ListWorkOrdersParams {
@@ -282,5 +284,13 @@ export async function listFailureRecords(params: {
   pageSize?: number;
 } = {}): Promise<PagedResult<FailureRecord>> {
   const { data } = await api.get<PagedResult<FailureRecord>>("/maintenance-work-orders/registros-de-falha", { params });
+  return data;
+}
+
+/** Backlog do PCM aberto por planta, area, ativo ou centro de custo. */
+export async function getMaintenanceBacklog(
+  params: { clientId?: string; groupBy?: BacklogGroupBy; plantId?: string; areaId?: string } = {},
+): Promise<MaintenanceBacklog> {
+  const { data } = await api.get<MaintenanceBacklog>("/maintenance-work-orders/backlog", { params });
   return data;
 }

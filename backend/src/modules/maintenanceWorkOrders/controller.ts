@@ -1144,6 +1144,102 @@ export const listFailureRecords = asyncHandler(async (req: Request, res: Respons
   res.json(buildPagedResult(comDowntime, total, pageParams));
 });
 
+/** Backlog do PCM aberto por planta, area, ativo ou centro de custo.
+ *
+ * Backlog e' a HH pendente da fila. O numero so tem valor se disser TAMBEM quantas OS
+ * estao sem estimativa: uma area com "12 h de backlog" e outras 30 OS sem HH prevista nao
+ * tem 12 h de trabalho pela frente, e quem olha so o total decide errado. */
+export const getMaintenanceBacklog = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const { clientId, groupBy = "plant", plantId, areaId } = req.query as {
+    clientId?: string; groupBy?: string; plantId?: string; areaId?: string;
+  };
+
+  const agrupamentos = ["plant", "area", "instrument", "costCenter"] as const;
+  type Agrupamento = (typeof agrupamentos)[number];
+  if (!agrupamentos.includes(groupBy as Agrupamento)) {
+    throw new ValidationError(`Agrupamento invalido. Use: ${agrupamentos.join(", ")}.`);
+  }
+
+  const agora = new Date();
+  const abertas = await prisma.maintenanceWorkOrder.findMany({
+    where: {
+      deletedAt: null,
+      status: { notIn: ["COMPLETED", "CANCELED"] },
+      ...clientScopeFilter(req),
+      ...(clientId ? { clientId } : {}),
+      ...(plantId ? { instrument: { plantId } } : {}),
+      ...(areaId ? { instrument: { areaId } } : {}),
+    },
+    select: {
+      id: true,
+      type: true,
+      priority: true,
+      scheduledDate: true,
+      estimatedHours: true,
+      costCenter: { select: { id: true, name: true } },
+      instrument: {
+        select: {
+          id: true, tag: true, description: true, type: true,
+          plant: { select: { id: true, name: true } },
+          area: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+
+  type Linha = {
+    id: string; nome: string;
+    ordens: number; horas: number; semEstimativa: number;
+    atrasadas: number; emergenciais: number; corretivas: number; preventivas: number;
+  };
+  const linhas = new Map<string, Linha>();
+
+  function chaveDe(o: (typeof abertas)[number]): { id: string; nome: string } {
+    if (groupBy === "area") return { id: o.instrument?.area?.id ?? "sem", nome: o.instrument?.area?.name ?? "Sem area" };
+    if (groupBy === "instrument") {
+      return { id: o.instrument?.id ?? "sem", nome: o.instrument ? `${o.instrument.tag ?? o.instrument.type}${o.instrument.description ? ` - ${o.instrument.description}` : ""}` : "Sem ativo" };
+    }
+    if (groupBy === "costCenter") return { id: o.costCenter?.id ?? "sem", nome: o.costCenter?.name ?? "Sem centro de custo" };
+    return { id: o.instrument?.plant?.id ?? "sem", nome: o.instrument?.plant?.name ?? "Sem planta" };
+  }
+
+  const mesmoDia = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+
+  for (const o of abertas) {
+    const { id, nome } = chaveDe(o);
+    const linha = linhas.get(id) ?? { id, nome, ordens: 0, horas: 0, semEstimativa: 0, atrasadas: 0, emergenciais: 0, corretivas: 0, preventivas: 0 };
+    linha.ordens += 1;
+    if (o.estimatedHours != null) linha.horas += o.estimatedHours;
+    else linha.semEstimativa += 1;
+    if (o.scheduledDate && o.scheduledDate < agora && !mesmoDia(o.scheduledDate, agora)) linha.atrasadas += 1;
+    if (o.priority === "CRITICAL") linha.emergenciais += 1;
+    if (o.type === "CORRECTIVE") linha.corretivas += 1;
+    if (o.type === "PREVENTIVE") linha.preventivas += 1;
+    linhas.set(id, linha);
+  }
+
+  const itens = [...linhas.values()]
+    .map((l) => ({ ...l, horas: Number(l.horas.toFixed(1)) }))
+    .sort((a, b) => b.horas - a.horas || b.ordens - a.ordens);
+
+  const totalOrdens = abertas.length;
+  const totalSemEstimativa = abertas.filter((o) => o.estimatedHours == null).length;
+
+  res.json({
+    groupBy,
+    itens,
+    totais: {
+      ordens: totalOrdens,
+      horas: Number(itens.reduce((s, i) => s + i.horas, 0).toFixed(1)),
+      semEstimativa: totalSemEstimativa,
+      // Fracao da fila que entra na conta de horas - se for baixa, o backlog em HH nao
+      // representa a fila e a tela precisa dizer isso.
+      coberturaPct: totalOrdens > 0 ? Number((((totalOrdens - totalSemEstimativa) / totalOrdens) * 100).toFixed(0)) : null,
+    },
+  });
+});
+
 export const getFailureAnalysis = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const { clientId, dateFrom, dateTo } = req.query as { clientId?: string; dateFrom?: string; dateTo?: string };

@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Wrench, Gauge, ClipboardList, ClipboardPlus, ShieldCheck, Activity, TimerReset, Boxes, GitBranch, Radar, HardHat, Kanban, BarChart3, Search, CalendarDays, SlidersHorizontal } from "lucide-react";
-import { getMaintenanceDashboard } from "../../../api/maintenanceWorkOrders";
+import { getMaintenanceDashboard, getMaintenanceBacklog } from "../../../api/maintenanceWorkOrders";
+import type { BacklogGroupBy } from "../../../api/types";
+import { EmptyState } from "../../../components/EmptyState";
 import { listClients } from "../../../api/clients";
 
 import { CmmsLogo } from "../../../components/CmmsLogo";
@@ -11,7 +13,16 @@ import { FullPageSpinner } from "../../../components/Spinner";
 import { clientDisplayName, formatKpi } from "../../../lib/format";
 import { useCmms } from "../../../lib/cmms";
 
+/** Como o backlog aparece na tela para cada agrupamento. */
+const ROTULO_AGRUPAMENTO: Record<BacklogGroupBy, string> = {
+  plant: "Planta",
+  area: "Area",
+  instrument: "Ativo",
+  costCenter: "Centro de custo",
+};
+
 export default function MaintenanceDashboard() {
+  const [agrupamento, setAgrupamento] = useState<BacklogGroupBy>("plant");
   const { isClient, base, assetsBase, partsBase, laborBase } = useCmms();
   const [clientId, setClientId] = useState("");
 
@@ -23,6 +34,11 @@ export default function MaintenanceDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["maintenance-dashboard", clientId],
     queryFn: () => getMaintenanceDashboard({ clientId: clientId || undefined }),
+  });
+
+  const { data: backlog } = useQuery({
+    queryKey: ["manutencao-backlog", clientId, agrupamento],
+    queryFn: () => getMaintenanceBacklog({ clientId: clientId || undefined, groupBy: agrupamento }),
   });
 
   return (
@@ -177,6 +193,82 @@ export default function MaintenanceDashboard() {
               <p className="text-xs uppercase tracking-wide text-graphite-400">HH prevista x realizada (concluidas)</p>
               <p className="mt-1 text-2xl font-bold text-navy-900">{data.pcm.plannedHoursCompleted}h / {data.pcm.actualHoursCompleted}h</p>
             </div>
+          </div>
+
+          {/* Backlog aberto: o total sozinho nao diz onde esta a fila. Aqui da pra ver que
+              a HH pendente esta concentrada numa area (ou num ativo) so. */}
+          <div className="mt-8">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-navy-900">Backlog por {ROTULO_AGRUPAMENTO[agrupamento].toLowerCase()}</h2>
+                <p className="text-xs text-graphite-500">HH pendente das OS em aberto, do maior para o menor.</p>
+              </div>
+              <select
+                className="input w-auto"
+                value={agrupamento}
+                onChange={(e) => setAgrupamento(e.target.value as BacklogGroupBy)}
+              >
+                <option value="plant">Geral da planta</option>
+                <option value="area">Por area</option>
+                <option value="instrument">Por ativo</option>
+                <option value="costCenter">Por centro de custo</option>
+              </select>
+            </div>
+
+            {!backlog || backlog.itens.length === 0 ? (
+              <EmptyState title="Nenhuma OS em aberto" description="Sem fila pendente, nao ha backlog a distribuir." />
+            ) : (
+              <>
+                {backlog.totais.coberturaPct != null && backlog.totais.coberturaPct < 100 && (
+                  <p className="mb-2 text-xs text-safety-yellow-dark">
+                    {backlog.totais.semEstimativa} das {backlog.totais.ordens} OS em aberto estao sem HH prevista
+                    ({backlog.totais.coberturaPct}% da fila entra na conta de horas) - o backlog real e' maior que o numero abaixo.
+                  </p>
+                )}
+                <div className="card overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase tracking-wide text-graphite-500">
+                      <tr>
+                        <th className="px-4 py-2.5">{ROTULO_AGRUPAMENTO[agrupamento]}</th>
+                        <th className="px-4 py-2.5 text-right">Backlog (h)</th>
+                        <th className="px-4 py-2.5 text-right">OS abertas</th>
+                        <th className="px-4 py-2.5 text-right">Sem HH</th>
+                        <th className="px-4 py-2.5 text-right">Atrasadas</th>
+                        <th className="px-4 py-2.5 text-right">Emergenciais</th>
+                        <th className="px-4 py-2.5">Corretiva / Preventiva</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {backlog.itens.map((i) => {
+                        const maior = backlog.itens[0].horas || 1;
+                        return (
+                          <tr key={i.id}>
+                            <td className="px-4 py-2.5">
+                              <p className="font-medium text-navy-900">{i.nome}</p>
+                              <div className="mt-1 h-1.5 w-32 rounded-full bg-gray-100">
+                                <div className="h-1.5 rounded-full bg-navy-600" style={{ width: `${Math.max(3, (i.horas / maior) * 100)}%` }} />
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-semibold text-navy-900">{i.horas}h</td>
+                            <td className="px-4 py-2.5 text-right text-graphite-700">{i.ordens}</td>
+                            <td className="px-4 py-2.5 text-right">
+                              {i.semEstimativa > 0 ? <span className="text-safety-yellow-dark">{i.semEstimativa}</span> : <span className="text-graphite-400">-</span>}
+                            </td>
+                            <td className="px-4 py-2.5 text-right">
+                              {i.atrasadas > 0 ? <span className="font-medium text-safety-red">{i.atrasadas}</span> : <span className="text-graphite-400">-</span>}
+                            </td>
+                            <td className="px-4 py-2.5 text-right">
+                              {i.emergenciais > 0 ? <span className="font-medium text-safety-red">{i.emergenciais}</span> : <span className="text-graphite-400">-</span>}
+                            </td>
+                            <td className="px-4 py-2.5 text-graphite-600">{i.corretivas} / {i.preventivas}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

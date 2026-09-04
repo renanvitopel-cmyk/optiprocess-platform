@@ -17,6 +17,7 @@ import type {
   ScheduleCard,
   SparePartMovement,
   SparePartReservation,
+  WorkOrderAssignee,
   WorkOrderLaborEntry,
   WorkOrderStoppage,
   WorkOrderThirdPartyService,
@@ -108,6 +109,15 @@ export async function addWorkOrderPart(
 
 export async function removeWorkOrderPart(workOrderId: string, movementId: string): Promise<void> {
   await api.delete(`/maintenance-work-orders/${workOrderId}/parts/${movementId}`);
+}
+
+export async function addWorkOrderAssignee(workOrderId: string, laborResourceId: string): Promise<WorkOrderAssignee> {
+  const { data } = await api.post<WorkOrderAssignee>(`/maintenance-work-orders/${workOrderId}/assignees`, { laborResourceId });
+  return data;
+}
+
+export async function removeWorkOrderAssignee(workOrderId: string, assigneeId: string): Promise<void> {
+  await api.delete(`/maintenance-work-orders/${workOrderId}/assignees/${assigneeId}`);
 }
 
 export async function addWorkOrderLabor(

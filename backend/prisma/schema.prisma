@@ -1038,6 +1038,8 @@ model LaborResource {
   updatedAt          DateTime  @updatedAt
   deletedAt          DateTime?
 
+  workOrderAssignments WorkOrderAssignee[]
+
   workOrderEntries WorkOrderLabor[]
   // OS programadas para esta pessoa no quadro de programacao do PCM.
   assignedWorkOrders MaintenanceWorkOrder[] @relation("WorkOrderAssignedResource")
@@ -1566,6 +1568,10 @@ model MaintenanceWorkOrder {
   // SS que originou esta OS (quando veio de uma Solicitacao de Servico aprovada) - lado
   // inverso de ServiceRequest.workOrderId.
   serviceRequest ServiceRequest?
+  // Equipe de apoio: quem mais pode atuar nesta OS alem do responsavel
+  // (assignedResourceId). Apontar horas nao exige estar aqui - a lista serve para
+  // combinar quem entra no servico, nao para bloquear o apontamento.
+  assignees WorkOrderAssignee[]
 
   @@unique([clientId, number])
   @@index([clientId])
@@ -1576,6 +1582,20 @@ model MaintenanceWorkOrder {
   @@index([assignedResourceId])
   @@index([scheduledDate])
   @@map("maintenance_work_orders")
+}
+
+// Equipe de apoio da OS - o responsavel fica em MaintenanceWorkOrder.assignedResourceId.
+model WorkOrderAssignee {
+  id              String               @id @default(uuid())
+  workOrderId     String
+  workOrder       MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  laborResourceId String
+  laborResource   LaborResource        @relation(fields: [laborResourceId], references: [id])
+  createdAt       DateTime             @default(now())
+
+  @@unique([workOrderId, laborResourceId])
+  @@index([workOrderId])
+  @@map("work_order_assignees")
 }
 
 model MaintenanceWorkOrderChecklistItem {

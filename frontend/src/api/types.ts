@@ -929,6 +929,16 @@ export interface MaintenanceWorkOrder {
   originChecklistItemId: string | null;
   originChecklistItem?: { id: string; description: string } | null;
   spawnedWorkOrders?: { id: string; number: string; status: MaintenanceOrderStatus; type: MaintenanceOrderType }[];
+  // Equipe de apoio (o responsavel e' o assignedResource declarado acima).
+  assignees?: WorkOrderAssignee[];
+  createdAt: string;
+}
+
+export interface WorkOrderAssignee {
+  id: string;
+  workOrderId: string;
+  laborResourceId: string;
+  laborResource?: { id: string; name: string; type: string };
   createdAt: string;
 }
 

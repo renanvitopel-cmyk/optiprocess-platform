@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole } from "../../middleware/rbac";
+import { requireRole, CMMS_ROLES } from "../../middleware/rbac";
 import {
   listMaintenancePlanTemplates,
   getMaintenancePlanTemplate,
@@ -12,11 +12,11 @@ import {
 
 export const maintenancePlanTemplatesRouter = Router();
 
-maintenancePlanTemplatesRouter.use(requireAuth, requireRole("ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT"));
+maintenancePlanTemplatesRouter.use(requireAuth, requireRole(...CMMS_ROLES));
 
 maintenancePlanTemplatesRouter.get("/", listMaintenancePlanTemplates);
 maintenancePlanTemplatesRouter.get("/:id", getMaintenancePlanTemplate);
-maintenancePlanTemplatesRouter.post("/", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), createMaintenancePlanTemplate);
-maintenancePlanTemplatesRouter.patch("/:id", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), updateMaintenancePlanTemplate);
-maintenancePlanTemplatesRouter.delete("/:id", requireRole("ADMIN", "CLIENT"), deleteMaintenancePlanTemplate);
-maintenancePlanTemplatesRouter.post("/:id/apply", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), applyMaintenancePlanTemplate);
+maintenancePlanTemplatesRouter.post("/", requireRole(...CMMS_ROLES), createMaintenancePlanTemplate);
+maintenancePlanTemplatesRouter.patch("/:id", requireRole(...CMMS_ROLES), updateMaintenancePlanTemplate);
+maintenancePlanTemplatesRouter.delete("/:id", requireRole(...CMMS_ROLES), deleteMaintenancePlanTemplate);
+maintenancePlanTemplatesRouter.post("/:id/apply", requireRole(...CMMS_ROLES), applyMaintenancePlanTemplate);

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole } from "../../middleware/rbac";
+import { requireRole, CMMS_ROLES } from "../../middleware/rbac";
 import {
   listMaintenancePlans,
   getMaintenancePlan,
@@ -12,11 +12,11 @@ import {
 
 export const maintenancePlansRouter = Router();
 
-maintenancePlansRouter.use(requireAuth);
+maintenancePlansRouter.use(requireAuth, requireRole(...CMMS_ROLES));
 
 maintenancePlansRouter.get("/", listMaintenancePlans);
 maintenancePlansRouter.get("/:id", getMaintenancePlan);
-maintenancePlansRouter.post("/", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), createMaintenancePlan);
-maintenancePlansRouter.patch("/:id", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), updateMaintenancePlan);
-maintenancePlansRouter.delete("/:id", requireRole("ADMIN", "CLIENT"), deleteMaintenancePlan);
-maintenancePlansRouter.post("/:id/generate", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), generateWorkOrderFromPlan);
+maintenancePlansRouter.post("/", requireRole(...CMMS_ROLES), createMaintenancePlan);
+maintenancePlansRouter.patch("/:id", requireRole(...CMMS_ROLES), updateMaintenancePlan);
+maintenancePlansRouter.delete("/:id", requireRole(...CMMS_ROLES), deleteMaintenancePlan);
+maintenancePlansRouter.post("/:id/generate", requireRole(...CMMS_ROLES), generateWorkOrderFromPlan);

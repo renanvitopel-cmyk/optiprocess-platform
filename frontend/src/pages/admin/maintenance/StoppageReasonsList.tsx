@@ -27,7 +27,7 @@ export default function StoppageReasonsList() {
   const { notify } = useToast();
   const { user } = useAuth();
   const isClient = user?.role === "CLIENT";
-  const canManage = isClient || user?.role === "ADMIN" || user?.role === "TECHNICIAN";
+  const canManage = isClient || user?.role === "ADMIN";
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<StoppageReason | null>(null);
 

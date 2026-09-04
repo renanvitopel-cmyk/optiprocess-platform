@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole } from "../../middleware/rbac";
+import { requireRole, CMMS_ROLES } from "../../middleware/rbac";
 import {
   listServiceRequestCategories,
   createServiceRequestCategory,
@@ -10,9 +10,9 @@ import {
 
 export const serviceRequestCategoriesRouter = Router();
 
-serviceRequestCategoriesRouter.use(requireAuth, requireRole("ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT"));
+serviceRequestCategoriesRouter.use(requireAuth, requireRole(...CMMS_ROLES));
 
 serviceRequestCategoriesRouter.get("/", listServiceRequestCategories);
-serviceRequestCategoriesRouter.post("/", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), createServiceRequestCategory);
-serviceRequestCategoriesRouter.patch("/:id", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), updateServiceRequestCategory);
-serviceRequestCategoriesRouter.delete("/:id", requireRole("ADMIN", "CLIENT"), deleteServiceRequestCategory);
+serviceRequestCategoriesRouter.post("/", requireRole(...CMMS_ROLES), createServiceRequestCategory);
+serviceRequestCategoriesRouter.patch("/:id", requireRole(...CMMS_ROLES), updateServiceRequestCategory);
+serviceRequestCategoriesRouter.delete("/:id", requireRole(...CMMS_ROLES), deleteServiceRequestCategory);

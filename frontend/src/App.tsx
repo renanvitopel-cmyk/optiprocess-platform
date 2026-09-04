@@ -151,30 +151,34 @@ export default function App() {
 
                 <Route path="contratos" element={<ContractsList />} />
 
-                <Route path="manutencao" element={<MaintenanceDashboard />} />
-                <Route path="manutencao/planos" element={<MaintenancePlansList />} />
-                <Route path="manutencao/planos/novo" element={<MaintenancePlanForm />} />
-                <Route path="manutencao/planos/:id/editar" element={<MaintenancePlanForm />} />
-                <Route path="manutencao/planos/:id" element={<MaintenancePlanDetail />} />
-                <Route path="manutencao/modelos-de-plano" element={<MaintenancePlanTemplatesList />} />
-                <Route path="manutencao/ordens" element={<WorkOrdersList />} />
-                <Route path="manutencao/kanban" element={<KanbanBoard />} />
-                <Route path="manutencao/programacao" element={<SchedulingBoard />} />
-                <Route path="manutencao/preditiva" element={<PredictivePanel />} />
-                <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
-                <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
-                <Route path="manutencao/ordens/:id" element={<WorkOrderDetail />} />
-                <Route path="manutencao/solicitacoes" element={<ServiceRequestsList />} />
-                <Route path="manutencao/solicitacoes/novo" element={<ServiceRequestForm />} />
-                <Route path="manutencao/solicitacoes/:id" element={<ServiceRequestDetail />} />
-                <Route path="manutencao/falhas" element={<FailureCodesList />} />
-                <Route path="manutencao/pareto" element={<FailureAnalysis />} />
-                <Route path="manutencao/rca" element={<RcaList />} />
-                <Route path="manutencao/rca/novo" element={<RcaForm />} />
-                <Route path="manutencao/rca/:id" element={<RcaForm />} />
-                <Route path="manutencao/paradas" element={<StoppageReasonsList />} />
-                <Route path="manutencao/almoxarifado" element={<SparePartsList />} />
-                <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
+                {/* O CMMS e' o produto vendido ao cliente e operado por ele. Na gestao da
+                    OptiProcess ele existe so como acesso master do dono da plataforma. */}
+                <Route element={<ProtectedRoute roles={["ADMIN"]} />}>
+                  <Route path="manutencao" element={<MaintenanceDashboard />} />
+                  <Route path="manutencao/planos" element={<MaintenancePlansList />} />
+                  <Route path="manutencao/planos/novo" element={<MaintenancePlanForm />} />
+                  <Route path="manutencao/planos/:id/editar" element={<MaintenancePlanForm />} />
+                  <Route path="manutencao/planos/:id" element={<MaintenancePlanDetail />} />
+                  <Route path="manutencao/modelos-de-plano" element={<MaintenancePlanTemplatesList />} />
+                  <Route path="manutencao/ordens" element={<WorkOrdersList />} />
+                  <Route path="manutencao/kanban" element={<KanbanBoard />} />
+                  <Route path="manutencao/programacao" element={<SchedulingBoard />} />
+                  <Route path="manutencao/preditiva" element={<PredictivePanel />} />
+                  <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
+                  <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
+                  <Route path="manutencao/ordens/:id" element={<WorkOrderDetail />} />
+                  <Route path="manutencao/solicitacoes" element={<ServiceRequestsList />} />
+                  <Route path="manutencao/solicitacoes/novo" element={<ServiceRequestForm />} />
+                  <Route path="manutencao/solicitacoes/:id" element={<ServiceRequestDetail />} />
+                  <Route path="manutencao/falhas" element={<FailureCodesList />} />
+                  <Route path="manutencao/pareto" element={<FailureAnalysis />} />
+                  <Route path="manutencao/rca" element={<RcaList />} />
+                  <Route path="manutencao/rca/novo" element={<RcaForm />} />
+                  <Route path="manutencao/rca/:id" element={<RcaForm />} />
+                  <Route path="manutencao/paradas" element={<StoppageReasonsList />} />
+                  <Route path="manutencao/almoxarifado" element={<SparePartsList />} />
+                  <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
+                </Route>
 
                 <Route path="produtos" element={<ProductsListAdmin />} />
                 <Route path="produtos/:id" element={<ProductDetailAdmin />} />

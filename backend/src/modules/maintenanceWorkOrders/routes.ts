@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole } from "../../middleware/rbac";
+import { requireRole, CMMS_ROLES } from "../../middleware/rbac";
 import { uploadAny } from "../../middleware/upload";
 import {
   listMaintenanceWorkOrders,
@@ -35,50 +35,50 @@ import {
 
 export const maintenanceWorkOrdersRouter = Router();
 
-maintenanceWorkOrdersRouter.use(requireAuth);
+maintenanceWorkOrdersRouter.use(requireAuth, requireRole(...CMMS_ROLES));
 
 maintenanceWorkOrdersRouter.get("/dashboard", getMaintenanceDashboard);
 maintenanceWorkOrdersRouter.get("/failure-analysis", getFailureAnalysis);
 maintenanceWorkOrdersRouter.get("/schedule", getMaintenanceSchedule);
 maintenanceWorkOrdersRouter.get("/", listMaintenanceWorkOrders);
 maintenanceWorkOrdersRouter.get("/:id", getMaintenanceWorkOrder);
-maintenanceWorkOrdersRouter.post("/", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), createMaintenanceWorkOrder);
-maintenanceWorkOrdersRouter.patch("/:id", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), updateMaintenanceWorkOrder);
-maintenanceWorkOrdersRouter.delete("/:id", requireRole("ADMIN", "CLIENT"), deleteMaintenanceWorkOrder);
-maintenanceWorkOrdersRouter.post("/:id/start", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), startMaintenanceWorkOrder);
-maintenanceWorkOrdersRouter.post("/:id/complete", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), completeMaintenanceWorkOrder);
+maintenanceWorkOrdersRouter.post("/", requireRole(...CMMS_ROLES), createMaintenanceWorkOrder);
+maintenanceWorkOrdersRouter.patch("/:id", requireRole(...CMMS_ROLES), updateMaintenanceWorkOrder);
+maintenanceWorkOrdersRouter.delete("/:id", requireRole(...CMMS_ROLES), deleteMaintenanceWorkOrder);
+maintenanceWorkOrdersRouter.post("/:id/start", requireRole(...CMMS_ROLES), startMaintenanceWorkOrder);
+maintenanceWorkOrdersRouter.post("/:id/complete", requireRole(...CMMS_ROLES), completeMaintenanceWorkOrder);
 
-maintenanceWorkOrdersRouter.patch("/:id/schedule", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), scheduleMaintenanceWorkOrder);
+maintenanceWorkOrdersRouter.patch("/:id/schedule", requireRole(...CMMS_ROLES), scheduleMaintenanceWorkOrder);
 
-maintenanceWorkOrdersRouter.patch("/:id/checklist/:itemId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), updateChecklistItem);
+maintenanceWorkOrdersRouter.patch("/:id/checklist/:itemId", requireRole(...CMMS_ROLES), updateChecklistItem);
 
-maintenanceWorkOrdersRouter.post("/:id/parts", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addWorkOrderPart);
-maintenanceWorkOrdersRouter.delete("/:id/parts/:movementId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), removeWorkOrderPart);
+maintenanceWorkOrdersRouter.post("/:id/parts", requireRole(...CMMS_ROLES), addWorkOrderPart);
+maintenanceWorkOrdersRouter.delete("/:id/parts/:movementId", requireRole(...CMMS_ROLES), removeWorkOrderPart);
 
-maintenanceWorkOrdersRouter.post("/:id/labor", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addWorkOrderLabor);
-maintenanceWorkOrdersRouter.delete("/:id/labor/:entryId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), removeWorkOrderLabor);
+maintenanceWorkOrdersRouter.post("/:id/labor", requireRole(...CMMS_ROLES), addWorkOrderLabor);
+maintenanceWorkOrdersRouter.delete("/:id/labor/:entryId", requireRole(...CMMS_ROLES), removeWorkOrderLabor);
 
-maintenanceWorkOrdersRouter.post("/:id/third-party-services", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addWorkOrderThirdPartyService);
-maintenanceWorkOrdersRouter.delete("/:id/third-party-services/:serviceId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), removeWorkOrderThirdPartyService);
+maintenanceWorkOrdersRouter.post("/:id/third-party-services", requireRole(...CMMS_ROLES), addWorkOrderThirdPartyService);
+maintenanceWorkOrdersRouter.delete("/:id/third-party-services/:serviceId", requireRole(...CMMS_ROLES), removeWorkOrderThirdPartyService);
 
-maintenanceWorkOrdersRouter.post("/:id/reservations", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addWorkOrderReservation);
-maintenanceWorkOrdersRouter.post("/:id/reservations/:reservationId/release", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), releaseWorkOrderReservation);
-maintenanceWorkOrdersRouter.post("/:id/reservations/:reservationId/consume", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), consumeWorkOrderReservation);
+maintenanceWorkOrdersRouter.post("/:id/reservations", requireRole(...CMMS_ROLES), addWorkOrderReservation);
+maintenanceWorkOrdersRouter.post("/:id/reservations/:reservationId/release", requireRole(...CMMS_ROLES), releaseWorkOrderReservation);
+maintenanceWorkOrdersRouter.post("/:id/reservations/:reservationId/consume", requireRole(...CMMS_ROLES), consumeWorkOrderReservation);
 
-maintenanceWorkOrdersRouter.post("/:id/stoppages", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), addWorkOrderStoppage);
-maintenanceWorkOrdersRouter.patch("/:id/stoppages/:stoppageId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), updateWorkOrderStoppage);
-maintenanceWorkOrdersRouter.delete("/:id/stoppages/:stoppageId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), removeWorkOrderStoppage);
+maintenanceWorkOrdersRouter.post("/:id/stoppages", requireRole(...CMMS_ROLES), addWorkOrderStoppage);
+maintenanceWorkOrdersRouter.patch("/:id/stoppages/:stoppageId", requireRole(...CMMS_ROLES), updateWorkOrderStoppage);
+maintenanceWorkOrdersRouter.delete("/:id/stoppages/:stoppageId", requireRole(...CMMS_ROLES), removeWorkOrderStoppage);
 
 maintenanceWorkOrdersRouter.get("/:id/attachments", listWorkOrderAttachmentsRoute);
 maintenanceWorkOrdersRouter.get("/:id/attachments/:attachmentId/url", getWorkOrderAttachmentUrl);
 maintenanceWorkOrdersRouter.post(
   "/:id/attachments",
-  requireRole("ADMIN", "TECHNICIAN", "CLIENT"),
+  requireRole(...CMMS_ROLES),
   uploadAny.single("file"),
   uploadWorkOrderAttachment,
 );
 maintenanceWorkOrdersRouter.delete(
   "/:id/attachments/:attachmentId",
-  requireRole("ADMIN", "TECHNICIAN", "CLIENT"),
+  requireRole(...CMMS_ROLES),
   deleteWorkOrderAttachment,
 );

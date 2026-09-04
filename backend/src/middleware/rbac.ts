@@ -21,6 +21,18 @@ export function requireRole(...roles: Role[]) {
 /** Papeis internos da empresa (tudo que nao e o portal do cliente). */
 export const STAFF_ROLES: Role[] = ["ADMIN", "TECHNICIAN", "COMMERCIAL"];
 
+/**
+ * Quem opera o RLP Maintenance CMMS.
+ *
+ * O CMMS e' um produto que a OptiProcess VENDE - quem faz a manutencao da fabrica e' a
+ * equipe do proprio cliente, nao a OptiProcess. Por isso TECHNICIAN e COMMERCIAL (que
+ * cuidam dos servicos prestados pela OptiProcess: calibracao, laudos, OS externas) nao
+ * entram aqui.
+ *
+ * ADMIN fica como acesso master do dono da plataforma - suporte e administracao.
+ */
+export const CMMS_ROLES: Role[] = ["ADMIN", "CLIENT"];
+
 /** Garante que um usuario CLIENT so acesse dados do proprio clientId.
  * Uso: validar o :clientId de rota, ou aplicar como filtro obrigatorio em queries. */
 export function assertOwnClient(req: Request, clientId: string): void {

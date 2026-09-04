@@ -12,8 +12,10 @@ export function useCmms() {
 
   return {
     isClient,
-    // No portal quem gerencia a manutencao e' o proprio cliente.
-    canManage: isClient || user?.role === "ADMIN" || user?.role === "TECHNICIAN",
+    // O CMMS e' do cliente: quem gerencia e' a equipe dele. O ADMIN da OptiProcess entra
+    // por acesso master (suporte/administracao da plataforma); TECHNICIAN e COMMERCIAL
+    // cuidam dos servicos prestados pela OptiProcess, nao da manutencao interna do cliente.
+    canManage: isClient || user?.role === "ADMIN",
     ownClientId: user?.clientId ?? undefined,
     base: isClient ? "/portal/manutencao" : "/gestao/manutencao",
     assetsBase: isClient ? "/portal/instrumentos" : "/gestao/instrumentos",

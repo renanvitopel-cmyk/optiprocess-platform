@@ -58,17 +58,25 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
     items: [{ to: "/portal", label: "Dashboard", icon: LayoutDashboard }],
   },
   {
-    title: "Manutencao",
+    // O dia a dia: o que se abre, programa e executa. Separado da "Gestao" (o parque, o
+    // estoque, o acompanhamento de condicao) porque sao rotinas de pessoas diferentes -
+    // e porque um unico bloco de nove itens ja nao era um menu, era uma lista.
+    title: "Operacional",
     items: [
       { to: "/portal/manutencao", label: "Painel do CMMS", icon: Wrench, requires: ["CMMS_MAINTENANCE"], exact: true },
       { to: "/portal/manutencao/solicitacoes", label: "Solicitacoes", icon: ClipboardPlus, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/ordens", label: "Ordens de manutencao", icon: ClipboardList, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/programacao", label: "Programacao", icon: CalendarDays, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/planos", label: "Planos preventivos", icon: ShieldCheck, requires: ["CMMS_MAINTENANCE"] },
+    ],
+  },
+  {
+    title: "Gestao",
+    items: [
       { to: "/portal/instrumentos", label: "Meus ativos", icon: Gauge, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
       { to: "/portal/almoxarifado", label: "Almoxarifado", icon: Boxes, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/preditiva", label: "Preditiva", icon: Radar, requires: ["CMMS_MAINTENANCE"] },
-      { to: "/portal/manutencao/pareto", label: "Analise de falhas", icon: BarChart3, requires: ["CMMS_MAINTENANCE"] },
+      { to: "/portal/manutencao/pareto", label: "Falhas e RCA", icon: BarChart3, requires: ["CMMS_MAINTENANCE"] },
     ],
   },
   {

@@ -785,6 +785,8 @@ export interface MaintenancePlan {
   toleranceDaysAfter: number | null;
   procedure: string | null;
   estimatedLaborHours: number | null;
+  /** Procedimento/cuidados do plano - vira a descricao da OS gerada. */
+  instructions?: string | null;
   templateId: string | null;
   template?: { id: string; name: string } | null;
   checklistTemplate: MaintenancePlanChecklistItem[];
@@ -988,6 +990,30 @@ export interface AssetPartHistoryEntry {
   lastWorkOrder: { id: string; number: string } | null;
 }
 
+export type FailureSeverity = "LOW" | "MODERATE" | "HIGH" | "CRITICAL";
+
+/** OS corretiva vista pelo angulo da falha (tela de Falhas/RCA). */
+export interface FailureRecord {
+  id: string;
+  number: string;
+  title: string | null;
+  description: string;
+  priority: MaintenancePriority;
+  status: MaintenanceOrderStatus;
+  failureStartedAt: string | null;
+  failureEndedAt: string | null;
+  failureSeverity: FailureSeverity | null;
+  failureRootCause: string | null;
+  productionLoss: number | null;
+  executionNotes: string | null;
+  /** Calculado a partir da janela da falha - nao e' digitado. */
+  downtimeHours: number | null;
+  failureCode?: { id: string; code: string; description: string } | null;
+  instrument?: { id: string; tag: string | null; description: string | null; type: string; area?: { id: string; name: string } | null } | null;
+  client?: ClientRef;
+  rootCauseAnalyses?: { id: string; status: string }[];
+}
+
 export interface MaintenanceWorkOrder {
   id: string;
   number: string;
@@ -1000,13 +1026,22 @@ export interface MaintenanceWorkOrder {
   type: MaintenanceOrderType;
   priority: MaintenancePriority;
   status: MaintenanceOrderStatus;
+  /** Titulo curto da OS - quando vazio, as telas caem na descricao. */
+  title: string | null;
   description: string;
+  /** Rateio contabil da OS (nasce do centro de custo do ativo). */
+  costCenterId: string | null;
+  costCenter?: { id: string; name: string; code?: string | null } | null;
   technicianId: string | null;
   technician?: { id: string; name: string } | null;
   /** Mao de obra do proprio cliente que vai executar (eixo do quadro de programacao). */
   assignedResourceId: string | null;
   assignedResource?: { id: string; name: string; type: string } | null;
   scheduledDate: string | null;
+  /** Janela planejada do servico (planejado x realizado). */
+  plannedStart: string | null;
+  plannedEnd: string | null;
+  estimatedHours: number | null;
   startedAt: string | null;
   completedAt: string | null;
   failureCodeId: string | null;
@@ -1016,12 +1051,30 @@ export interface MaintenanceWorkOrder {
   meterReadingAtExecution: number | null;
   laborHours: number | null;
   observations: string | null;
+  /** O que foi executado, escrito por quem executou. */
+  executionNotes: string | null;
+  /** Registro do encerramento (pendencias, combinados, o que observar). */
+  closureNotes: string | null;
+  /** Registro de falha - preenchido pelo tecnico na OS corretiva. */
+  failureStartedAt: string | null;
+  failureEndedAt: string | null;
+  failureSeverity: FailureSeverity | null;
+  failureRootCause: string | null;
+  productionLoss: number | null;
+  approvedById: string | null;
+  approvedBy?: { id: string; name: string } | null;
+  approvedAt: string | null;
+  closedById: string | null;
+  closedBy?: { id: string; name: string } | null;
+  closedAt: string | null;
   checklist?: MaintenanceWorkOrderChecklistItem[];
   partsUsed?: MaintenancePartUsed[];
   laborEntries?: WorkOrderLaborEntry[];
   thirdPartyServices?: WorkOrderThirdPartyService[];
   partReservations?: SparePartReservation[];
   stoppages?: WorkOrderStoppage[];
+  /** RCAs abertas a partir da falha registrada nesta OS. */
+  rootCauseAnalyses?: { id: string; status: string }[];
   // Rastreabilidade: de onde esta OS veio (SS que a originou, ou OS + item de checklist
   // que revelou a anomalia) e o que ela gerou (corretivas abertas automaticamente).
   serviceRequest?: { id: string; number: string; status: string } | null;

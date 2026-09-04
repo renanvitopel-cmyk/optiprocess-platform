@@ -12,6 +12,7 @@ import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
 import { listFailureCodes } from "../../../api/failureCodes";
 import { listLaborResources } from "../../../api/laborResources";
+import { listCostCenters } from "../../../api/costCenters";
 import { getInstrument } from "../../../api/instruments";
 import { createMaintenanceWorkOrder, getMaintenanceWorkOrder, updateMaintenanceWorkOrder } from "../../../api/maintenanceWorkOrders";
 import { useToast } from "../../../components/Toast";
@@ -24,12 +25,16 @@ const schema = z.object({
   instrumentId: z.string().uuid("Selecione o ativo."),
   type: z.enum(["PREVENTIVE", "CORRECTIVE", "PREDICTIVE"]),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
+  title: z.string().min(3, "Informe um titulo curto.").max(200),
   description: z.string().min(2, "Descreva o servico."),
+  costCenterId: z.string().uuid().optional().or(z.literal("")),
   technicianId: z.string().uuid().optional().or(z.literal("")),
   assignedResourceId: z.string().uuid().optional().or(z.literal("")),
   scheduledDate: z.string().optional(),
+  plannedStart: z.string().optional(),
+  plannedEnd: z.string().optional(),
+  estimatedHours: z.coerce.number().nonnegative().optional(),
   failureCodeId: z.string().uuid().optional().or(z.literal("")),
-  laborHours: z.coerce.number().optional(),
   observations: z.string().optional(),
   checklist: z.array(z.object({ description: z.string().min(1, "Descreva o item.") })),
 });
@@ -73,6 +78,12 @@ export default function WorkOrderForm() {
     enabled: !!clientId,
   });
 
+  const { data: costCenters } = useQuery({
+    queryKey: ["cost-centers-os", clientId],
+    queryFn: () => listCostCenters({ clientId, active: true }),
+    enabled: !!clientId,
+  });
+
   // Sugere a prioridade a partir da criticidade do ativo escolhido - o tecnico ainda
   // pode trocar (por isso so sobrescreve enquanto o campo nao foi tocado a mao).
   const { data: selectedInstrument } = useQuery({
@@ -93,12 +104,16 @@ export default function WorkOrderForm() {
         instrumentId: existing.instrumentId,
         type: existing.type,
         priority: existing.priority,
+        title: existing.title ?? "",
         description: existing.description,
+        costCenterId: existing.costCenterId ?? "",
         technicianId: existing.technicianId ?? "",
         assignedResourceId: existing.assignedResourceId ?? "",
         scheduledDate: existing.scheduledDate?.slice(0, 10) ?? "",
+        plannedStart: existing.plannedStart?.slice(0, 16) ?? "",
+        plannedEnd: existing.plannedEnd?.slice(0, 16) ?? "",
+        estimatedHours: existing.estimatedHours ?? undefined,
         failureCodeId: existing.failureCodeId ?? "",
-        laborHours: existing.laborHours ?? undefined,
         observations: existing.observations ?? "",
         checklist: existing.checklist?.length ? existing.checklist.map((c) => ({ description: c.description })) : [{ description: "" }],
       });
@@ -111,7 +126,10 @@ export default function WorkOrderForm() {
         ...values,
         technicianId: values.technicianId || null,
         assignedResourceId: values.assignedResourceId || null,
+        costCenterId: values.costCenterId || null,
         failureCodeId: values.failureCodeId || null,
+        plannedStart: values.plannedStart || null,
+        plannedEnd: values.plannedEnd || null,
         checklist: values.checklist.filter((c) => c.description.trim()),
       };
       const saved = isEdit ? await updateMaintenanceWorkOrder(id!, payload) : await createMaintenanceWorkOrder(payload);
@@ -146,6 +164,16 @@ export default function WorkOrderForm() {
             )}
             <InstrumentPicker clientId={clientId} required error={errors.instrumentId?.message} {...register("instrumentId")} />
           </div>
+          {/* Titulo curto: e' o que aparece na lista de OS e no quadro de programacao. A
+              descricao abaixo continua sendo o relato completo do sintoma/servico. */}
+          <TextInput
+            label="Titulo"
+            required
+            placeholder="Ex.: Troca do rolamento do mancal lado acoplamento"
+            hint="Resumo em uma linha - e' o que aparece nas listas e na programacao."
+            error={errors.title?.message}
+            {...register("title")}
+          />
           <div className={`grid gap-4 ${isClient ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
             <SelectInput
               label="Tipo"
@@ -180,10 +208,23 @@ export default function WorkOrderForm() {
               {...register("assignedResourceId")}
             />
           </div>
-          <TextareaInput label="Descricao do servico" required rows={3} error={errors.description?.message} {...register("description")} />
+          <TextareaInput
+            label="Descricao / sintoma"
+            required
+            rows={3}
+            hint="O relato completo: o que foi observado ou o que precisa ser feito."
+            error={errors.description?.message}
+            {...register("description")}
+          />
           <div className="grid gap-4 sm:grid-cols-3">
-            <TextInput label="Data agendada" type="date" {...register("scheduledDate")} />
-            <TextInput label="Horas previstas" type="number" step="0.5" {...register("laborHours")} />
+            <SelectInput
+              label="Centro de custo"
+              placeholder={clientId ? "Do ativo (padrao)" : "Selecione o cliente primeiro"}
+              disabled={!clientId}
+              hint="Em branco = cai no centro de custo do ativo."
+              options={(costCenters ?? []).map((c) => ({ value: c.id, label: c.code ? `${c.code} - ${c.name}` : c.name }))}
+              {...register("costCenterId")}
+            />
             {type === "CORRECTIVE" && (
               <SelectInput
                 label="Codigo de falha"
@@ -194,6 +235,27 @@ export default function WorkOrderForm() {
             )}
           </div>
           <TextareaInput label="Observacoes (opcional)" rows={2} {...register("observations")} />
+        </div>
+
+        <div className="card space-y-4 p-5">
+          <div>
+            <h2 className="font-semibold text-navy-900">Planejamento</h2>
+            <p className="text-xs text-graphite-500">
+              A data agendada e' o dia em que a OS aparece na programacao. A janela e as horas estimadas
+              sao a previsao - o que foi realmente gasto e' apontado na aba Equipe e horas da OS.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <TextInput label="Data agendada" type="date" {...register("scheduledDate")} />
+            <TextInput label="Inicio planejado" type="datetime-local" {...register("plannedStart")} />
+            <TextInput
+              label="Termino planejado"
+              type="datetime-local"
+              error={errors.plannedEnd?.message}
+              {...register("plannedEnd")}
+            />
+            <TextInput label="Horas estimadas" type="number" step="0.5" min="0" {...register("estimatedHours")} />
+          </div>
         </div>
 
         <div className="card space-y-4 p-5">

@@ -21,6 +21,8 @@ import type {
   WorkOrderLaborEntry,
   WorkOrderStoppage,
   WorkOrderThirdPartyService,
+  FailureRecord,
+  FailureSeverity,
 } from "./types";
 
 export interface ListWorkOrdersParams {
@@ -50,12 +52,25 @@ export interface WorkOrderInput {
   instrumentId: string;
   type: MaintenanceOrderType;
   priority?: MaintenancePriority;
+  title?: string | null;
   description: string;
+  costCenterId?: string | null;
   technicianId?: string | null;
+  assignedResourceId?: string | null;
   scheduledDate?: string | null;
+  plannedStart?: string | null;
+  plannedEnd?: string | null;
+  estimatedHours?: number | null;
   failureCodeId?: string | null;
   laborHours?: number | null;
   observations?: string | null;
+  executionNotes?: string | null;
+  closureNotes?: string | null;
+  failureStartedAt?: string | null;
+  failureEndedAt?: string | null;
+  failureSeverity?: FailureSeverity | null;
+  failureRootCause?: string | null;
+  productionLoss?: number | null;
   checklist?: { description: string }[];
 }
 
@@ -78,8 +93,15 @@ export async function startMaintenanceWorkOrder(id: string): Promise<Maintenance
   return data;
 }
 
-export async function completeMaintenanceWorkOrder(id: string, meterReadingAtExecution?: number): Promise<MaintenanceWorkOrder> {
-  const { data } = await api.post<MaintenanceWorkOrder>(`/maintenance-work-orders/${id}/complete`, { meterReadingAtExecution });
+export async function completeMaintenanceWorkOrder(
+  id: string,
+  meterReadingAtExecution?: number,
+  closureNotes?: string,
+): Promise<MaintenanceWorkOrder> {
+  const { data } = await api.post<MaintenanceWorkOrder>(`/maintenance-work-orders/${id}/complete`, {
+    meterReadingAtExecution,
+    closureNotes,
+  });
   return data;
 }
 
@@ -242,5 +264,19 @@ export async function scheduleMaintenanceWorkOrder(
   input: { scheduledDate: string | null; assignedResourceId: string | null },
 ): Promise<ScheduleCard> {
   const { data } = await api.patch<ScheduleCard>(`/maintenance-work-orders/${id}/schedule`, input);
+  return data;
+}
+
+/** OS corretivas com registro de falha preenchido - alimenta a tela de Falhas/RCA. */
+export async function listFailureRecords(params: {
+  clientId?: string;
+  instrumentId?: string;
+  severity?: FailureSeverity;
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  pageSize?: number;
+} = {}): Promise<PagedResult<FailureRecord>> {
+  const { data } = await api.get<PagedResult<FailureRecord>>("/maintenance-work-orders/registros-de-falha", { params });
   return data;
 }

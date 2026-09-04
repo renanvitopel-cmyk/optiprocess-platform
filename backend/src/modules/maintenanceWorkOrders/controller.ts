@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { MaintenanceOrderType, MaintenancePriority, MaintenanceOrderStatus, ChecklistItemResult, AttachmentCategory, LaborHourType } from "@prisma/client";
+import { MaintenanceOrderType, MaintenancePriority, MaintenanceOrderStatus, ChecklistItemResult, AttachmentCategory, LaborHourType, FailureSeverity } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -17,6 +17,9 @@ const detailInclude = {
   plan: { select: { id: true, name: true } },
   technician: { select: { id: true, name: true } },
   assignedResource: { select: { id: true, name: true, type: true } },
+  costCenter: { select: { id: true, name: true, code: true } },
+  approvedBy: { select: { id: true, name: true } },
+  closedBy: { select: { id: true, name: true } },
   failureCode: true,
   checklist: { orderBy: { sortOrder: "asc" as const } },
   // Rastreabilidade fim-a-fim: de onde esta OS veio (SS que a originou, ou OS preventiva
@@ -37,6 +40,8 @@ const detailInclude = {
     orderBy: { createdAt: "asc" as const },
   },
   stoppages: { include: { reason: { select: { id: true, name: true } } }, orderBy: { startedAt: "asc" as const } },
+  // Investigacoes abertas a partir da falha registrada nesta OS.
+  rootCauseAnalyses: { where: { deletedAt: null }, select: { id: true, status: true }, orderBy: { createdAt: "desc" as const } },
 };
 
 export const listMaintenanceWorkOrders = asyncHandler(async (req: Request, res: Response) => {
@@ -98,15 +103,65 @@ const workOrderSchema = z.object({
   instrumentId: z.string().uuid(),
   type: z.nativeEnum(MaintenanceOrderType),
   priority: z.nativeEnum(MaintenancePriority).optional(),
+  title: z.string().max(200).nullish(),
   description: z.string().min(2, "Descreva o servico."),
+  costCenterId: z.string().uuid().nullish(),
   technicianId: z.string().uuid().nullish(),
   assignedResourceId: z.string().uuid().nullish(),
   scheduledDate: z.coerce.date().nullish(),
+  plannedStart: z.coerce.date().nullish(),
+  plannedEnd: z.coerce.date().nullish(),
+  estimatedHours: z.coerce.number().nonnegative().nullish(),
   failureCodeId: z.string().uuid().nullish(),
   laborHours: z.coerce.number().nullish(),
   observations: z.string().nullish(),
+  executionNotes: z.string().nullish(),
+  closureNotes: z.string().nullish(),
+  // Registro de falha - so tem sentido em OS corretiva (validado abaixo).
+  failureStartedAt: z.coerce.date().nullish(),
+  failureEndedAt: z.coerce.date().nullish(),
+  failureSeverity: z.nativeEnum(FailureSeverity).nullish(),
+  failureRootCause: z.string().nullish(),
+  productionLoss: z.coerce.number().nonnegative().nullish(),
   checklist: z.array(checklistItemInput).optional(),
 });
+
+/** Centro de custo da OS tem que ser da mesma empresa. */
+async function assertCostCenterBelongsToClient(costCenterId: string | null | undefined, clientId: string) {
+  if (!costCenterId) return;
+  const cc = await prisma.costCenter.findFirst({ where: { id: costCenterId, deletedAt: null }, select: { clientId: true } });
+  if (!cc) throw new NotFoundError("Centro de custo");
+  if (cc.clientId !== clientId) throw new ValidationError("Esse centro de custo e' de outra empresa.");
+}
+
+/** O registro de falha pertence a corretiva: numa preventiva/preditiva ele nao descreve
+ * nada real e sujaria o Pareto de falhas. */
+function assertRegistroDeFalhaCoerente(
+  tipo: MaintenanceOrderType | undefined,
+  dados: { failureStartedAt?: Date | null; failureEndedAt?: Date | null; failureSeverity?: FailureSeverity | null; failureRootCause?: string | null; productionLoss?: number | null },
+) {
+  const preencheu =
+    dados.failureStartedAt != null ||
+    dados.failureEndedAt != null ||
+    dados.failureSeverity != null ||
+    (dados.failureRootCause != null && dados.failureRootCause !== "") ||
+    dados.productionLoss != null;
+
+  if (preencheu && tipo && tipo !== "CORRECTIVE") {
+    throw new ValidationError("O registro de falha so se aplica a ordem corretiva.");
+  }
+  if (dados.failureStartedAt && dados.failureEndedAt && dados.failureEndedAt < dados.failureStartedAt) {
+    throw new ValidationError("O termino da falha nao pode ser antes do inicio da falha.");
+  }
+}
+
+/** Termino planejado antes do inicio nao e' erro de digitacao aceitavel: vira prazo
+ * negativo em qualquer relatorio de aderencia. */
+function assertJanelaCoerente(inicio?: Date | null, fim?: Date | null) {
+  if (inicio && fim && fim < inicio) {
+    throw new ValidationError("O termino planejado nao pode ser antes do inicio planejado.");
+  }
+}
 
 /** A mao de obra atribuida a OS tem que ser da mesma empresa da OS. */
 async function assertResourceBelongsToClient(assignedResourceId: string | null | undefined, clientId: string) {
@@ -132,12 +187,15 @@ export const createMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
   const data = workOrderSchema.parse(req.body);
   const clientId = resolveClientId(req, data.clientId);
 
-  const instrument = await prisma.instrument.findFirst({ where: { id: data.instrumentId, deletedAt: null }, select: { clientId: true } });
+  const instrument = await prisma.instrument.findFirst({ where: { id: data.instrumentId, deletedAt: null }, select: { clientId: true, costCenterId: true } });
   if (!instrument) throw new NotFoundError("Ativo");
   if (instrument.clientId !== clientId) throw new ValidationError("Esse ativo pertence a outra empresa.");
 
   await assertFailureCodeUsable(data.failureCodeId, clientId);
   await assertResourceBelongsToClient(data.assignedResourceId, clientId);
+  await assertCostCenterBelongsToClient(data.costCenterId, clientId);
+  assertJanelaCoerente(data.plannedStart, data.plannedEnd);
+  assertRegistroDeFalhaCoerente(data.type, data);
 
   const number = await nextClientMaintenanceOrderNumber(clientId);
   const { checklist, ...orderData } = data;
@@ -147,6 +205,9 @@ export const createMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
       ...orderData,
       clientId,
       number,
+      // Sem centro de custo informado, a OS herda o do ativo - e' onde o custo cai por
+      // padrao. Fica gravado na OS para nao mudar retroativamente se o ativo for movido.
+      costCenterId: orderData.costCenterId ?? instrument.costCenterId,
       status: "OPEN",
       createdById: req.user?.sub,
       checklist: { create: (checklist ?? []).map((c, i) => ({ description: c.description, sortOrder: i })) },
@@ -176,6 +237,15 @@ export const updateMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
 
   await assertFailureCodeUsable(data.failureCodeId, existing.clientId);
   await assertResourceBelongsToClient(data.assignedResourceId, existing.clientId);
+  await assertCostCenterBelongsToClient(data.costCenterId, existing.clientId);
+  assertJanelaCoerente(data.plannedStart ?? existing.plannedStart, data.plannedEnd ?? existing.plannedEnd);
+  assertRegistroDeFalhaCoerente(data.type ?? existing.type, {
+    failureStartedAt: data.failureStartedAt ?? existing.failureStartedAt,
+    failureEndedAt: data.failureEndedAt ?? existing.failureEndedAt,
+    failureSeverity: data.failureSeverity ?? existing.failureSeverity,
+    failureRootCause: data.failureRootCause ?? existing.failureRootCause,
+    productionLoss: data.productionLoss ?? existing.productionLoss,
+  });
 
   const { checklist, ...orderData } = data;
   if (req.user?.role === "CLIENT") delete orderData.clientId;
@@ -251,16 +321,22 @@ export const completeMaintenanceWorkOrder = asyncHandler(async (req: Request, re
     throw new ValidationError("Resolva todos os itens do checklist antes de concluir a ordem.");
   }
 
-  const { meterReadingAtExecution } = z
-    .object({ meterReadingAtExecution: z.coerce.number().nullish() })
+  const { meterReadingAtExecution, closureNotes } = z
+    .object({ meterReadingAtExecution: z.coerce.number().nullish(), closureNotes: z.string().nullish() })
     .parse(req.body ?? {});
 
+  const agora = new Date();
   const workOrder = await prisma.maintenanceWorkOrder.update({
     where: { id: existing.id },
     data: {
-      completedAt: new Date(),
+      completedAt: agora,
       status: "COMPLETED",
-      startedAt: existing.startedAt ?? new Date(),
+      startedAt: existing.startedAt ?? agora,
+      // Quem encerrou e quando - a OS deixa de depender do log de auditoria para responder
+      // "quem fechou isso?".
+      closedById: req.user?.sub,
+      closedAt: agora,
+      ...(closureNotes != null ? { closureNotes } : {}),
       ...(meterReadingAtExecution != null ? { meterReadingAtExecution } : {}),
     },
     include: detailInclude,
@@ -897,6 +973,71 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
  * responder "quais falhas mais pesam" de tres angulos diferentes sem precisar de SQL
  * agregado (volume pequeno o bastante pra fazer em memoria, mesmo padrao do dashboard).
  */
+/** Registros de falha: as OS corretivas em que o tecnico preencheu o que aconteceu.
+ * Nao ha tabela separada - a OS corretiva e' o registro do evento, e esta lista so a
+ * apresenta pelo angulo da falha (quando comecou, quanto parou, gravidade, causa). */
+export const listFailureRecords = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const { clientId, instrumentId, dateFrom, dateTo, severity } = req.query as {
+    clientId?: string; instrumentId?: string; dateFrom?: string; dateTo?: string; severity?: FailureSeverity;
+  };
+  const pageParams = parsePageParams(req.query as Record<string, unknown>);
+
+  const where = {
+    deletedAt: null,
+    type: "CORRECTIVE" as const,
+    ...clientScopeFilter(req),
+    ...(clientId ? { clientId } : {}),
+    ...(instrumentId ? { instrumentId } : {}),
+    ...(severity ? { failureSeverity: severity } : {}),
+    // "Registro preenchido" = o tecnico disse ao menos quando a falha comecou ou o quanto
+    // ela pesou. Sem isso a OS ainda nao conta uma falha, so um servico corretivo.
+    OR: [{ failureStartedAt: { not: null } }, { failureSeverity: { not: null } }],
+    ...(dateFrom || dateTo
+      ? { failureStartedAt: { ...(dateFrom ? { gte: new Date(dateFrom) } : {}), ...(dateTo ? { lte: new Date(dateTo) } : {}) } }
+      : {}),
+  };
+
+  const [items, total] = await Promise.all([
+    prisma.maintenanceWorkOrder.findMany({
+      where,
+      orderBy: [{ failureStartedAt: "desc" }, { createdAt: "desc" }],
+      ...toSkipTake(pageParams),
+      select: {
+        id: true,
+        number: true,
+        title: true,
+        description: true,
+        priority: true,
+        status: true,
+        failureStartedAt: true,
+        failureEndedAt: true,
+        failureSeverity: true,
+        failureRootCause: true,
+        productionLoss: true,
+        executionNotes: true,
+        failureCode: { select: { id: true, code: true, description: true } },
+        instrument: { select: { id: true, tag: true, description: true, type: true, area: { select: { id: true, name: true } } } },
+        client: { select: { id: true, companyName: true, tradeName: true } },
+        rootCauseAnalyses: { select: { id: true, status: true }, where: { deletedAt: null } },
+      },
+    }),
+    prisma.maintenanceWorkOrder.count({ where }),
+  ]);
+
+  // Tempo parado sai da propria janela da falha - nao e' um numero digitado que possa
+  // divergir das datas informadas.
+  const comDowntime = items.map((o) => ({
+    ...o,
+    downtimeHours:
+      o.failureStartedAt && o.failureEndedAt
+        ? (o.failureEndedAt.getTime() - o.failureStartedAt.getTime()) / 3600000
+        : null,
+  }));
+
+  res.json(buildPagedResult(comDowntime, total, pageParams));
+});
+
 export const getFailureAnalysis = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const { clientId, dateFrom, dateTo } = req.query as { clientId?: string; dateFrom?: string; dateTo?: string };

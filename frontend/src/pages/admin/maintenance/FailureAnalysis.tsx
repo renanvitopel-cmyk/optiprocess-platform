@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getFailureAnalysis } from "../../../api/maintenanceWorkOrders";
+import { getFailureAnalysis, listFailureRecords } from "../../../api/maintenanceWorkOrders";
 import { listClients } from "../../../api/clients";
-import type { FailureAnalysisBucket } from "../../../api/types";
+import type { FailureAnalysisBucket, FailureSeverity } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { StatCard } from "../../../components/StatCard";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { EmptyState } from "../../../components/EmptyState";
-import { clientDisplayName, formatCurrency } from "../../../lib/format";
+import { clientDisplayName, formatCurrency, formatDateTime } from "../../../lib/format";
+import { Link } from "react-router-dom";
 import { useCmms } from "../../../lib/cmms";
 import { AlertTriangle, Siren, HelpCircle, Repeat } from "lucide-react";
 
@@ -28,12 +29,24 @@ export default function FailureAnalysis() {
     queryFn: () => getFailureAnalysis({ clientId: clientId || undefined }),
   });
 
+  // Os registros que os tecnicos preencheram nas OS corretivas. O Pareto acima diz "o que
+  // mais pesa"; esta lista diz "o que aconteceu, uma falha por vez".
+  const { data: registros } = useQuery({
+    queryKey: ["registros-de-falha", clientId],
+    queryFn: () => listFailureRecords({ clientId: clientId || undefined, pageSize: 25 }),
+  });
+
   return (
     <div>
       <PageHeader
-        title="Pareto de falhas"
-        description="OS corretivas dos ultimos 90 dias, agrupadas por codigo de falha, ativo e area"
-        breadcrumbs={[{ label: "RLP Maintenance CMMS", to: base }, { label: "Pareto de falhas" }]}
+        title="Falhas e RCA"
+        description="O que quebrou, quanto parou e o que ja foi investigado - a partir das OS corretivas"
+        breadcrumbs={[{ label: "RLP Maintenance CMMS", to: base }, { label: "Falhas e RCA" }]}
+        actions={
+          <Link to={`${base}/manutencao/rca`} className="btn-outline">
+            Todas as analises (RCA)
+          </Link>
+        }
       />
 
       {!isClient && (
@@ -67,9 +80,79 @@ export default function FailureAnalysis() {
           </div>
         </>
       )}
+
+      <div className="mt-8">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold text-navy-900">Registros de falha</h2>
+          <p className="text-xs text-graphite-500">Preenchidos pelo tecnico na OS corretiva.</p>
+        </div>
+
+        {!registros || registros.items.length === 0 ? (
+          <EmptyState
+            title="Nenhum registro de falha ainda"
+            description="Numa OS corretiva, a aba Execucao tem o bloco 'Registro da falha' - o que for preenchido la aparece aqui."
+          />
+        ) : (
+          <div className="card divide-y divide-gray-100">
+            {registros.items.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-start justify-between gap-3 p-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link to={`${base}/ordens/${r.id}`} className="font-medium text-navy-800 hover:underline">
+                      {r.number}
+                    </Link>
+                    <span className="text-sm text-graphite-700">{r.title ?? r.description}</span>
+                    {r.failureSeverity && (
+                      <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${SEVERIDADE[r.failureSeverity].tom}`}>
+                        {SEVERIDADE[r.failureSeverity].rotulo}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-graphite-500">
+                    {r.instrument?.tag ?? "sem TAG"}
+                    {r.instrument?.area ? ` - ${r.instrument.area.name}` : ""}
+                    {r.failureStartedAt ? ` - ${formatDateTime(r.failureStartedAt)}` : ""}
+                    {r.failureCode ? ` - ${r.failureCode.code}` : ""}
+                  </p>
+                  {r.failureRootCause && (
+                    <p className="mt-1 text-sm text-graphite-600">Causa apurada: {r.failureRootCause}</p>
+                  )}
+                </div>
+
+                <div className="shrink-0 text-right">
+                  {/* Sem as duas datas nao da pra dizer quanto parou - e' melhor dizer isso
+                      do que estampar "0h" como se a linha nao tivesse parado. */}
+                  <p className="text-sm font-semibold text-navy-900">
+                    {r.downtimeHours != null ? `${r.downtimeHours.toFixed(1)}h parada` : "Parada nao informada"}
+                  </p>
+                  {r.productionLoss != null && (
+                    <p className="text-xs text-graphite-500">Perda: {r.productionLoss}</p>
+                  )}
+                  {r.rootCauseAnalyses && r.rootCauseAnalyses.length > 0 ? (
+                    <Link to={`${base}/manutencao/rca/${r.rootCauseAnalyses[0].id}`} className="text-xs font-medium text-navy-700 hover:underline">
+                      Ver RCA
+                    </Link>
+                  ) : (
+                    <Link to={`${base}/manutencao/rca/novo?workOrderId=${r.id}`} className="text-xs font-medium text-navy-700 hover:underline">
+                      Abrir RCA
+                    </Link>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
+const SEVERIDADE: Record<FailureSeverity, { rotulo: string; tom: string }> = {
+  LOW: { rotulo: "Baixa", tom: "border-gray-200 bg-gray-50 text-graphite-600" },
+  MODERATE: { rotulo: "Moderada", tom: "border-yellow-200 bg-yellow-50 text-safety-yellow-dark" },
+  HIGH: { rotulo: "Alta", tom: "border-orange-200 bg-orange-50 text-orange-700" },
+  CRITICAL: { rotulo: "Critica", tom: "border-red-200 bg-red-50 text-safety-red" },
+};
 
 function ParetoSection({ title, buckets }: { title: string; buckets: FailureAnalysisBucket[] }) {
   const max = Math.max(1, ...buckets.map((b) => b.count));

@@ -28,7 +28,7 @@ import { listSpareParts } from "../../../api/spareParts";
 import { listAssetParts } from "../../../api/instruments";
 import { listLaborResources } from "../../../api/laborResources";
 import { listStoppageReasons } from "../../../api/stoppageReasons";
-import type { ChecklistItemResult, MaintenanceOrderStatus, LaborHourType, MaintenanceWorkOrder } from "../../../api/types";
+import type { ChecklistItemResult, MaintenanceOrderStatus, LaborHourType, MaintenanceWorkOrder, FailureSeverity } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -61,6 +61,7 @@ export default function WorkOrderDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [closureNotes, setClosureNotes] = useState("");
   const [partSparePartId, setPartSparePartId] = useState("");
   const [partQty, setPartQty] = useState(1);
   const [laborResourceId, setLaborResourceId] = useState("");
@@ -143,10 +144,32 @@ export default function WorkOrderDetail() {
     }
   }
 
+  /** Grava o relato da execucao sem sair da aba - e' texto longo, salvar ao sair do campo
+   * evita perder o que foi digitado. */
+  async function handleSalvarRelato(valores: { executionNotes?: string | null }) {
+    try {
+      await updateMaintenanceWorkOrder(id, valores);
+      invalidate();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    }
+  }
+
+  /** Grava um campo do registro de falha. Sao poucos campos e o tecnico preenche no meio
+   * do atendimento - salvar ao sair do campo evita um botao "salvar" a mais. */
+  async function handleSalvarFalha(valores: Parameters<typeof updateMaintenanceWorkOrder>[1]) {
+    try {
+      await updateMaintenanceWorkOrder(id, valores);
+      invalidate();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    }
+  }
+
   async function handleComplete() {
     setBusy(true);
     try {
-      await completeMaintenanceWorkOrder(id);
+      await completeMaintenanceWorkOrder(id, undefined, closureNotes.trim() || undefined);
       notify("success", "OS concluida.");
       invalidate();
     } catch (error) {
@@ -388,6 +411,22 @@ export default function WorkOrderDetail() {
   if (isLoading || !workOrder) return <FullPageSpinner />;
 
   const isCompleted = workOrder.status === "COMPLETED";
+
+  const janelaPlanejada =
+    workOrder.plannedStart || workOrder.plannedEnd
+      ? `${workOrder.plannedStart ? formatDateTime(workOrder.plannedStart) : "?"} ate ${workOrder.plannedEnd ? formatDateTime(workOrder.plannedEnd) : "?"}`
+      : "-";
+
+  // Horas realizadas: a soma dos apontamentos e' a fonte de verdade quando existe; o campo
+  // solto da OS so vale para as OS antigas, anteriores ao apontamento por pessoa.
+  const horasApontadas = (workOrder.laborEntries ?? []).reduce((soma, e) => soma + e.hours, 0);
+  const horasRealizadas = horasApontadas > 0 ? horasApontadas : workOrder.laborHours ?? null;
+
+  // Tempo parado sai da janela informada - nunca e' digitado, para nao divergir das datas.
+  const downtimeDaFalha =
+    workOrder.failureStartedAt && workOrder.failureEndedAt
+      ? (new Date(workOrder.failureEndedAt).getTime() - new Date(workOrder.failureStartedAt).getTime()) / 3600000
+      : null;
   const hasTraceability = !!workOrder.serviceRequest || !!workOrder.originWorkOrder || (workOrder.spawnedWorkOrders?.length ?? 0) > 0;
 
   // Custo desta OS - mesmo criterio do resumo por ativo (so soma o que tem custo
@@ -405,7 +444,7 @@ export default function WorkOrderDetail() {
   return (
     <div>
       <PageHeader
-        title={workOrder.number}
+        title={workOrder.title ? `${workOrder.number} - ${workOrder.title}` : workOrder.number}
         description={isClient ? `Ativo: ${workOrder.instrument?.tag ?? "-"}` : `${clientDisplayName(workOrder.client)} - Ativo: ${workOrder.instrument?.tag ?? "-"}`}
         breadcrumbs={[
           { label: "RLP Maintenance CMMS", to: base },
@@ -495,15 +534,27 @@ export default function WorkOrderDetail() {
             />
             <Info label="Programada para" value={workOrder.scheduledDate ? formatDateTime(workOrder.scheduledDate).slice(0, 10) : "-"} />
             <Info label="Codigo de falha" value={workOrder.failureCode ? `${workOrder.failureCode.code} - ${workOrder.failureCode.description}` : "-"} />
+            <Info label="Centro de custo" value={workOrder.costCenter ? (workOrder.costCenter.code ? `${workOrder.costCenter.code} - ${workOrder.costCenter.name}` : workOrder.costCenter.name) : "-"} />
+            <Info label="Janela planejada" value={janelaPlanejada} />
             <Info label="Iniciada em" value={formatDateTime(workOrder.startedAt)} />
             <Info label="Concluida em" value={formatDateTime(workOrder.completedAt)} />
-            <Info label="Horas trabalhadas" value={workOrder.laborHours ? `${workOrder.laborHours}h` : "-"} />
+            {/* Estimado e realizado lado a lado: e' a comparacao que diz se o plano esta
+                dimensionado certo. */}
+            <Info label="Horas estimadas" value={workOrder.estimatedHours != null ? `${workOrder.estimatedHours}h` : "-"} />
+            <Info label="Horas trabalhadas" value={horasRealizadas != null ? `${horasRealizadas}h` : "-"} />
             <Info label="Plano de origem" value={workOrder.plan?.name ?? "Avulsa"} />
+            {workOrder.closedBy && <Info label="Encerrada por" value={`${workOrder.closedBy.name}${workOrder.closedAt ? ` em ${formatDateTime(workOrder.closedAt)}` : ""}`} />}
           </dl>
           {workOrder.observations && (
             <div>
               <p className="text-xs uppercase tracking-wide text-graphite-400">Observacoes</p>
               <p className="mt-1 text-sm text-graphite-700">{workOrder.observations}</p>
+            </div>
+          )}
+          {workOrder.closureNotes && (
+            <div>
+              <p className="text-xs uppercase tracking-wide text-graphite-400">Observacoes de encerramento</p>
+              <p className="mt-1 text-sm text-graphite-700">{workOrder.closureNotes}</p>
             </div>
           )}
         </div>
@@ -643,6 +694,137 @@ export default function WorkOrderDetail() {
             </ul>
           )}
         </div>
+        {/* Registro de falha: so na corretiva. E' o que o tecnico que atendeu a quebra sabe
+            e ninguem mais vai lembrar depois - por isso fica junto do atendimento, e nao
+            numa tela separada que alguem teria que abrir depois. */}
+        {workOrder.type === "CORRECTIVE" && (
+          <div className="card space-y-4 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-semibold text-navy-900">Registro da falha</h2>
+                <p className="text-xs text-graphite-500">
+                  Alimenta o Pareto de falhas e a tela de Falhas/RCA. O tempo parado sai das datas abaixo.
+                </p>
+              </div>
+              {downtimeDaFalha != null && (
+                <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-safety-red">
+                  Parada de {downtimeDaFalha.toFixed(1)}h
+                </span>
+              )}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-graphite-700">Inicio da falha</span>
+                <input
+                  type="datetime-local"
+                  className="input"
+                  defaultValue={workOrder.failureStartedAt?.slice(0, 16) ?? ""}
+                  disabled={!canManage || isCompleted}
+                  onBlur={(e) => handleSalvarFalha({ failureStartedAt: e.target.value || null })}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-graphite-700">Termino da falha</span>
+                <input
+                  type="datetime-local"
+                  className="input"
+                  defaultValue={workOrder.failureEndedAt?.slice(0, 16) ?? ""}
+                  disabled={!canManage || isCompleted}
+                  onBlur={(e) => handleSalvarFalha({ failureEndedAt: e.target.value || null })}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-graphite-700">Gravidade</span>
+                <select
+                  className="input"
+                  defaultValue={workOrder.failureSeverity ?? ""}
+                  disabled={!canManage || isCompleted}
+                  onChange={(e) => handleSalvarFalha({ failureSeverity: (e.target.value || null) as FailureSeverity | null })}
+                >
+                  <option value="">Nao informada</option>
+                  <option value="LOW">Baixa - sem parar producao</option>
+                  <option value="MODERATE">Moderada - perda parcial</option>
+                  <option value="HIGH">Alta - linha parada</option>
+                  <option value="CRITICAL">Critica - seguranca ou meio ambiente</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-graphite-700">Perda de producao</span>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  className="input"
+                  placeholder="Estimativa"
+                  defaultValue={workOrder.productionLoss ?? ""}
+                  disabled={!canManage || isCompleted}
+                  onBlur={(e) => handleSalvarFalha({ productionLoss: e.target.value === "" ? null : Number(e.target.value) })}
+                />
+              </label>
+            </div>
+
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-graphite-700">Causa identificada no atendimento</span>
+              <textarea
+                className="input min-h-[70px]"
+                placeholder="O que causou a quebra, no que deu pra apurar na hora."
+                defaultValue={workOrder.failureRootCause ?? ""}
+                disabled={!canManage || isCompleted}
+                onBlur={(e) => {
+                  if (e.target.value !== (workOrder.failureRootCause ?? "")) handleSalvarFalha({ failureRootCause: e.target.value || null });
+                }}
+              />
+            </label>
+
+            {/* A causa acima e' o que deu pra ver na hora. Quando a falha se repete ou o
+                impacto e' grande, a investigacao de verdade e' a RCA. */}
+            <div className="flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 px-4 py-3">
+              {workOrder.rootCauseAnalyses && workOrder.rootCauseAnalyses.length > 0 ? (
+                <p className="text-sm text-graphite-600">
+                  RCA aberta para esta falha.{" "}
+                  <Link to={`${base}/manutencao/rca/${workOrder.rootCauseAnalyses[0].id}`} className="font-medium text-navy-700 hover:underline">
+                    Ver analise
+                  </Link>
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-graphite-600">Falha recorrente ou de grande impacto? Abra uma analise de causa raiz.</p>
+                  <Link to={`${base}/manutencao/rca/novo?workOrderId=${workOrder.id}`} className="btn-outline ml-auto text-sm">
+                    Abrir RCA
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* O relato do servico. Separado das "Observacoes" da abertura: aquilo e' o que se
+            pediu, isto e' o que se fez - misturar os dois apaga o historico. */}
+        <div className="card space-y-3 p-5">
+          <h2 className="font-semibold text-navy-900">Atividade executada</h2>
+          <textarea
+            className="input min-h-[90px]"
+            placeholder="O que foi feito, o que foi trocado, o que ficou pendente."
+            defaultValue={workOrder.executionNotes ?? ""}
+            disabled={!canManage || isCompleted}
+            onBlur={(e) => {
+              if (e.target.value !== (workOrder.executionNotes ?? "")) handleSalvarRelato({ executionNotes: e.target.value || null });
+            }}
+          />
+          {!isCompleted && canManage && (
+            <>
+              <h3 className="pt-1 text-sm font-medium text-graphite-700">Observacoes de encerramento</h3>
+              <textarea
+                className="input min-h-[70px]"
+                placeholder="Combinados, pendencias e o que acompanhar depois - gravado ao concluir a OS."
+                value={closureNotes}
+                onChange={(e) => setClosureNotes(e.target.value)}
+              />
+            </>
+          )}
+        </div>
+
         <div className="card space-y-3 p-5">
           <h2 className="font-semibold text-navy-900">Paradas</h2>
           {canManage && !isCompleted && (

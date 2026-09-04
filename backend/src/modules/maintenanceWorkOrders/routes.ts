@@ -31,6 +31,7 @@ import {
   getWorkOrderAttachmentUrl,
   getMaintenanceDashboard,
   getFailureAnalysis,
+  listFailureRecords,
   getMaintenanceSchedule,
   scheduleMaintenanceWorkOrder,
 } from "./controller";
@@ -41,6 +42,7 @@ maintenanceWorkOrdersRouter.use(requireAuth, requireRole(...CMMS_ROLES));
 
 maintenanceWorkOrdersRouter.get("/dashboard", getMaintenanceDashboard);
 maintenanceWorkOrdersRouter.get("/failure-analysis", getFailureAnalysis);
+maintenanceWorkOrdersRouter.get("/registros-de-falha", listFailureRecords);
 maintenanceWorkOrdersRouter.get("/schedule", getMaintenanceSchedule);
 maintenanceWorkOrdersRouter.get("/", listMaintenanceWorkOrders);
 maintenanceWorkOrdersRouter.get("/:id", getMaintenanceWorkOrder);

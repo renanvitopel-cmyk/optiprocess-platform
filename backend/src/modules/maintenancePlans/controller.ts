@@ -14,7 +14,7 @@ import { reserveSparePart } from "../../lib/inventory";
 
 const detailInclude = {
   client: { select: { id: true, companyName: true, tradeName: true } },
-  instrument: { select: { id: true, type: true, model: true, serialNumber: true, tag: true, description: true, criticality: true } },
+  instrument: { select: { id: true, type: true, model: true, serialNumber: true, tag: true, description: true, criticality: true, costCenterId: true } },
   meter: { select: { id: true, name: true, unit: true, currentValue: true } },
   responsible: { select: { id: true, name: true } },
   specialty: { select: { id: true, name: true } },
@@ -189,6 +189,8 @@ const planSchema = z.object({
   toleranceDaysAfter: z.coerce.number().int().nonnegative().nullish(),
   procedure: z.string().nullish(),
   estimatedLaborHours: z.coerce.number().nonnegative().nullish(),
+  // Procedimento/cuidados do plano - vira a descricao da OS gerada.
+  instructions: z.string().nullish(),
   templateId: z.string().uuid().nullish(),
   parts: z.array(planPartSchema).optional(),
 });
@@ -431,7 +433,12 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const plan = await prisma.maintenancePlan.findFirst({
     where: { id: req.params.id, deletedAt: null },
-    include: { checklistTemplate: { orderBy: { sortOrder: "asc" } }, meter: true, parts: true },
+    include: {
+      checklistTemplate: { orderBy: { sortOrder: "asc" } },
+      meter: true,
+      parts: true,
+      instrument: { select: { costCenterId: true } },
+    },
   });
   if (!plan) throw new NotFoundError("Plano de manutencao");
   assertOwnClient(req, plan.clientId);
@@ -537,12 +544,18 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
       type: "PREVENTIVE",
       status: statusInicial,
       priority: plan.defaultPriority,
-      description: plan.name,
+      title: plan.name,
+      description: plan.instructions?.trim() || plan.name,
+      // Rateio: cai no centro de custo do ativo, como qualquer outra OS dele.
+      costCenterId: plan.instrument?.costCenterId ?? null,
       technicianId: plan.responsibleId,
       // Data programada sugerida: o vencimento do ciclo que esta sendo atendido.
       scheduledDate: plan.nextDueDate,
       meterReadingAtExecution: plan.meter?.currentValue,
-      laborHours: plan.estimatedLaborHours,
+      // Estimativa do plano e' previsao, nao apontamento: laborHours guarda o que foi de
+      // fato trabalhado e nasce vazio (antes ele ja vinha preenchido com a estimativa, o
+      // que dava a OS por executada antes de alguem encostar nela).
+      estimatedHours: plan.estimatedLaborHours,
       observations: observacoesDeGeracao || null,
       createdById: req.user?.sub,
       // O item da OS leva a regra junto (tipo de resposta, faixa, foto): se o plano for

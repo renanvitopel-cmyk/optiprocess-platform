@@ -403,6 +403,8 @@ model User {
   contractsAsResponsible        ServiceContract[]  @relation("ContractResponsible")
   maintenancePlansAsResponsible      MaintenancePlan[]       @relation("MaintenancePlanResponsible")
   maintenanceWorkOrdersAsTechnician  MaintenanceWorkOrder[]  @relation("MaintenanceWorkOrderTechnician")
+  maintenanceWorkOrdersApproved      MaintenanceWorkOrder[]  @relation("MaintenanceWorkOrderApprover")
+  maintenanceWorkOrdersClosed        MaintenanceWorkOrder[]  @relation("MaintenanceWorkOrderCloser")
   serviceRequestsAsRequester    ServiceRequest[]        @relation("ServiceRequestRequester")
   serviceRequestsAsTriage       ServiceRequest[]        @relation("ServiceRequestTriage")
   rcaAsResponsible              RootCauseAnalysis[]     @relation("RcaResponsible")
@@ -1347,6 +1349,7 @@ model CostCenter {
   @@unique([clientId, name])
   @@index([clientId])
   @@map("cost_centers")
+  maintenanceWorkOrders MaintenanceWorkOrder[]
 }
 
 model FailureCode {
@@ -1550,6 +1553,9 @@ model MaintenancePlan {
   requiresApproval         Boolean @default(false)
   // Uma OS por ativo (padrao) ou uma OS agrupando os ativos da familia.
   groupWorkOrder Boolean @default(false)
+  // Instrucoes gerais do plano (procedimento, cuidados, referencia de manual) - texto
+  // livre que acompanha toda OS gerada a partir dele.
+  instructions String?
   materialPolicy MaterialPolicy @default(RESERVE_AUTO)
   // Gatilho por condicao: ponto de medicao que, ao entrar em alarme, gera a OS do plano.
   conditionMeterId String?
@@ -1680,6 +1686,15 @@ model MaintenancePlanChecklistItem {
 }
 
 // Ordem de Manutencao ("OM") - entidade propria do CMMS, separada de ServiceOrder.
+// Impacto da falha no processo - preenchido por quem atendeu a quebra, no momento em que
+// atendeu. Diferente da prioridade da OS (que e' sobre urgencia de atender).
+enum FailureSeverity {
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+}
+
 model MaintenanceWorkOrder {
   id           String                 @id @default(uuid())
   // Numeracao propria por cliente ("OS-1", "OS-2"...) em vez de sequencia global -
@@ -1694,7 +1709,17 @@ model MaintenanceWorkOrder {
   type         MaintenanceOrderType
   priority     MaintenancePriority    @default(MEDIUM)
   status       MaintenanceOrderStatus @default(OPEN)
+  // Titulo curto ("Troca do rolamento do mancal LA") - e' o que aparece nas listas e no
+  // quadro de programacao. Opcional porque as OS antigas so tinham a descricao; quando
+  // vazio, as telas caem na descricao.
+  title        String?
+  // Descricao/sintoma: o relato do problema ou do servico a fazer.
   description  String
+  // Rateio contabil desta OS. Nasce do centro de custo do ativo, mas fica gravado aqui
+  // porque uma OS pode ser rateada em outro centro (ex.: obra, projeto) sem que isso mude
+  // o cadastro do ativo.
+  costCenterId String?
+  costCenter   CostCenter?            @relation(fields: [costCenterId], references: [id])
   technicianId String?
   technician   User?                  @relation("MaintenanceWorkOrderTechnician", fields: [technicianId], references: [id])
   // Quem vai executar, vindo do catalogo de mao de obra do proprio cliente - e' o eixo
@@ -1703,6 +1728,13 @@ model MaintenanceWorkOrder {
   assignedResourceId String?
   assignedResource   LaborResource?     @relation("WorkOrderAssignedResource", fields: [assignedResourceId], references: [id])
   scheduledDate DateTime?
+  // Janela planejada: quando o servico deve comecar e terminar. scheduledDate continua
+  // sendo o dia em que a OS aparece no quadro de programacao; estes dois dizem o horario
+  // combinado e permitem comparar planejado x realizado.
+  plannedStart DateTime?
+  plannedEnd   DateTime?
+  // Quanto se espera gastar de mao de obra. Copiado do plano quando a OS e' gerada.
+  estimatedHours Float?
   // Alimentam MTTR (tempo de reparo) e disponibilidade.
   startedAt    DateTime?
   completedAt  DateTime?
@@ -1711,6 +1743,30 @@ model MaintenanceWorkOrder {
   meterReadingAtExecution Float?
   laborHours   Float?
   observations String?
+  // O que foi de fato executado, escrito por quem executou. Numa OS corretiva, e' tambem
+  // a acao corretiva tomada sobre a falha - por isso nao existe um campo separado para ela.
+  executionNotes String?
+  // --- Registro de falha (so faz sentido em OS corretiva) ---------------------------
+  // Preenchido pelo tecnico que atendeu a quebra. Fica na propria OS, e nao numa tabela
+  // separada, porque a OS corretiva ja e' o registro do evento: duplicar viraria duas
+  // versoes da mesma falha. A investigacao aprofundada (5 porques) continua sendo a RCA,
+  // que se abre a partir daqui quando o caso merece.
+  failureStartedAt DateTime?
+  failureEndedAt   DateTime?
+  failureSeverity  FailureSeverity?
+  // Causa imediata identificada no atendimento. Uma causa raiz de verdade sai da RCA.
+  failureRootCause String?
+  // Perda de producao estimada, na unidade que a empresa usa (pecas, toneladas, horas).
+  productionLoss   Float?
+  // Registro do encerramento: o que ficou pendente, o que foi combinado, o que observar.
+  closureNotes   String?
+  // Quem liberou a OS para execucao (quando o plano exige aprovacao) e quem a encerrou.
+  approvedById String?
+  approvedBy   User?     @relation("MaintenanceWorkOrderApprover", fields: [approvedById], references: [id])
+  approvedAt   DateTime?
+  closedById   String?
+  closedBy     User?     @relation("MaintenanceWorkOrderCloser", fields: [closedById], references: [id])
+  closedAt     DateTime?
   // Preenchido quando a OS foi aberta sozinha por uma leitura de medidor fora da faixa -
   // e' o que torna "Preditiva" uma manutencao de verdade, nao so uma opcao no formulario.
   triggeredByMeterId String?
@@ -1753,6 +1809,7 @@ model MaintenanceWorkOrder {
   @@index([originWorkOrderId])
   @@index([assignedResourceId])
   @@index([scheduledDate])
+  @@index([costCenterId])
   @@map("maintenance_work_orders")
 }
 

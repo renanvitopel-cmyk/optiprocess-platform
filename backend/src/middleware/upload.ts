@@ -1,4 +1,5 @@
 import multer from "multer";
+import { ValidationError } from "../utils/errors";
 
 const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
 
@@ -10,7 +11,9 @@ function fileFilterFor(allowed: string[]) {
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error(`Tipo de arquivo nao permitido: ${file.mimetype}`));
+      // ValidationError (e nao Error puro): assim o tratador devolve 422 com a mensagem
+      // para quem enviou, em vez de um 500 generico.
+      cb(new ValidationError(`Tipo de arquivo nao permitido: ${file.mimetype}. Aceitos: ${allowed.join(", ")}.`));
     }
   };
 }

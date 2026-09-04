@@ -11,6 +11,7 @@ import { ClientPicker } from "../../../components/ClientPicker";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
 import { getRootCauseAnalysis, createRootCauseAnalysis, updateRootCauseAnalysis, deleteRootCauseAnalysis } from "../../../api/rootCauseAnalyses";
+import { getMaintenanceWorkOrder } from "../../../api/maintenanceWorkOrders";
 import { RcaAttachments } from "../../../components/RcaAttachments";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
@@ -20,6 +21,7 @@ import { useCmms } from "../../../lib/cmms";
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
   instrumentId: z.string().uuid().optional().or(z.literal("")),
+  workOrderId: z.string().uuid().optional().or(z.literal("")),
   problem: z.string().min(2, "Descreva o problema."),
   participants: z.string().optional(),
   why1: z.string().optional(),
@@ -55,11 +57,12 @@ export default function RcaForm() {
     enabled: isEdit,
   });
 
-  const { register, handleSubmit, watch, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       clientId: ownClientId ?? searchParams.get("clientId") ?? "",
       instrumentId: searchParams.get("instrumentId") ?? "",
+      workOrderId: searchParams.get("workOrderId") ?? "",
       status: "OPEN",
     },
   });
@@ -70,6 +73,7 @@ export default function RcaForm() {
       reset({
         clientId: existing.clientId,
         instrumentId: existing.instrumentId ?? "",
+        workOrderId: existing.workOrderId ?? "",
         problem: existing.problem,
         participants: existing.participants ?? "",
         why1: existing.why1 ?? "",
@@ -89,11 +93,29 @@ export default function RcaForm() {
     }
   }, [existing, reset]);
 
+  // Aberta a partir de uma OS corretiva: o problema, o ativo e a causa apurada no
+  // atendimento ja vem preenchidos - a RCA comeca de onde o tecnico parou, em vez de
+  // pedir que alguem redigite o que ja esta na OS.
+  const origemId = searchParams.get("workOrderId");
+  const { data: origem } = useQuery({
+    queryKey: ["rca-origem-os", origemId],
+    queryFn: () => getMaintenanceWorkOrder(origemId as string),
+    enabled: !isEdit && !!origemId,
+  });
+  useEffect(() => {
+    if (!origem) return;
+    setValue("clientId", origem.clientId);
+    setValue("instrumentId", origem.instrumentId);
+    setValue("problem", `OS ${origem.number} - ${origem.title ?? origem.description}`);
+    if (origem.failureRootCause) setValue("why1", origem.failureRootCause);
+  }, [origem, setValue]);
+
   async function onSubmit(values: FormValues) {
     try {
       const payload = {
         ...values,
         instrumentId: values.instrumentId || null,
+        workOrderId: values.workOrderId || null,
         responsibleId: values.responsibleId || null,
         dueDate: values.dueDate || null,
         effectivenessVerifiedAt: values.effectivenessVerifiedAt || null,

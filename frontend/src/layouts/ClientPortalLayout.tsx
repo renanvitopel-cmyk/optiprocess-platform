@@ -32,22 +32,34 @@ export function ClientPortalLayout() {
 
   const nav = (isCollapsed: boolean) => (
     <nav className="flex flex-col gap-0.5 px-3 py-4">
-      {portalNav.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          end={item.to === "/portal" || item.exact}
-          onClick={() => setMobileOpen(false)}
-          title={isCollapsed ? item.label : undefined}
-          className={({ isActive }) =>
-            `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${isCollapsed ? "justify-center" : ""} ${
-              isActive ? "bg-navy-800 text-safety-yellow" : "text-navy-200 hover:bg-navy-800/60 hover:text-white"
-            }`
-          }
-        >
-          <item.icon className="h-4.5 w-4.5 shrink-0" />
-          {!isCollapsed && item.label}
-        </NavLink>
+      {portalNav.map((section, index) => (
+        <div key={section.title ?? `section-${index}`} className={index > 0 ? "mt-4" : ""}>
+          {section.title &&
+            (isCollapsed ? (
+              <div className="mx-3 mb-1 border-t border-navy-800" />
+            ) : (
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-navy-400">{section.title}</p>
+            ))}
+          <div className="flex flex-col gap-0.5">
+            {section.items.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/portal" || item.exact}
+                onClick={() => setMobileOpen(false)}
+                title={isCollapsed ? item.label : undefined}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${isCollapsed ? "justify-center" : ""} ${
+                    isActive ? "bg-navy-800 text-safety-yellow" : "text-navy-200 hover:bg-navy-800/60 hover:text-white"
+                  }`
+                }
+              >
+                <item.icon className="h-4.5 w-4.5 shrink-0" />
+                {!isCollapsed && item.label}
+              </NavLink>
+            ))}
+          </div>
+        </div>
       ))}
       <button
         type="button"

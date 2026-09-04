@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Wrench, Gauge, ClipboardList, ClipboardPlus, ShieldCheck, Activity, TimerReset, ListChecks, Boxes, GitBranch, Radar, HardHat, OctagonPause, Kanban, BarChart3, Search, LayoutTemplate, CalendarDays } from "lucide-react";
+import { Wrench, Gauge, ClipboardList, ClipboardPlus, ShieldCheck, Activity, TimerReset, Boxes, GitBranch, Radar, HardHat, Kanban, BarChart3, Search, CalendarDays, SlidersHorizontal } from "lucide-react";
 import { getMaintenanceDashboard } from "../../../api/maintenanceWorkOrders";
 import { listClients } from "../../../api/clients";
 import { PageHeader } from "../../../components/PageHeader";
@@ -40,49 +40,47 @@ export default function MaintenanceDashboard() {
             ))}
           </select>
         )}
-        <Link to={`${assetsBase}${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
-          <Gauge className="h-4 w-4" /> Ativos
-        </Link>
-        <Link to={`${base}/arvore${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
-          <GitBranch className="h-4 w-4" /> Arvore de ativos
-        </Link>
         <Link to={`${base}/solicitacoes${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
-          <ClipboardPlus className="h-4 w-4" /> Solicitacoes de servico
+          <ClipboardPlus className="h-4 w-4" /> Solicitacoes
         </Link>
         <Link to={`${base}/ordens${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
-          <ClipboardList className="h-4 w-4" /> Ordens de manutencao
+          <ClipboardList className="h-4 w-4" /> Ordens
+        </Link>
+        <Link to={`${base}/programacao`} className="btn-outline">
+          <CalendarDays className="h-4 w-4" /> Programacao
         </Link>
         <Link to={`${base}/kanban${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <Kanban className="h-4 w-4" /> Kanban
         </Link>
-        <Link to={`${base}/programacao`} className="btn-outline">
-          <CalendarDays className="h-4 w-4" /> Programacao (calendario)
-        </Link>
         <Link to={`${base}/planos${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
-          <ShieldCheck className="h-4 w-4" /> Planos de manutencao
+          <ShieldCheck className="h-4 w-4" /> Planos preventivos
         </Link>
-        <Link to={`${base}/modelos-de-plano`} className="btn-outline">
-          <LayoutTemplate className="h-4 w-4" /> Modelos de plano
-        </Link>
-        <Link to={`${base}/ordens?type=PREDICTIVE${clientId ? `&clientId=${clientId}` : ""}`} className="btn-outline">
-          <Radar className="h-4 w-4" /> Manutencao preditiva
-        </Link>
-        <Link to={`${base}/falhas`} className="btn-outline">
-          <ListChecks className="h-4 w-4" /> Codigos de falha
-        </Link>
-        <Link to={`${base}/pareto${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
-          <BarChart3 className="h-4 w-4" /> Pareto de falhas
-        </Link>
-        <Link to={`${base}/rca${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
-          <Search className="h-4 w-4" /> RCA / 5 Porques
-        </Link>
-        <Link to={`${base}/paradas`} className="btn-outline">
-          <OctagonPause className="h-4 w-4" /> Motivos de parada
+        <Link to={`${assetsBase}${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+          <Gauge className="h-4 w-4" /> Ativos
         </Link>
         <Link to={`${partsBase}${!isClient && clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <Boxes className="h-4 w-4" /> Almoxarifado
         </Link>
-        <Link to={`${laborBase}${!isClient && clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+        <Link to={`${assetsBase}/cadastros`} className="btn-outline">
+          <SlidersHorizontal className="h-4 w-4" /> Cadastros
+        </Link>
+      </div>
+
+      {/* Segunda linha: analise e visoes secundarias - usadas menos que a operacao acima. */}
+      <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        <Link to={`${base}/pareto${clientId ? `?clientId=${clientId}` : ""}`} className="inline-flex items-center gap-1.5 text-graphite-600 hover:text-navy-700">
+          <BarChart3 className="h-4 w-4" /> Pareto de falhas
+        </Link>
+        <Link to={`${base}/rca${clientId ? `?clientId=${clientId}` : ""}`} className="inline-flex items-center gap-1.5 text-graphite-600 hover:text-navy-700">
+          <Search className="h-4 w-4" /> RCA / 5 Porques
+        </Link>
+        <Link to={`${base}/arvore${clientId ? `?clientId=${clientId}` : ""}`} className="inline-flex items-center gap-1.5 text-graphite-600 hover:text-navy-700">
+          <GitBranch className="h-4 w-4" /> Arvore de ativos
+        </Link>
+        <Link to={`${base}/ordens?type=PREDICTIVE${clientId ? `&clientId=${clientId}` : ""}`} className="inline-flex items-center gap-1.5 text-graphite-600 hover:text-navy-700">
+          <Radar className="h-4 w-4" /> Manutencao preditiva
+        </Link>
+        <Link to={`${laborBase}${!isClient && clientId ? `?clientId=${clientId}` : ""}`} className="inline-flex items-center gap-1.5 text-graphite-600 hover:text-navy-700">
           <HardHat className="h-4 w-4" /> Mao de obra
         </Link>
       </div>

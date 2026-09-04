@@ -14,14 +14,20 @@ import { DataTable } from "../../../components/DataTable";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { EmptyState } from "../../../components/EmptyState";
 import { Modal } from "../../../components/Modal";
-import { TextInput } from "../../../components/form/Field";
+import { TextInput, SelectInput } from "../../../components/form/Field";
+import { listCostCenters } from "../../../api/costCenters";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { useAuth } from "../../../auth/AuthContext";
 import { clientDisplayName } from "../../../lib/format";
 import { useCmms } from "../../../lib/cmms";
 
-const schema = z.object({ name: z.string().min(2, "Informe o nome da area."), code: z.string().optional() });
+const schema = z.object({
+  name: z.string().min(2, "Informe o nome da area."),
+  code: z.string().optional(),
+  // Centro de custo padrao: todo ativo dentro da area herda este centro de custo.
+  costCenterId: z.string().uuid().optional().or(z.literal("")),
+});
 type FormValues = z.infer<typeof schema>;
 
 /** Areas ficam dentro de uma Planta (cascata) - escolhe a planta primeiro pra saber
@@ -50,6 +56,11 @@ export default function AreasList() {
     queryFn: () => listPlants({ clientId, active: true }),
     enabled: !!clientId,
   });
+  const { data: costCenters } = useQuery({
+    queryKey: ["cost-centers-picker", clientId],
+    queryFn: () => listCostCenters({ clientId, active: true }),
+    enabled: !!clientId,
+  });
   const { data, isLoading } = useQuery({
     queryKey: ["areas", clientId, plantId],
     queryFn: () => listAreas({ clientId, plantId }),
@@ -61,18 +72,18 @@ export default function AreasList() {
   });
 
   function openCreate() {
-    reset({ name: "", code: "" });
+    reset({ name: "", code: "", costCenterId: "" });
     setEditing(null);
     setCreateOpen(true);
   }
   function openEdit(area: Area) {
-    reset({ name: area.name, code: area.code ?? "" });
+    reset({ name: area.name, code: area.code ?? "", costCenterId: area.costCenterId ?? "" });
     setEditing(area);
     setCreateOpen(true);
   }
 
   async function onSubmit(values: FormValues) {
-    const payload = { name: values.name, code: values.code || null };
+    const payload = { name: values.name, code: values.code || null, costCenterId: values.costCenterId || null };
     try {
       if (editing) {
         await updateArea(editing.id, payload);
@@ -167,6 +178,7 @@ export default function AreasList() {
           columns={[
             { header: "Nome", accessor: (a) => <span className="font-medium text-navy-900">{a.name}</span> },
             { header: "Codigo", accessor: (a) => <span className="text-xs text-graphite-500">{a.code ?? "-"}</span> },
+            { header: "Centro de custo padrao", accessor: (a) => a.costCenter?.name ?? <span className="text-graphite-400">Nenhum</span> },
             {
               header: "Status",
               accessor: (a) =>
@@ -213,6 +225,13 @@ export default function AreasList() {
         <form id="area-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
           <TextInput label="Nome" required placeholder="Ex.: Recebimento de materia-prima" error={errors.name?.message} {...register("name")} />
           <TextInput label="Codigo (opcional)" placeholder="Ex.: RMP" error={errors.code?.message} {...register("code")} />
+          <SelectInput
+            label="Centro de custo padrao"
+            placeholder="Nenhum"
+            hint="Todo ativo desta area herda este centro de custo. Excecao por ativo so o administrador faz."
+            options={(costCenters ?? []).map((c) => ({ value: c.id, label: c.name }))}
+            {...register("costCenterId")}
+          />
         </form>
       </Modal>
     </div>

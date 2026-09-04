@@ -9,15 +9,18 @@ import { ClientPicker } from "../../../components/ClientPicker";
 import { AssetTypeInput } from "../../../components/AssetTypeInput";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { LocationPicker } from "../../../components/LocationPicker";
-import { createInstrument, updateInstrument } from "../../../api/instruments";
+import { createInstrument, updateInstrument, getInstrument } from "../../../api/instruments";
+import { listAssetTypes } from "../../../api/assetTypes";
 import type { Instrument } from "../../../api/types";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "../../../auth/AuthContext";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
   tag: z.string().min(1, "Informe o TAG do ativo."),
-  description: z.string().optional(),
+  description: z.string().min(2, "Informe a descricao do ativo."),
   type: z.string().min(2, "Informe o tipo (Planta, Linha, Maquina, Componente...)."),
   criticality: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   operationalStatus: z.enum(["IN_OPERATION", "STOPPED", "STANDBY", "DEACTIVATED", "IN_MAINTENANCE"]).optional(),
@@ -35,10 +38,9 @@ const schema = z.object({
   calibrationFrequencyMonths: z.coerce.number().int().min(1).optional().or(z.literal("")),
   lastCalibrationDate: z.string().optional(),
   status: z.enum(["VALID", "DUE_SOON", "EXPIRED", "IN_MAINTENANCE"]).optional(),
-  // Classificacao antiga por catalogos - mantida para quem ja usa, escondida por padrao.
+  // Contexto so e' escolhido no ativo raiz (a planta). Nos filhos vem herdado do pai.
   plantId: z.string().uuid().optional().or(z.literal("")),
   areaId: z.string().uuid().optional().or(z.literal("")),
-  systemId: z.string().uuid().optional().or(z.literal("")),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -80,8 +82,29 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
   const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
   });
+  const { user } = useAuth();
   const clientId = watch("clientId");
+  const parentId = watch("parentId");
+  const selectedType = watch("type");
   const tracksCalibration = !!watch("calibrationFrequencyMonths");
+
+  // Nivel do tipo escolhido decide o que e' obrigatorio (requisito 5) e se o ativo pode
+  // ficar na raiz da arvore (requisito 6).
+  const { data: assetTypes } = useQuery({
+    queryKey: ["asset-types-picker"],
+    queryFn: () => listAssetTypes({ active: true }),
+    staleTime: 60_000,
+  });
+  const level = (assetTypes ?? []).find((t) => t.name.toLowerCase() === (selectedType ?? "").toLowerCase())?.level ?? null;
+  const isRoot = level === "PLANT";
+  const exigeFichaTecnica = level === "MACHINE";
+
+  // Contexto herdado do pai - so leitura, o filho nao redefine planta/area/centro de custo.
+  const { data: parent } = useQuery({
+    queryKey: ["instrument-parent-context", parentId],
+    queryFn: () => getInstrument(parentId as string),
+    enabled: !!parentId,
+  });
 
   useEffect(() => {
     if (open) {
@@ -108,7 +131,6 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               status: instrument.status,
               plantId: instrument.plantId ?? "",
               areaId: instrument.areaId ?? "",
-              systemId: instrument.systemId ?? "",
             }
           : {
               criticality: "MEDIUM",
@@ -133,7 +155,6 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
         parentId: values.parentId || null,
         plantId: values.plantId || null,
         areaId: values.areaId || null,
-        systemId: values.systemId || null,
         costCenterId: values.costCenterId || null,
         calibrationFrequencyMonths: values.calibrationFrequencyMonths || null,
       };
@@ -178,12 +199,40 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
 
         <InstrumentPicker
           label="Faz parte de (ativo pai)"
-          hint="A estrutura e' uma arvore: Planta > Linha > Maquina > Componente. Deixe vazio se este ativo esta no topo (ex.: uma planta)."
+          required={!isRoot}
+          hint={
+            isRoot
+              ? "Planta e' a raiz da arvore - nao precisa de pai."
+              : "Estrutura: Planta > Area > Ativo/Sistema > Equipamento > Componente."
+          }
           clientId={clientId}
           excludeId={instrument?.id}
           error={errors.parentId?.message}
           {...register("parentId")}
         />
+
+        {parentId && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-graphite-400">Contexto herdado</p>
+            <p className="mt-0.5 text-xs text-graphite-500">
+              Vem do ativo pai e do centro de custo padrao da area - nao se edita aqui.
+            </p>
+            <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-3">
+              <div>
+                <dt className="text-xs text-graphite-400">Planta</dt>
+                <dd className="font-medium text-graphite-800">{parent?.plant?.name ?? "-"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-graphite-400">Area</dt>
+                <dd className="font-medium text-graphite-800">{parent?.area?.name ?? "-"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-graphite-400">Centro de custo</dt>
+                <dd className="font-medium text-graphite-800">{parent?.costCenter?.name ?? "-"}</dd>
+              </div>
+            </dl>
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-3">
           <AssetTypeInput required currentValue={instrument?.type} error={errors.type?.message} {...register("type")} />
@@ -211,16 +260,23 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
           />
         </div>
 
-        <Section title="Ficha do fabricante" hint="opcional">
+        <Section
+          title="Ficha do fabricante"
+          hint={exigeFichaTecnica ? "obrigatoria para este tipo" : "opcional"}
+          defaultOpen={exigeFichaTecnica}
+        >
+          {exigeFichaTecnica && (
+            <p className="text-xs text-graphite-500">
+              Equipamento/maquina tem ficha de fabricante rastreavel - por isso os tres campos abaixo sao exigidos
+              neste tipo de ativo. Em area, linha, sistema ou componente eles ficam opcionais.
+            </p>
+          )}
           <div className="grid gap-4 sm:grid-cols-3">
-            <TextInput label="Fabricante" {...register("manufacturer")} />
-            <TextInput label="Modelo" {...register("model")} />
-            <TextInput label="Numero de serie" {...register("serialNumber")} />
+            <TextInput label="Fabricante" required={exigeFichaTecnica} {...register("manufacturer")} />
+            <TextInput label="Modelo" required={exigeFichaTecnica} {...register("model")} />
+            <TextInput label="Numero de serie" required={exigeFichaTecnica} {...register("serialNumber")} />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <TextInput label="Ponto de instalacao" placeholder="Ex.: Casa de maquinas, painel 3" {...register("installationLocation")} />
-            <LocationPicker clientId={clientId} register={register} watch={watch} setValue={setValue} onlyCostCenter />
-          </div>
+          <TextInput label="Ponto de instalacao" placeholder="Ex.: Casa de maquinas, painel 3" {...register("installationLocation")} />
         </Section>
 
         <Section title="Calibracao" hint="so para ativos com calibracao periodica">
@@ -253,13 +309,25 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
           </div>
         </Section>
 
-        <Section title="Classificacao por catalogo (Planta/Area/Sistema)" hint="opcional - a arvore ja diz onde o ativo esta">
-          <p className="text-xs text-graphite-500">
-            So preencha se voce usa esses catalogos para filtrar relatorios. Quem monta a estrutura pela arvore
-            (campo "Faz parte de") nao precisa repetir a informacao aqui.
-          </p>
-          <LocationPicker clientId={clientId} register={register} watch={watch} setValue={setValue} hideCostCenter />
-        </Section>
+        {!parentId && (
+          <Section title="Localizacao (planta e area)" hint="definida no ativo raiz" defaultOpen>
+            <p className="text-xs text-graphite-500">
+              Como este ativo nao tem pai, e' aqui que a planta e a area sao definidas. Todos os ativos abaixo
+              dele na arvore herdam esse contexto automaticamente.
+            </p>
+            <LocationPicker clientId={clientId} register={register} watch={watch} setValue={setValue} hideCostCenter />
+          </Section>
+        )}
+
+        {user?.role === "ADMIN" && (
+          <Section title="Excecao de centro de custo" hint="somente administrador">
+            <p className="text-xs text-graphite-500">
+              Por padrao o centro de custo vem da area. Preencha aqui apenas se este ativo especifico precisa
+              ser rateado em outro centro de custo - a heranca deixa de sobrescrever este ativo.
+            </p>
+            <LocationPicker clientId={clientId} register={register} watch={watch} setValue={setValue} onlyCostCenter />
+          </Section>
+        )}
       </form>
     </Modal>
   );

@@ -184,6 +184,120 @@ async function assertLocationFieldsBelongToClient(clientId: string, data: Pick<z
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// Heranca de contexto na arvore de ativos
+//
+// A arvore (Planta > Area > Ativo/Sistema > Equipamento > Componente) e' a estrutura
+// TECNICA: diz o que faz parte do que. Planta / Area / Centro de custo sao CONTEXTO de
+// localizacao e rateio: definidos uma vez no topo e herdados por todos os descendentes,
+// para nao repetir (nem divergir) a mesma informacao em cada nivel.
+// ---------------------------------------------------------------------------
+
+/** Nivel do tipo escolhido (PLANT/AREA/MACHINE/SUBASSEMBLY/PART), resolvido pelo nome
+ * contra o catalogo AssetType. null = tipo fora do catalogo, sem nivel definido. */
+async function resolveAssetLevel(type: string): Promise<string | null> {
+  const assetType = await prisma.assetType.findFirst({
+    where: { name: { equals: type, mode: "insensitive" } },
+    select: { level: true },
+  });
+  return assetType?.level ?? null;
+}
+
+/** So equipamento de verdade (maquina, motor, instrumento) tem ficha de fabricante que
+ * faz sentido exigir. Planta, area, linha, sistema e componente nao tem numero de serie. */
+const LEVELS_COM_FICHA_TECNICA = new Set(["MACHINE"]);
+
+/** Contexto (planta/area/centro de custo) que este ativo deve ter, dado o pai escolhido.
+ * O centro de custo vem do padrao da area; um ativo marcado como excecao (so ADMIN) fica
+ * com o que foi definido a mao. */
+async function resolveInheritedContext(parentId: string | null | undefined, fallback: { plantId?: string | null; areaId?: string | null }) {
+  let plantId = fallback.plantId ?? null;
+  let areaId = fallback.areaId ?? null;
+
+  if (parentId) {
+    const parent = await prisma.instrument.findFirst({
+      where: { id: parentId, deletedAt: null },
+      select: { plantId: true, areaId: true },
+    });
+    // Ativo filho nao escolhe planta/area: herda o do pai, sempre.
+    plantId = parent?.plantId ?? null;
+    areaId = parent?.areaId ?? null;
+  }
+
+  let costCenterId: string | null = null;
+  if (areaId) {
+    const area = await prisma.area.findFirst({ where: { id: areaId, deletedAt: null }, select: { costCenterId: true } });
+    costCenterId = area?.costCenterId ?? null;
+  }
+
+  return { plantId, areaId, costCenterId };
+}
+
+/** Depois que o contexto de um ativo muda, todo o galho abaixo dele precisa acompanhar -
+ * senao o filho continuaria apontando para a area antiga. Ativos marcados como excecao
+ * mantem o proprio centro de custo. */
+async function propagateContextToDescendants(instrumentId: string, depth = 0): Promise<void> {
+  if (depth > 20) return; // arvore muito profunda: para por seguranca (ciclo ja e' barrado na escrita)
+
+  const parent = await prisma.instrument.findFirst({
+    where: { id: instrumentId, deletedAt: null },
+    select: { plantId: true, areaId: true },
+  });
+  if (!parent) return;
+
+  const children = await prisma.instrument.findMany({
+    where: { parentId: instrumentId, deletedAt: null },
+    select: { id: true, costCenterOverride: true },
+  });
+  if (children.length === 0) return;
+
+  let areaCostCenterId: string | null = null;
+  if (parent.areaId) {
+    const area = await prisma.area.findFirst({ where: { id: parent.areaId, deletedAt: null }, select: { costCenterId: true } });
+    areaCostCenterId = area?.costCenterId ?? null;
+  }
+
+  for (const child of children) {
+    await prisma.instrument.update({
+      where: { id: child.id },
+      data: {
+        plantId: parent.plantId,
+        areaId: parent.areaId,
+        ...(child.costCenterOverride ? {} : { costCenterId: areaCostCenterId }),
+      },
+    });
+    await propagateContextToDescendants(child.id, depth + 1);
+  }
+}
+
+/** Regras de preenchimento que dependem do nivel do ativo (requisitos 5 e 6). */
+async function assertLevelRules(
+  data: { type: string; description?: string | null; parentId?: string | null; manufacturer?: string | null; model?: string | null; serialNumber?: string | null },
+  { isCreate }: { isCreate: boolean },
+): Promise<void> {
+  const level = await resolveAssetLevel(data.type);
+
+  if (isCreate && !data.description?.trim()) {
+    throw new ValidationError("Informe a descricao do ativo.");
+  }
+
+  // Ativo raiz e' a planta; qualquer outro nivel precisa dizer de quem faz parte.
+  if (isCreate && level && level !== "PLANT" && !data.parentId) {
+    throw new ValidationError("Informe o ativo pai - so a planta fica na raiz da arvore.");
+  }
+
+  if (level && LEVELS_COM_FICHA_TECNICA.has(level)) {
+    const faltando: string[] = [];
+    if (!data.manufacturer?.trim()) faltando.push("fabricante");
+    if (!data.model?.trim()) faltando.push("modelo");
+    if (!data.serialNumber?.trim()) faltando.push("numero de serie");
+    if (faltando.length > 0) {
+      throw new ValidationError(`Para este tipo de ativo, informe tambem: ${faltando.join(", ")}.`);
+    }
+  }
+}
+
 /** Ativo pai precisa existir, pertencer ao mesmo cliente e nao criar um ciclo na arvore. */
 async function assertValidParent(clientId: string, parentId: string, excludeId?: string): Promise<void> {
   if (parentId === excludeId) throw new ValidationError("Um ativo nao pode ser pai de si mesmo.");
@@ -236,12 +350,28 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
   await assertTagAvailable(clientId, data.tag);
   if (data.parentId) await assertValidParent(clientId, data.parentId);
   await assertLocationFieldsBelongToClient(clientId, data);
+  await assertLevelRules(data, { isCreate: true });
   const nextDueDate = data.lastCalibrationDate && data.calibrationFrequencyMonths
     ? computeNextDueDate(data.lastCalibrationDate, data.calibrationFrequencyMonths)
     : null;
 
+  // Planta/area/centro de custo nao sao digitados no filho: vem do pai (e o centro de
+  // custo, do padrao da area). Excecao de centro de custo so o ADMIN faz.
+  const context = await resolveInheritedContext(data.parentId, data);
+  const isAdmin = req.user?.role === "ADMIN";
+  const costCenterOverride = isAdmin && !!data.costCenterId && data.costCenterId !== context.costCenterId;
+
   const instrument = await prisma.instrument.create({
-    data: { ...data, clientId, nextDueDate, createdById: req.user?.sub },
+    data: {
+      ...data,
+      clientId,
+      plantId: context.plantId,
+      areaId: context.areaId,
+      costCenterId: costCenterOverride ? data.costCenterId : context.costCenterId,
+      costCenterOverride,
+      nextDueDate,
+      createdById: req.user?.sub,
+    },
   });
 
   await writeAuditLog({
@@ -279,10 +409,36 @@ export const updateInstrument = asyncHandler(async (req: Request, res: Response)
   const nextDueDate =
     lastCalibrationDate && frequency ? computeNextDueDate(lastCalibrationDate, frequency) : existing.nextDueDate;
 
+  // Mesma heranca do cadastro. Se o contexto mudou (trocou de pai, ou a area mudou de
+  // centro de custo), o galho inteiro abaixo precisa acompanhar - senao o filho ficaria
+  // apontando para a area antiga.
+  const context = await resolveInheritedContext(
+    data.parentId !== undefined ? data.parentId : existing.parentId,
+    { plantId: data.plantId ?? existing.plantId, areaId: data.areaId ?? existing.areaId },
+  );
+  const isAdmin = req.user?.role === "ADMIN";
+  const querSetarCentroCusto = data.costCenterId !== undefined && data.costCenterId !== null;
+  const costCenterOverride =
+    isAdmin && querSetarCentroCusto ? data.costCenterId !== context.costCenterId : existing.costCenterOverride;
+  const costCenterId = costCenterOverride
+    ? isAdmin && querSetarCentroCusto
+      ? data.costCenterId
+      : existing.costCenterId
+    : context.costCenterId;
+
   const instrument = await prisma.instrument.update({
     where: { id: req.params.id },
-    data: { ...data, nextDueDate },
+    data: {
+      ...data,
+      plantId: context.plantId,
+      areaId: context.areaId,
+      costCenterId,
+      costCenterOverride,
+      nextDueDate,
+    },
   });
+
+  await propagateContextToDescendants(instrument.id);
 
   await writeAuditLog({
     userId: req.user?.sub,

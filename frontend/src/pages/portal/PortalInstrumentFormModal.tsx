@@ -16,7 +16,7 @@ import { useAuth } from "../../auth/AuthContext";
 const schema = z.object({
   type: z.string().min(2, "Informe o tipo de equipamento."),
   tag: z.string().min(1, "Informe o TAG do ativo."),
-  description: z.string().optional(),
+  description: z.string().min(2, "Informe a descricao do ativo."),
   manufacturer: z.string().optional(),
   model: z.string().optional(),
   serialNumber: z.string().optional(),
@@ -27,7 +27,6 @@ const schema = z.object({
   parentId: z.string().uuid().optional().or(z.literal("")),
   plantId: z.string().uuid().optional().or(z.literal("")),
   areaId: z.string().uuid().optional().or(z.literal("")),
-  systemId: z.string().uuid().optional().or(z.literal("")),
   costCenterId: z.string().uuid().optional().or(z.literal("")),
 });
 type FormValues = z.infer<typeof schema>;
@@ -70,7 +69,6 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
               parentId: instrument.parentId ?? "",
               plantId: instrument.plantId ?? "",
               areaId: instrument.areaId ?? "",
-              systemId: instrument.systemId ?? "",
               costCenterId: instrument.costCenterId ?? "",
             }
           : { criticality: "MEDIUM", operationalStatus: "IN_OPERATION", parentId: initialParentId ?? "", tag: initialTagPrefix ?? "" },
@@ -89,7 +87,6 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
         parentId: values.parentId || null,
         plantId: values.plantId || null,
         areaId: values.areaId || null,
-        systemId: values.systemId || null,
         costCenterId: values.costCenterId || null,
         calibrationFrequencyMonths: values.calibrationFrequencyMonths || null,
       };

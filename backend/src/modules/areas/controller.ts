@@ -17,7 +17,7 @@ export const listAreas = asyncHandler(async (req: Request, res: Response) => {
       ...(plantId ? { plantId } : {}),
       ...(active !== undefined ? { active: active === "true" } : {}),
     },
-    include: { plant: { select: { id: true, name: true } } },
+    include: { plant: { select: { id: true, name: true } }, costCenter: { select: { id: true, name: true } } },
     orderBy: { name: "asc" },
   });
   res.json(areas);
@@ -28,6 +28,8 @@ const areaSchema = z.object({
   plantId: z.string().uuid("Selecione a planta."),
   name: z.string().min(2, "Informe o nome da area."),
   code: z.string().nullish(),
+  // Centro de custo padrao da area - todo ativo dentro dela herda este centro de custo.
+  costCenterId: z.string().uuid().nullish(),
 });
 
 /** A planta escolhida precisa existir e ser da mesma empresa - senao a area ficaria
@@ -36,6 +38,12 @@ async function assertPlantBelongsToClient(plantId: string, clientId: string): Pr
   const plant = await prisma.plant.findFirst({ where: { id: plantId, deletedAt: null } });
   if (!plant) throw new NotFoundError("Planta");
   if (plant.clientId !== clientId) throw new ValidationError("A planta selecionada e' de outra empresa.");
+}
+
+async function assertCostCenterBelongsToClient(costCenterId: string, clientId: string): Promise<void> {
+  const costCenter = await prisma.costCenter.findFirst({ where: { id: costCenterId, deletedAt: null } });
+  if (!costCenter) throw new NotFoundError("Centro de custo");
+  if (costCenter.clientId !== clientId) throw new ValidationError("O centro de custo selecionado e' de outra empresa.");
 }
 
 export const createArea = asyncHandler(async (req: Request, res: Response) => {
@@ -48,6 +56,7 @@ export const createArea = asyncHandler(async (req: Request, res: Response) => {
     throw new ValidationError("Selecione o cliente.");
   }
   await assertPlantBelongsToClient(data.plantId, data.clientId!);
+  if (data.costCenterId) await assertCostCenterBelongsToClient(data.costCenterId, data.clientId!);
 
   const existing = await prisma.area.findFirst({
     where: { plantId: data.plantId, name: { equals: data.name, mode: "insensitive" } },

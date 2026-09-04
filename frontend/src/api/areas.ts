@@ -7,6 +7,7 @@ export async function listAreas(params: { clientId?: string; plantId?: string; a
 }
 
 export interface AreaInput {
+  costCenterId?: string | null;
   name: string;
   code?: string | null;
   plantId: string;

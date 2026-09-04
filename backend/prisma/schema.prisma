@@ -581,6 +581,9 @@ model Instrument {
   system                     AssetSystem?      @relation(fields: [systemId], references: [id], onDelete: Restrict)
   costCenterId               String?
   costCenter                 CostCenter?       @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  // true = ADMIN definiu um centro de custo diferente do padrao da area, entao a heranca
+  // para de sobrescrever este ativo.
+  costCenterOverride         Boolean           @default(false)
   createdById                String?
   createdAt                  DateTime          @default(now())
   updatedAt                  DateTime          @updatedAt
@@ -1201,6 +1204,10 @@ model Area {
   plant     Plant     @relation(fields: [plantId], references: [id])
   name      String
   code      String?
+  // Centro de custo padrao da area: todo ativo dentro dela herda este centro de custo.
+  // Excecao por ativo so o ADMIN pode fazer (Instrument.costCenterOverride).
+  costCenterId String?
+  costCenter   CostCenter? @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
   active    Boolean   @default(true)
   createdAt DateTime  @default(now())
   deletedAt DateTime?
@@ -1246,6 +1253,7 @@ model CostCenter {
   deletedAt DateTime?
 
   instruments Instrument[]
+  areasAsDefault Area[]
 
   @@unique([clientId, name])
   @@index([clientId])

@@ -16,6 +16,12 @@ import {
   BarChart3,
   SlidersHorizontal,
   Radar,
+  Droplets,
+  MapPin,
+  Route,
+  FlaskConical,
+  TrendingUp,
+  History,
 } from "lucide-react";
 import type { ServiceCategory } from "../api/types";
 
@@ -68,6 +74,20 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
       { to: "/portal/manutencao/ordens", label: "Ordens de manutencao", icon: ClipboardList, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/programacao", label: "Programacao", icon: CalendarDays, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/planos", label: "Planos preventivos", icon: ShieldCheck, requires: ["CMMS_MAINTENANCE"] },
+    ],
+  },
+  {
+    // Lubrificacao tem topico proprio: e' um ciclo inteiro (lubrificante no almoxarifado ->
+    // ponto -> rota -> aplicacao -> previsao de consumo), com rotina e responsavel proprios,
+    // e nao um item solto dentro de manutencao.
+    title: "Lubrificacao",
+    items: [
+      { to: "/portal/lubrificacao", label: "Painel", icon: Droplets, requires: ["CMMS_MAINTENANCE"], exact: true },
+      { to: "/portal/lubrificacao/pontos", label: "Pontos", icon: MapPin, requires: ["CMMS_MAINTENANCE"] },
+      { to: "/portal/lubrificacao/rotas", label: "Rotas", icon: Route, requires: ["CMMS_MAINTENANCE"] },
+      { to: "/portal/lubrificacao/lubrificantes", label: "Lubrificantes", icon: FlaskConical, requires: ["CMMS_MAINTENANCE"] },
+      { to: "/portal/lubrificacao/previsao", label: "Previsao de consumo", icon: TrendingUp, requires: ["CMMS_MAINTENANCE"] },
+      { to: "/portal/lubrificacao/historico", label: "Historico", icon: History, requires: ["CMMS_MAINTENANCE"] },
     ],
   },
   {

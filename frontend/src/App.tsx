@@ -71,6 +71,12 @@ const SchedulingBoard = lazy(() => import("./pages/admin/maintenance/SchedulingB
 const PredictivePanel = lazy(() => import("./pages/admin/maintenance/PredictivePanel"));
 const RcaList = lazy(() => import("./pages/admin/maintenance/RcaList"));
 const RcaForm = lazy(() => import("./pages/admin/maintenance/RcaForm"));
+const LubricationDashboard = lazy(() => import("./pages/admin/lubrication/LubricationDashboard"));
+const LubricationPointsList = lazy(() => import("./pages/admin/lubrication/LubricationPointsList"));
+const LubricationRoutesList = lazy(() => import("./pages/admin/lubrication/LubricationRoutesList"));
+const LubricantsList = lazy(() => import("./pages/admin/lubrication/LubricantsList"));
+const LubricationForecast = lazy(() => import("./pages/admin/lubrication/LubricationForecast"));
+const LubricationHistory = lazy(() => import("./pages/admin/lubrication/LubricationHistory"));
 const FailureAnalysis = lazy(() => import("./pages/admin/maintenance/FailureAnalysis"));
 const WorkOrderForm = lazy(() => import("./pages/admin/maintenance/WorkOrderForm"));
 const WorkOrderDetail = lazy(() => import("./pages/admin/maintenance/WorkOrderDetail"));
@@ -176,6 +182,12 @@ export default function App() {
                   <Route path="manutencao/rca/novo" element={<RcaForm />} />
                   <Route path="manutencao/rca/:id" element={<RcaForm />} />
                   <Route path="manutencao/paradas" element={<StoppageReasonsList />} />
+                  <Route path="lubrificacao" element={<LubricationDashboard />} />
+                  <Route path="lubrificacao/pontos" element={<LubricationPointsList />} />
+                  <Route path="lubrificacao/rotas" element={<LubricationRoutesList />} />
+                  <Route path="lubrificacao/lubrificantes" element={<LubricantsList />} />
+                  <Route path="lubrificacao/previsao" element={<LubricationForecast />} />
+                  <Route path="lubrificacao/historico" element={<LubricationHistory />} />
                   <Route path="manutencao/almoxarifado" element={<SparePartsList />} />
                   <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
                 </Route>
@@ -239,6 +251,12 @@ export default function App() {
                 <Route path="manutencao/rca/:id" element={<RcaForm />} />
                 <Route path="manutencao/paradas" element={<StoppageReasonsList />} />
                 <Route path="manutencao/arvore" element={<PortalInstrumentsTree />} />
+                <Route path="lubrificacao" element={<LubricationDashboard />} />
+                <Route path="lubrificacao/pontos" element={<LubricationPointsList />} />
+                <Route path="lubrificacao/rotas" element={<LubricationRoutesList />} />
+                <Route path="lubrificacao/lubrificantes" element={<LubricantsList />} />
+                <Route path="lubrificacao/previsao" element={<LubricationForecast />} />
+                <Route path="lubrificacao/historico" element={<LubricationHistory />} />
                 <Route path="almoxarifado" element={<PortalSpareParts />} />
                 <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
                 <Route path="perfil" element={<PortalProfile />} />

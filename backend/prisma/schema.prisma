@@ -521,6 +521,10 @@ model Client {
   @@index([status])
   @@index([planId])
   @@map("clients")
+  lubricants Lubricant[]
+  lubricationPoints LubricationPoint[]
+  lubricationRoutes LubricationRoute[]
+  lubricationRecords LubricationRecord[]
 }
 
 // ---------------------------------------------------------------------------
@@ -701,6 +705,7 @@ model Instrument {
   @@index([systemId])
   @@index([costCenterId])
   @@map("instruments")
+  lubricationPoints LubricationPoint[]
 }
 
 model Calibration {
@@ -1146,6 +1151,8 @@ model LaborResource {
 
   @@index([clientId])
   @@map("labor_resources")
+  lubricationRoutes LubricationRoute[] @relation("LubricationRouteResponsible")
+  lubricationRecords LubricationRecord[] @relation("LubricationExecutor")
 }
 
 // Lancamento de horas de um recurso de mao de obra numa OS - mesmo papel do
@@ -1291,6 +1298,7 @@ model Plant {
   @@unique([clientId, name])
   @@index([clientId])
   @@map("plants")
+  lubricationRoutes LubricationRoute[]
 }
 
 model Area {
@@ -1317,6 +1325,7 @@ model Area {
   @@index([clientId])
   @@index([plantId])
   @@map("areas")
+  lubricationRoutes LubricationRoute[]
 }
 
 model AssetSystem {
@@ -1562,11 +1571,11 @@ model MaintenancePlan {
   // --- Lubrificacao (so preenchido em plano do tipo Lubrificacao) --------------------
   // Qual lubrificante, quantos pontos, quanto em cada ponto e como aplicar. O lubrificante
   // vem do almoxarifado para que o consumo do plano baixe do mesmo estoque das outras pecas.
-  lubricantSparePartId String?
-  lubricantSparePart   SparePart? @relation("PlanLubricant", fields: [lubricantSparePartId], references: [id])
-  lubricationPoints    Int?
-  lubricantQtyPerPoint Float?
-  lubricationMethod    LubricationMethod?
+  // Um plano de lubrificacao agenda uma ROTA: quem diz o lubrificante, a quantidade e o
+  // metodo e' cada ponto da rota. Descrever isso no plano de novo criaria duas versoes da
+  // mesma especificacao.
+  lubricationRouteId String?
+  lubricationRoute   LubricationRoute? @relation(fields: [lubricationRouteId], references: [id])
 
   // Instrucoes gerais do plano (procedimento, cuidados, referencia de manual) - texto
   // livre que acompanha toda OS gerada a partir dele.
@@ -1856,6 +1865,7 @@ model MaintenanceWorkOrder {
   @@index([scheduledDate])
   @@index([costCenterId])
   @@map("maintenance_work_orders")
+  lubricationRecords LubricationRecord[]
 }
 
 // Equipe de apoio da OS - o responsavel fica em MaintenanceWorkOrder.assignedResourceId.
@@ -1964,7 +1974,7 @@ model SparePart {
   @@index([clientId])
   @@index([active])
   @@map("spare_parts")
-  planosDeLubrificacao MaintenancePlan[] @relation("PlanLubricant")
+  lubricante Lubricant?
 }
 
 model SparePartMovement {
@@ -1985,6 +1995,7 @@ model SparePartMovement {
   @@index([sparePartId])
   @@index([maintenanceWorkOrderId])
   @@map("spare_part_movements")
+  lubricationRecord LubricationRecord?
 }
 
 // Lista de materiais (BOM): quais pecas do almoxarifado sao usadas em cada ativo.
@@ -2045,4 +2056,184 @@ model Notification {
 
   @@index([userId])
   @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Lubrificacao
+//
+// O ciclo completo, do almoxarifado ao ponto: o lubrificante e' uma peca do
+// almoxarifado (saldo, custo e movimentacao ficam la, num lugar so) com uma ficha
+// tecnica propria; cada ponto do equipamento diz qual lubrificante, quanto e de
+// quanto em quanto tempo; as rotas agrupam pontos para o lubrificador percorrer; e
+// cada aplicacao registrada baixa o estoque. Dessas frequencias sai a previsao de
+// consumo por periodo.
+// ---------------------------------------------------------------------------
+
+enum LubricantType {
+  GREASE
+  OIL
+  OTHER
+}
+
+enum LubricantBase {
+  MINERAL
+  SYNTHETIC
+  SEMI_SYNTHETIC
+}
+
+// Se o ponto pode ser lubrificado com a maquina rodando. Nao e' detalhe: lubrificar
+// acoplamento girando e' acidente, e o campo existe para o plano avisar antes.
+enum MachineStateForLubrication {
+  STOPPED
+  RUNNING
+  ANY
+}
+
+// Como o ponto foi encontrado / como ficou.
+enum LubricationCondition {
+  NORMAL
+  LOW
+  DRY
+  CONTAMINATED
+  EXCESS
+}
+
+model Lubricant {
+  id            String         @id @default(uuid())
+  clientId      String
+  client        Client         @relation(fields: [clientId], references: [id])
+  // O lubrificante E' uma peca do almoxarifado - esta tabela so acrescenta a ficha
+  // tecnica. Assim saldo, custo medio e historico de movimentacao nao viram duas
+  // verdades diferentes.
+  sparePartId   String         @unique
+  sparePart     SparePart      @relation(fields: [sparePartId], references: [id])
+  type          LubricantType  @default(GREASE)
+  // ISO VG 220, NLGI 2, SAE 90...
+  specification String?
+  base          LubricantBase?
+  manufacturer  String?
+  application   String?
+  notes         String?
+  active        Boolean        @default(true)
+  createdById   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?
+
+  points  LubricationPoint[]
+  records LubricationRecord[]
+
+  @@index([clientId])
+  @@map("lubricants")
+}
+
+model LubricationPoint {
+  id           String     @id @default(uuid())
+  clientId     String
+  client       Client     @relation(fields: [clientId], references: [id])
+  instrumentId String
+  instrument   Instrument @relation(fields: [instrumentId], references: [id])
+  code         String
+  name         String
+  // Mancal LA, redutor, corrente, guia linear...
+  component    String?
+  lubricantId  String
+  lubricant    Lubricant  @relation(fields: [lubricantId], references: [id])
+  // Quantidade por aplicacao, na unidade da peca do almoxarifado (nao se repete a
+  // unidade aqui: duas unidades para a mesma coisa e' garantia de divergencia).
+  quantityPerApplication Float
+  method       LubricationMethod
+  // Intervalo de engenharia deste ponto. E' a unica frequencia que existe - a rota so
+  // agrupa pontos, nao redefine periodicidade.
+  frequencyDays Int
+  machineState MachineStateForLubrication @default(ANY)
+  accessNotes  String?
+  safetyNotes  String?
+  lastLubricatedAt DateTime?
+  nextDueAt    DateTime?
+  active       Boolean    @default(true)
+  createdById  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  routeItems LubricationRouteItem[]
+  records    LubricationRecord[]
+
+  @@unique([clientId, code])
+  @@index([clientId])
+  @@index([instrumentId])
+  @@index([lubricantId])
+  @@index([nextDueAt])
+  @@map("lubrication_points")
+}
+
+model LubricationRoute {
+  id            String         @id @default(uuid())
+  clientId      String
+  client        Client         @relation(fields: [clientId], references: [id])
+  name          String
+  code          String?
+  plantId       String?
+  plant         Plant?         @relation(fields: [plantId], references: [id])
+  areaId        String?
+  area          Area?          @relation(fields: [areaId], references: [id])
+  responsibleId String?
+  responsible   LaborResource? @relation("LubricationRouteResponsible", fields: [responsibleId], references: [id])
+  notes         String?
+  active        Boolean        @default(true)
+  createdById   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?
+
+  items LubricationRouteItem[]
+  plans MaintenancePlan[]
+
+  @@index([clientId])
+  @@map("lubrication_routes")
+}
+
+model LubricationRouteItem {
+  id        String           @id @default(uuid())
+  routeId   String
+  route     LubricationRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  pointId   String
+  point     LubricationPoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  sortOrder Int              @default(0)
+
+  @@unique([routeId, pointId])
+  @@index([routeId])
+  @@map("lubrication_route_items")
+}
+
+model LubricationRecord {
+  id              String                @id @default(uuid())
+  clientId        String
+  client          Client                @relation(fields: [clientId], references: [id])
+  pointId         String
+  point           LubricationPoint      @relation(fields: [pointId], references: [id])
+  // Guardado alem do ponto porque o lubrificante aplicado pode ter sido outro (faltou o
+  // especificado) - e o historico precisa dizer o que realmente entrou no equipamento.
+  lubricantId     String
+  lubricant       Lubricant             @relation(fields: [lubricantId], references: [id])
+  workOrderId     String?
+  workOrder       MaintenanceWorkOrder? @relation(fields: [workOrderId], references: [id])
+  quantity        Float
+  executedAt      DateTime              @default(now())
+  laborResourceId String?
+  laborResource   LaborResource?        @relation("LubricationExecutor", fields: [laborResourceId], references: [id])
+  conditionBefore LubricationCondition?
+  conditionAfter  LubricationCondition?
+  notes           String?
+  // Baixa correspondente no almoxarifado - a aplicacao e o consumo sao o mesmo evento.
+  movementId      String?               @unique
+  movement        SparePartMovement?    @relation(fields: [movementId], references: [id])
+  createdById     String?
+  createdAt       DateTime              @default(now())
+
+  @@index([clientId])
+  @@index([pointId])
+  @@index([executedAt])
+  @@map("lubrication_records")
 }

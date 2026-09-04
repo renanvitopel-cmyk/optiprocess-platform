@@ -12,7 +12,6 @@ import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
 import { listFailureCodes } from "../../../api/failureCodes";
 import { listLaborResources } from "../../../api/laborResources";
-import { listCostCenters } from "../../../api/costCenters";
 import { getInstrument } from "../../../api/instruments";
 import { createMaintenanceWorkOrder, getMaintenanceWorkOrder, updateMaintenanceWorkOrder } from "../../../api/maintenanceWorkOrders";
 import { useToast } from "../../../components/Toast";
@@ -31,7 +30,6 @@ const schema = z.object({
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   title: z.string().min(3, "Informe um titulo curto.").max(200),
   description: z.string().min(2, "Descreva o servico."),
-  costCenterId: z.string().uuid().optional().or(z.literal("")),
   technicianId: z.string().uuid().optional().or(z.literal("")),
   assignedResourceId: z.string().uuid().optional().or(z.literal("")),
   scheduledDate: z.string().optional(),
@@ -98,12 +96,6 @@ export default function WorkOrderForm() {
     enabled: !!clientId,
   });
 
-  const { data: costCenters } = useQuery({
-    queryKey: ["cost-centers-os", clientId],
-    queryFn: () => listCostCenters({ clientId, active: true }),
-    enabled: !!clientId,
-  });
-
   // Sugere a prioridade a partir da criticidade do ativo escolhido - o tecnico ainda
   // pode trocar (por isso so sobrescreve enquanto o campo nao foi tocado a mao).
   const { data: selectedInstrument } = useQuery({
@@ -126,7 +118,6 @@ export default function WorkOrderForm() {
         priority: existing.priority,
         title: existing.title ?? "",
         description: existing.description,
-        costCenterId: existing.costCenterId ?? "",
         technicianId: existing.technicianId ?? "",
         assignedResourceId: existing.assignedResourceId ?? "",
         scheduledDate: existing.scheduledDate?.slice(0, 10) ?? "",
@@ -186,7 +177,6 @@ export default function WorkOrderForm() {
         ...registroDeFalha,
         technicianId: values.technicianId || null,
         assignedResourceId: values.assignedResourceId || null,
-        costCenterId: values.costCenterId || null,
         failureCodeId: values.failureCodeId || null,
         plannedStart: values.plannedStart || null,
         plannedEnd: values.plannedEnd || null,
@@ -277,14 +267,6 @@ export default function WorkOrderForm() {
             {...register("description")}
           />
           <div className="grid gap-4 sm:grid-cols-3">
-            <SelectInput
-              label="Centro de custo"
-              placeholder={clientId ? "Do ativo (padrao)" : "Selecione o cliente primeiro"}
-              disabled={!clientId}
-              hint="Em branco = cai no centro de custo do ativo."
-              options={(costCenters ?? []).map((c) => ({ value: c.id, label: c.code ? `${c.code} - ${c.name}` : c.name }))}
-              {...register("costCenterId")}
-            />
             {ehCorretiva && (
               <SelectInput
                 label="Categoria da falha"

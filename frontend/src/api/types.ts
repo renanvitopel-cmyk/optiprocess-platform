@@ -801,12 +801,10 @@ export interface MaintenancePlan {
   estimatedLaborHours: number | null;
   /** Procedimento/cuidados do plano - vira a descricao da OS gerada. */
   instructions?: string | null;
-  /** Lubrificacao - so em plano do tipo Lubrificacao. */
-  lubricantSparePartId?: string | null;
-  lubricantSparePart?: { id: string; name: string; unit: string } | null;
-  lubricationPoints?: number | null;
-  lubricantQtyPerPoint?: number | null;
-  lubricationMethod?: LubricationMethod | null;
+  /** Plano de lubrificacao agenda uma rota - o lubrificante, a quantidade e o metodo sao
+   * a especificacao de cada ponto da rota, nao do plano. */
+  lubricationRouteId?: string | null;
+  lubricationRoute?: { id: string; name: string } | null;
   templateId: string | null;
   template?: { id: string; name: string } | null;
   checklistTemplate: MaintenancePlanChecklistItem[];
@@ -1227,4 +1225,182 @@ export interface MaintenanceDashboardData {
     scheduleAdherencePct: number | null;
     scheduledCompletedCount: number;
   };
+}
+
+// ── Lubrificacao ─────────────────────────────────────────────────────────────
+
+export type LubricantType = "GREASE" | "OIL" | "OTHER";
+export type LubricantBase = "MINERAL" | "SYNTHETIC" | "SEMI_SYNTHETIC";
+export type MachineStateForLubrication = "STOPPED" | "RUNNING" | "ANY";
+export type LubricationCondition = "NORMAL" | "LOW" | "DRY" | "CONTAMINATED" | "EXCESS";
+
+/** Ficha tecnica sobre uma peca do almoxarifado - o saldo e o custo continuam sendo os
+ * da peca, aqui so mora o que e' especifico de lubrificante. */
+export interface Lubricant {
+  id: string;
+  clientId: string;
+  sparePartId: string;
+  sparePart: { id: string; name: string; code: string | null; unit: string; stockQty: number; minStock: number };
+  type: LubricantType;
+  specification: string | null;
+  base: LubricantBase | null;
+  manufacturer: string | null;
+  application: string | null;
+  notes: string | null;
+  active: boolean;
+}
+
+export interface LubricantInput {
+  clientId?: string;
+  sparePartId: string;
+  type?: LubricantType;
+  specification?: string | null;
+  base?: LubricantBase | null;
+  manufacturer?: string | null;
+  application?: string | null;
+  notes?: string | null;
+  active?: boolean;
+}
+
+export interface LubricationPoint {
+  id: string;
+  clientId: string;
+  instrumentId: string;
+  instrument?: {
+    id: string;
+    tag: string | null;
+    description: string | null;
+    type: string;
+    area?: { id: string; name: string } | null;
+    plant?: { id: string; name: string } | null;
+  };
+  code: string;
+  name: string;
+  component: string | null;
+  lubricantId: string;
+  lubricant?: Lubricant;
+  /** Na unidade da peca do almoxarifado - o ponto nao guarda unidade propria. */
+  quantityPerApplication: number;
+  method: LubricationMethod;
+  frequencyDays: number;
+  machineState: MachineStateForLubrication;
+  accessNotes: string | null;
+  safetyNotes: string | null;
+  lastLubricatedAt: string | null;
+  nextDueAt: string | null;
+  active: boolean;
+  routeItems?: { id: string; route: { id: string; name: string } }[];
+  records?: LubricationRecord[];
+}
+
+export interface LubricationPointInput {
+  clientId?: string;
+  instrumentId: string;
+  code: string;
+  name: string;
+  component?: string | null;
+  lubricantId: string;
+  quantityPerApplication: number;
+  method: LubricationMethod;
+  frequencyDays: number;
+  machineState?: MachineStateForLubrication;
+  accessNotes?: string | null;
+  safetyNotes?: string | null;
+  lastLubricatedAt?: string | null;
+  active?: boolean;
+}
+
+export interface LubricationRecord {
+  id: string;
+  pointId: string;
+  point?: { id: string; code: string; name: string; instrument?: { id: string; tag: string | null } };
+  lubricantId: string;
+  lubricant?: Lubricant;
+  workOrderId: string | null;
+  workOrder?: { id: string; number: string } | null;
+  quantity: number;
+  executedAt: string;
+  laborResourceId: string | null;
+  laborResource?: { id: string; name: string } | null;
+  conditionBefore: LubricationCondition | null;
+  conditionAfter: LubricationCondition | null;
+  notes: string | null;
+}
+
+export interface LubricationRecordInput {
+  quantity: number;
+  lubricantId?: string;
+  executedAt?: string;
+  laborResourceId?: string | null;
+  workOrderId?: string | null;
+  conditionBefore?: LubricationCondition | null;
+  conditionAfter?: LubricationCondition | null;
+  notes?: string | null;
+}
+
+export interface LubricationRoute {
+  id: string;
+  clientId: string;
+  name: string;
+  code: string | null;
+  plantId: string | null;
+  plant?: { id: string; name: string } | null;
+  areaId: string | null;
+  area?: { id: string; name: string } | null;
+  responsibleId: string | null;
+  responsible?: { id: string; name: string; type: string } | null;
+  notes: string | null;
+  active: boolean;
+  items?: { id: string; sortOrder: number; point: LubricationPoint }[];
+}
+
+export interface LubricationRouteInput {
+  clientId?: string;
+  name: string;
+  code?: string | null;
+  plantId?: string | null;
+  areaId?: string | null;
+  responsibleId?: string | null;
+  notes?: string | null;
+  active?: boolean;
+  pointIds?: string[];
+}
+
+export interface LubricationDashboard {
+  totais: { pontos: number; vencidos: number; proximos7Dias: number; rotas: number; aplicacoes30Dias: number };
+  /** null quando nao ha ponto cadastrado - nao se mostra 100% de aderencia sobre nada. */
+  aderenciaPct: number | null;
+  atrasados: LubricationPoint[];
+}
+
+export interface LubricationForecastItem {
+  lubricantId: string;
+  nome: string;
+  codigo: string | null;
+  unidade: string;
+  especificacao: string | null;
+  consumoPrevisto: number;
+  aplicacoes: number;
+  pontos: number;
+  saldoAtual: number;
+  estoqueMinimo: number;
+  aComprar: number;
+  diasDeCobertura: number | null;
+}
+
+export interface LubricationForecast {
+  periodo: { de: string; ate: string; dias: number };
+  itens: LubricationForecastItem[];
+  detalhePorPonto: {
+    pointId: string;
+    code: string;
+    name: string;
+    instrumentTag: string | null;
+    area: string | null;
+    lubricante: string;
+    aplicacoes: number;
+    consumoPrevisto: number;
+    unidade: string;
+  }[];
+  totais: { pontosConsiderados: number; lubrificantes: number; aplicacoesPrevistas: number; itensAComprar: number };
 }

@@ -15,6 +15,19 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     return;
   }
 
+  // Erro de validacao do proprio zod (schema.parse fora de um ValidationError). Sem este
+  // ramo qualquer campo mal preenchido virava "erro interno do servidor" - o usuario nao
+  // ficava sabendo o que corrigir, e o log dava a impressao de bug no servidor.
+  if (err instanceof ZodError) {
+    const flat = err.flatten();
+    const primeiro = Object.entries(flat.fieldErrors)[0];
+    const mensagem = primeiro
+      ? `${primeiro[0]}: ${primeiro[1]?.[0] ?? "valor invalido"}`
+      : flat.formErrors[0] ?? "Dados invalidos.";
+    res.status(422).json({ message: mensagem, code: "VALIDATION_ERROR", details: flat });
+    return;
+  }
+
   if (err instanceof AppError) {
     res.status(err.statusCode).json({ message: err.message, code: err.code });
     return;

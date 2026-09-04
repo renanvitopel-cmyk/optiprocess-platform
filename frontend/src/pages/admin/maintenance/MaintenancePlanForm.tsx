@@ -18,7 +18,8 @@ import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { useCmms } from "../../../lib/cmms";
-import { TIPOS_DE_PLANO, METODOS_DE_LUBRIFICACAO } from "../../../lib/maintenanceLabels";
+import { TIPOS_DE_PLANO } from "../../../lib/maintenanceLabels";
+import { listLubricationRoutes } from "../../../api/lubrication";
 
 const MESES = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -59,11 +60,9 @@ const schema = z.object({
   responsibleId: z.string().uuid().optional().or(z.literal("")),
   status: z.enum(["DRAFT", "ACTIVE", "SUSPENDED", "CLOSED"]),
   planType: z.enum(["PREVENTIVE", "PREDICTIVE", "INSPECTION", "LUBRICATION", "CALIBRATION", "ELECTRICAL", "MECHANICAL", "REGULATORY", "OTHER"]),
-  // Lubrificacao - so aparece (e so viaja) em plano do tipo Lubrificacao.
-  lubricantSparePartId: z.string().uuid().optional().or(z.literal("")),
-  lubricationPoints: z.coerce.number().int().positive().optional().or(z.literal("")),
-  lubricantQtyPerPoint: z.coerce.number().positive().optional().or(z.literal("")),
-  lubricationMethod: z.enum(["MANUAL_GUN", "AUTOMATIC_CENTRAL", "OIL_BATH", "IMMERSION", "BRUSH", "SPRAY"]).optional().or(z.literal("")),
+  // Plano de lubrificacao agenda uma rota; o lubrificante, a quantidade e o metodo sao
+  // especificacao de cada ponto da rota.
+  lubricationRouteId: z.string().uuid().optional().or(z.literal("")),
   scope: z.enum(["SINGLE_ASSET", "ASSET_FAMILY"]),
   defaultPriority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
   specialtyId: z.string().uuid().optional().or(z.literal("")),
@@ -137,11 +136,14 @@ export default function MaintenancePlanForm() {
   const instrumentId = watch("instrumentId");
   const triggerType = watch("triggerType");
   const planType = watch("planType");
-  const pontosDeLubrificacao = watch("lubricationPoints");
-  const qtdPorPonto = watch("lubricantQtyPerPoint");
-  // Total previsto de lubrificante: e' o que sai do estoque a cada execucao.
-  const quantidadeTotalDeLubrificante =
-    pontosDeLubrificacao && qtdPorPonto ? Number(pontosDeLubrificacao) * Number(qtdPorPonto) : null;
+  const lubricationRouteId = watch("lubricationRouteId");
+
+  const { data: rotasDeLubrificacao } = useQuery({
+    queryKey: ["rotas-lubrificacao-plano", clientId],
+    queryFn: () => listLubricationRoutes({ clientId, active: true }),
+    enabled: !!clientId && planType === "LUBRICATION",
+  });
+  const rotaEscolhida = (rotasDeLubrificacao ?? []).find((r) => r.id === lubricationRouteId);
   const frequencyUnit = watch("frequencyUnit");
 
   const { data: meters } = useQuery({
@@ -200,10 +202,7 @@ export default function MaintenancePlanForm() {
         responsibleId: existing.responsibleId ?? "",
         status: existing.status ?? (existing.active ? "ACTIVE" : "SUSPENDED"),
         planType: existing.planType ?? "PREVENTIVE",
-        lubricantSparePartId: existing.lubricantSparePartId ?? "",
-        lubricationPoints: existing.lubricationPoints ?? "",
-        lubricantQtyPerPoint: existing.lubricantQtyPerPoint ?? "",
-        lubricationMethod: existing.lubricationMethod ?? "",
+        lubricationRouteId: existing.lubricationRouteId ?? "",
         scope: existing.scope ?? "SINGLE_ASSET",
         defaultPriority: existing.defaultPriority ?? "MEDIUM",
         specialtyId: existing.specialtyId ?? "",
@@ -289,14 +288,7 @@ export default function MaintenancePlanForm() {
         toleranceDaysAfter: values.toleranceDaysAfter ?? null,
         procedure: values.procedure || null,
         // Lubrificacao so viaja em plano de lubrificacao - noutro tipo o backend recusa.
-        ...(values.planType === "LUBRICATION"
-          ? {
-              lubricantSparePartId: values.lubricantSparePartId || null,
-              lubricationPoints: values.lubricationPoints === "" ? null : Number(values.lubricationPoints),
-              lubricantQtyPerPoint: values.lubricantQtyPerPoint === "" ? null : Number(values.lubricantQtyPerPoint),
-              lubricationMethod: values.lubricationMethod || null,
-            }
-          : { lubricantSparePartId: null, lubricationPoints: null, lubricantQtyPerPoint: null, lubricationMethod: null }),
+        lubricationRouteId: values.planType === "LUBRICATION" ? values.lubricationRouteId || null : null,
         estimatedLaborHours: values.estimatedLaborHours ?? null,
         parts: values.parts
           .filter((p) => p.sparePartId)
@@ -715,35 +707,39 @@ export default function MaintenancePlanForm() {
         {planType === "LUBRICATION" && (
           <div className="card space-y-4 p-5">
             <div>
-              <h2 className="font-semibold text-navy-900">Lubrificacao</h2>
+              <h2 className="font-semibold text-navy-900">Rota de lubrificacao</h2>
               <p className="text-xs text-graphite-500">
-                O lubrificante vem do almoxarifado, para que o consumo baixe do mesmo estoque das outras pecas.
+                O plano agenda uma rota; o lubrificante, a quantidade e o metodo sao a especificacao de cada
+                ponto dela - cadastrados em Lubrificacao &gt; Pontos.
               </p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <SelectInput
-                label="Lubrificante"
-                placeholder={clientId ? "Selecione a peca" : "Selecione o cliente primeiro"}
-                disabled={!clientId}
-                options={pecaOptions}
-                {...register("lubricantSparePartId")}
-              />
-              <TextInput label="Numero de pontos" type="number" min="1" {...register("lubricationPoints")} />
-              <TextInput
-                label="Quantidade por ponto"
-                type="number"
-                step="any"
-                min="0"
-                hint={quantidadeTotalDeLubrificante ? `Total: ${quantidadeTotalDeLubrificante}` : undefined}
-                {...register("lubricantQtyPerPoint")}
-              />
-              <SelectInput
-                label="Metodo de aplicacao"
-                placeholder="Nao informado"
-                options={Object.entries(METODOS_DE_LUBRIFICACAO).map(([valor, rotulo]) => ({ value: valor, label: rotulo }))}
-                {...register("lubricationMethod")}
-              />
-            </div>
+            <SelectInput
+              label="Rota"
+              placeholder={clientId ? "Selecione a rota" : "Selecione o cliente primeiro"}
+              disabled={!clientId}
+              options={(rotasDeLubrificacao ?? []).map((r) => ({
+                value: r.id,
+                label: `${r.name}${r.items?.length ? ` (${r.items.length} pontos)` : ""}`,
+              }))}
+              {...register("lubricationRouteId")}
+            />
+            {rotaEscolhida && (
+              <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-graphite-400">Pontos da rota</p>
+                <ul className="mt-1 space-y-0.5 text-sm text-graphite-700">
+                  {(rotaEscolhida.items ?? []).map((item) => (
+                    <li key={item.id}>
+                      {item.point.code} - {item.point.name}
+                      <span className="text-graphite-400">
+                        {" "}
+                        ({item.point.quantityPerApplication} {item.point.lubricant?.sparePart.unit ?? ""} de{" "}
+                        {item.point.lubricant?.sparePart.name ?? "lubrificante"}, a cada {item.point.frequencyDays} dias)
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 

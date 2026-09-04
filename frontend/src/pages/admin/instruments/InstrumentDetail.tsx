@@ -159,8 +159,8 @@ export default function InstrumentDetail() {
     <div>
       <PageHeader
         title={`TAG ${instrument.tag ?? "sem TAG"}`}
-        description={`${instrument.type} - ${instrument.model} · Cliente: ${clientDisplayName(instrument.client)}`}
-        breadcrumbs={[{ label: "Ativos", to: "/gestao/instrumentos" }, { label: instrument.tag ?? instrument.model }]}
+        description={`${instrument.description || instrument.type} · Cliente: ${clientDisplayName(instrument.client)}`}
+        breadcrumbs={[{ label: "Ativos", to: "/gestao/instrumentos" }, { label: instrument.tag ?? instrument.type }]}
         actions={
           canManage && (
             <>
@@ -195,8 +195,8 @@ export default function InstrumentDetail() {
       {tab === "overview" && (
         <div className="card p-5">
           <dl className="grid gap-4 sm:grid-cols-3">
-            <Info label="Fabricante" value={instrument.manufacturer} />
-            <Info label="Numero de serie" value={instrument.serialNumber} />
+            <Info label="Fabricante" value={instrument.manufacturer ?? "-"} />
+            <Info label="Numero de serie" value={instrument.serialNumber ?? "-"} />
             <Info label="Faixa de medicao" value={instrument.measurementRange ?? "-"} />
             <Info label="Resolucao" value={instrument.resolution ?? "-"} />
             <Info label="Unidade" value={instrument.unit ?? "-"} />

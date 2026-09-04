@@ -512,9 +512,15 @@ model Instrument {
   client                     Client            @relation(fields: [clientId], references: [id])
   type                       String
   tag                        String?
-  manufacturer               String
-  model                      String
-  serialNumber               String
+  // Nome do ativo em linguagem de gente ("Compressor de ar - Linha 4"). Junto com o TAG e'
+  // o que identifica o equipamento nas telas; o resto e' ficha tecnica complementar.
+  description                String?
+  // Ficha do fabricante: opcional de proposito. Um ativo de manutencao (uma linha, um
+  // tanque) muitas vezes nao tem numero de serie - exigir isso so fazia o usuario digitar
+  // "-" para escapar do campo obrigatorio.
+  manufacturer               String?
+  model                      String?
+  serialNumber               String?
   measurementRange           String?
   resolution                 String?
   unit                       String?

@@ -113,9 +113,10 @@ export interface ServiceOrderItem {
 export interface InstrumentRef {
   id: string;
   type: string;
-  model: string;
-  serialNumber: string;
+  model: string | null;
+  serialNumber: string | null;
   tag: string | null;
+  description?: string | null;
 }
 
 export interface ServiceOrder {
@@ -148,9 +149,11 @@ export interface Instrument {
   client?: ClientRef;
   type: string;
   tag: string | null;
-  manufacturer: string;
-  model: string;
-  serialNumber: string;
+  /** Nome do ativo em linguagem de gente - junto do TAG e' o que identifica nas telas. */
+  description: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
   measurementRange: string | null;
   resolution: string | null;
   unit: string | null;

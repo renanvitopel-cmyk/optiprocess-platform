@@ -111,7 +111,7 @@ export default function InstrumentsList() {
               </span>
             ),
           },
-          { header: "Equipamento", accessor: (i) => <span className="font-medium text-navy-900">{i.type} - {i.model}</span> },
+          { header: "Ativo", accessor: (i) => (<div><p className="font-medium text-navy-900">{i.description || i.type}</p><p className="text-xs text-graphite-400">{i.type}{i.model ? ` - ${i.model}` : ""}</p></div>) },
           { header: "Componente de", accessor: (i) => (i.parent ? `TAG ${i.parent.tag ?? i.parent.type}` : "-") },
           { header: "Cliente", accessor: (i) => clientDisplayName(i.client) },
           { header: "Criticidade", accessor: (i) => <StatusBadge status={i.criticality} /> },

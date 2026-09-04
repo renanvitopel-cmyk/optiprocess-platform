@@ -129,8 +129,8 @@ export default function PortalInstrumentDetail() {
     <div>
       <PageHeader
         title={`TAG ${instrument.tag ?? "sem TAG"}`}
-        description={`${instrument.type} - ${instrument.model}`}
-        breadcrumbs={[{ label: "Meus ativos", to: "/portal/instrumentos" }, { label: instrument.tag ?? instrument.model }]}
+        description={instrument.description || instrument.type}
+        breadcrumbs={[{ label: "Meus ativos", to: "/portal/instrumentos" }, { label: instrument.tag ?? instrument.type }]}
         actions={
           <button className="btn-outline" onClick={() => setEditOpen(true)}>
             <Pencil className="h-4 w-4" /> Editar
@@ -158,8 +158,8 @@ export default function PortalInstrumentDetail() {
       {tab === "overview" && (
         <div className="card p-5">
           <dl className="grid gap-4 sm:grid-cols-3">
-            <Info label="Fabricante" value={instrument.manufacturer} />
-            <Info label="Numero de serie" value={instrument.serialNumber} />
+            <Info label="Fabricante" value={instrument.manufacturer ?? "-"} />
+            <Info label="Numero de serie" value={instrument.serialNumber ?? "-"} />
             <Info label="Faixa de medicao" value={instrument.measurementRange ?? "-"} />
             <Info label="Local de instalacao" value={instrument.installationLocation ?? "-"} />
             <Info label="Planta" value={instrument.plant?.name ?? "-"} />

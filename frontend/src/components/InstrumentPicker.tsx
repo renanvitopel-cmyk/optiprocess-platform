@@ -43,7 +43,7 @@ export const InstrumentPicker = forwardRef<HTMLSelectElement, InstrumentPickerPr
       disabled={!ready}
       options={(data?.items ?? [])
         .filter((i) => i.id !== excludeId)
-        .map((i) => ({ value: i.id, label: `${i.tag ?? i.type} - ${i.model} (${i.serialNumber})` }))}
+        .map((i) => ({ value: i.id, label: [i.tag ?? i.type, i.description || i.model].filter(Boolean).join(" - ") }))}
       {...rest}
     />
   );

@@ -273,9 +273,9 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
     fieldGrid(
       [
         { label: "Instrumento", value: instrument.type },
-        { label: "Fabricante", value: instrument.manufacturer },
-        { label: "Modelo", value: instrument.model },
-        { label: "Nº de série", value: instrument.serialNumber },
+        { label: "Fabricante", value: instrument.manufacturer || "-" },
+        { label: "Modelo", value: instrument.model || "-" },
+        { label: "Nº de série", value: instrument.serialNumber || "-" },
         { label: "Tag / Patrimônio", value: instrument.tag || "-" },
         { label: "Faixa de medição", value: instrument.measurementRange || "-" },
         { label: "Resolução", value: instrument.resolution || "-" },

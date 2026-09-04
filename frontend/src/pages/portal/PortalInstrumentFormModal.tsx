@@ -16,9 +16,10 @@ import { useAuth } from "../../auth/AuthContext";
 const schema = z.object({
   type: z.string().min(2, "Informe o tipo de equipamento."),
   tag: z.string().min(1, "Informe o TAG do ativo."),
-  manufacturer: z.string().min(1, "Informe o fabricante."),
-  model: z.string().min(1, "Informe o modelo."),
-  serialNumber: z.string().min(1, "Informe o numero de serie."),
+  description: z.string().optional(),
+  manufacturer: z.string().optional(),
+  model: z.string().optional(),
+  serialNumber: z.string().optional(),
   installationLocation: z.string().optional(),
   calibrationFrequencyMonths: z.coerce.number().int().min(1).optional().or(z.literal("")),
   criticality: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
@@ -58,9 +59,10 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
           ? {
               type: instrument.type,
               tag: instrument.tag ?? "",
-              manufacturer: instrument.manufacturer,
-              model: instrument.model,
-              serialNumber: instrument.serialNumber,
+              description: instrument.description ?? "",
+              manufacturer: instrument.manufacturer ?? "",
+              model: instrument.model ?? "",
+              serialNumber: instrument.serialNumber ?? "",
               installationLocation: instrument.installationLocation ?? "",
               calibrationFrequencyMonths: instrument.calibrationFrequencyMonths ?? undefined,
               criticality: instrument.criticality,
@@ -80,6 +82,10 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
     try {
       const payload = {
         ...values,
+        description: values.description || null,
+        manufacturer: values.manufacturer || null,
+        model: values.model || null,
+        serialNumber: values.serialNumber || null,
         parentId: values.parentId || null,
         plantId: values.plantId || null,
         areaId: values.areaId || null,
@@ -110,13 +116,20 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
       }
     >
       <form id="portal-instrument-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-        <div className="rounded-lg border border-navy-200 bg-navy-50 p-4">
+        <div className="grid gap-4 sm:grid-cols-2">
           <TextInput
-            label="TAG do ativo"
+            label="TAG"
             required
-            hint="Codigo que voce usa para identificar este equipamento. As calibracoes e ordens de servico ficam agrupadas por ele."
+            placeholder="Ex.: VTP-VOT-L4-CP01"
+            hint="Codigo unico deste ativo na sua empresa."
             error={errors.tag?.message}
             {...register("tag")}
+          />
+          <TextInput
+            label="Descricao"
+            placeholder="Ex.: Compressor de ar da Linha 4"
+            hint="Nome do ativo em linguagem de gente."
+            {...register("description")}
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -146,8 +159,8 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
           />
         </div>
         <InstrumentPicker
-          label="Ativo pai (opcional)"
-          hint="Use para montar a arvore de ativos: o motor e' filho do compressor, a bomba e' filha da linha."
+          label="Faz parte de (ativo pai)"
+          hint="A estrutura e' uma arvore: Planta > Linha > Maquina > Componente. Vazio = ativo no topo."
           excludeId={instrument?.id}
           error={errors.parentId?.message}
           {...register("parentId")}

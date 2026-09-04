@@ -59,6 +59,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
       ? {
           OR: [
             { tag: { contains: search, mode: "insensitive" as const } },
+            { description: { contains: search, mode: "insensitive" as const } },
             { model: { contains: search, mode: "insensitive" as const } },
             { serialNumber: { contains: search, mode: "insensitive" as const } },
             { manufacturer: { contains: search, mode: "insensitive" as const } },
@@ -74,7 +75,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
       ...toSkipTake(pageParams),
       include: {
         client: { select: { id: true, companyName: true, tradeName: true } },
-        parent: { select: { id: true, type: true, model: true, serialNumber: true, tag: true } },
+        parent: { select: { id: true, type: true, model: true, serialNumber: true, tag: true, description: true } },
         plant: { select: { id: true, name: true } },
         area: { select: { id: true, name: true } },
         system: { select: { id: true, name: true } },
@@ -88,7 +89,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
   res.json(buildPagedResult(withLevel, total, pageParams));
 });
 
-const instrumentRefSelect = { id: true, type: true, model: true, serialNumber: true, tag: true } as const;
+const instrumentRefSelect = { id: true, type: true, model: true, serialNumber: true, tag: true, description: true } as const;
 
 export const getInstrument = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
@@ -131,9 +132,12 @@ const instrumentSchema = z.object({
   // TAG e o codigo que identifica o ativo (cadastrado pelo cliente ou pela OptiProcess) -
   // e' o que agrupa, na ficha do ativo, todas as calibracoes e ordens de servico dele.
   tag: z.string().min(1, "Informe o TAG do ativo."),
-  manufacturer: z.string().min(1),
-  model: z.string().min(1),
-  serialNumber: z.string().min(1),
+  // Nome do ativo em linguagem de gente - junto do TAG e' o que identifica nas telas.
+  description: z.string().nullish(),
+  // Ficha do fabricante e' opcional: nem todo ativo de manutencao tem numero de serie.
+  manufacturer: z.string().nullish(),
+  model: z.string().nullish(),
+  serialNumber: z.string().nullish(),
   measurementRange: z.string().nullish(),
   resolution: z.string().nullish(),
   unit: z.string().nullish(),
@@ -245,7 +249,7 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
     action: "CREATE",
     entityType: "Instrument",
     entityId: instrument.id,
-    description: `Instrumento ${instrument.model} (${instrument.serialNumber}) cadastrado`,
+    description: `Ativo ${instrument.tag ?? instrument.type}${instrument.description ? ` - ${instrument.description}` : ""} cadastrado`,
   });
 
   res.status(201).json(instrument);
@@ -285,7 +289,7 @@ export const updateInstrument = asyncHandler(async (req: Request, res: Response)
     action: "UPDATE",
     entityType: "Instrument",
     entityId: instrument.id,
-    description: `Instrumento ${instrument.model} (${instrument.serialNumber}) atualizado`,
+    description: `Ativo ${instrument.tag ?? instrument.type}${instrument.description ? ` - ${instrument.description}` : ""} atualizado`,
   });
 
   res.json(instrument);
@@ -302,7 +306,7 @@ export const deleteInstrument = asyncHandler(async (req: Request, res: Response)
     action: "DELETE",
     entityType: "Instrument",
     entityId: existing.id,
-    description: `Instrumento ${existing.model} (${existing.serialNumber}) removido`,
+    description: `Ativo ${existing.tag ?? existing.type}${existing.description ? ` - ${existing.description}` : ""} removido`,
   });
 
   res.status(204).send();

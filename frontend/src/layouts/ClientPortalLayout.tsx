@@ -3,6 +3,7 @@ import { NavLink, Outlet, Link } from "react-router-dom";
 import { Menu, X, LogOut } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { getPortalNav } from "./portalNav";
+import { CmmsLogo } from "../components/CmmsLogo";
 import { clientDisplayName } from "../lib/format";
 import { Logo } from "../components/Logo";
 
@@ -37,6 +38,11 @@ export function ClientPortalLayout() {
           {section.title &&
             (isCollapsed ? (
               <div className="mx-3 mb-1 border-t border-navy-800" />
+            ) : section.title === "Manutencao" ? (
+              // A secao de manutencao e' o produto CMMS, com marca propria.
+              <div className="px-3 pb-1.5 pt-0.5">
+                <CmmsLogo variant="light" size="sm" />
+              </div>
             ) : (
               <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-navy-400">{section.title}</p>
             ))}

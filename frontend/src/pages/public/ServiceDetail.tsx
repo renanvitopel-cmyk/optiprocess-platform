@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { CheckCircle2, ArrowRight, Sparkles, Plug } from "lucide-react";
 import { serviceLines } from "../../lib/companyInfo";
+import { CmmsLogo } from "../../components/CmmsLogo";
 import NotFound from "../NotFound";
 
 export default function ServiceDetail() {
@@ -17,7 +18,13 @@ export default function ServiceDetail() {
       <section className="bg-navy-950 py-16 text-white">
         <div className="container-page">
           <p className="text-sm font-semibold text-safety-yellow">{service.subtitle ?? "Serviços"}</p>
-          <h1 className="mt-1 text-3xl font-bold text-white sm:text-4xl">{service.title}</h1>
+          {isPlatform ? (
+            // O CMMS e' um produto com marca propria - na pagina dele, quem assina e' a
+            // marca do produto. O site segue sendo da OptiProcess.
+            <CmmsLogo variant="light" size="lg" className="mt-2" />
+          ) : (
+            <h1 className="mt-1 text-3xl font-bold text-white sm:text-4xl">{service.title}</h1>
+          )}
           <p className="mt-3 max-w-2xl text-navy-200">{service.shortDescription}</p>
         </div>
       </section>

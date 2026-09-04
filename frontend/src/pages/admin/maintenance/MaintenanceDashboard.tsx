@@ -4,7 +4,8 @@ import { Link } from "react-router-dom";
 import { Wrench, Gauge, ClipboardList, ClipboardPlus, ShieldCheck, Activity, TimerReset, Boxes, GitBranch, Radar, HardHat, Kanban, BarChart3, Search, CalendarDays, SlidersHorizontal } from "lucide-react";
 import { getMaintenanceDashboard } from "../../../api/maintenanceWorkOrders";
 import { listClients } from "../../../api/clients";
-import { PageHeader } from "../../../components/PageHeader";
+
+import { CmmsLogo } from "../../../components/CmmsLogo";
 import { StatCard } from "../../../components/StatCard";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { clientDisplayName } from "../../../lib/format";
@@ -26,10 +27,14 @@ export default function MaintenanceDashboard() {
 
   return (
     <div>
-      <PageHeader
-        title="RLP Maintenance CMMS"
-        description="Ciclo completo de manutencao - planos preventivos, ordens, pecas e indicadores (ultimos 90 dias)"
-      />
+      {/* O CMMS e' produto proprio: o painel dele abre com a marca do produto, nao com a
+          da OptiProcess (que segue como marca principal do site e da gestao). */}
+      <div className="mb-6">
+        <CmmsLogo size="lg" />
+        <p className="mt-2 text-sm text-graphite-500">
+          Ciclo completo de manutencao - planos preventivos, ordens, pecas e indicadores (ultimos 90 dias)
+        </p>
+      </div>
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
         {!isClient && (

@@ -18,6 +18,7 @@ import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { useCmms } from "../../../lib/cmms";
+import { TIPOS_DE_PLANO, METODOS_DE_LUBRIFICACAO } from "../../../lib/maintenanceLabels";
 
 const MESES = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -57,7 +58,12 @@ const schema = z.object({
   materialPolicy: z.enum(["RESERVE_AUTO", "BLOCK_AWAITING_MATERIAL", "ALERT_ONLY", "DO_NOT_GENERATE"]),
   responsibleId: z.string().uuid().optional().or(z.literal("")),
   status: z.enum(["DRAFT", "ACTIVE", "SUSPENDED", "CLOSED"]),
-  planType: z.enum(["PREVENTIVE", "INSPECTION", "LUBRICATION", "CALIBRATION", "REGULATORY", "OTHER"]),
+  planType: z.enum(["PREVENTIVE", "PREDICTIVE", "INSPECTION", "LUBRICATION", "CALIBRATION", "ELECTRICAL", "MECHANICAL", "REGULATORY", "OTHER"]),
+  // Lubrificacao - so aparece (e so viaja) em plano do tipo Lubrificacao.
+  lubricantSparePartId: z.string().uuid().optional().or(z.literal("")),
+  lubricationPoints: z.coerce.number().int().positive().optional().or(z.literal("")),
+  lubricantQtyPerPoint: z.coerce.number().positive().optional().or(z.literal("")),
+  lubricationMethod: z.enum(["MANUAL_GUN", "AUTOMATIC_CENTRAL", "OIL_BATH", "IMMERSION", "BRUSH", "SPRAY"]).optional().or(z.literal("")),
   scope: z.enum(["SINGLE_ASSET", "ASSET_FAMILY"]),
   defaultPriority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
   specialtyId: z.string().uuid().optional().or(z.literal("")),
@@ -73,6 +79,7 @@ const schema = z.object({
       targetValue: z.coerce.number().optional(),
       requiresPhoto: z.boolean().optional(),
       reference: z.string().optional(),
+      estimatedMinutes: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
     }),
   ),
   toleranceDaysBefore: z.coerce.number().int().nonnegative().optional(),
@@ -129,6 +136,12 @@ export default function MaintenancePlanForm() {
   const clientId = watch("clientId");
   const instrumentId = watch("instrumentId");
   const triggerType = watch("triggerType");
+  const planType = watch("planType");
+  const pontosDeLubrificacao = watch("lubricationPoints");
+  const qtdPorPonto = watch("lubricantQtyPerPoint");
+  // Total previsto de lubrificante: e' o que sai do estoque a cada execucao.
+  const quantidadeTotalDeLubrificante =
+    pontosDeLubrificacao && qtdPorPonto ? Number(pontosDeLubrificacao) * Number(qtdPorPonto) : null;
   const frequencyUnit = watch("frequencyUnit");
 
   const { data: meters } = useQuery({
@@ -187,6 +200,10 @@ export default function MaintenancePlanForm() {
         responsibleId: existing.responsibleId ?? "",
         status: existing.status ?? (existing.active ? "ACTIVE" : "SUSPENDED"),
         planType: existing.planType ?? "PREVENTIVE",
+        lubricantSparePartId: existing.lubricantSparePartId ?? "",
+        lubricationPoints: existing.lubricationPoints ?? "",
+        lubricantQtyPerPoint: existing.lubricantQtyPerPoint ?? "",
+        lubricationMethod: existing.lubricationMethod ?? "",
         scope: existing.scope ?? "SINGLE_ASSET",
         defaultPriority: existing.defaultPriority ?? "MEDIUM",
         specialtyId: existing.specialtyId ?? "",
@@ -216,6 +233,7 @@ export default function MaintenancePlanForm() {
           ? existing.checklistTemplate.map((c) => ({
               description: c.description,
               section: c.section ?? "",
+              estimatedMinutes: c.estimatedMinutes ?? "",
               required: c.required ?? true,
               responseType: c.responseType ?? "YES_NO_NA",
               unit: c.unit ?? "",
@@ -260,10 +278,25 @@ export default function MaintenancePlanForm() {
         toleranceMeterAfter: values.toleranceMeterAfter ?? null,
         checklistTemplate: values.checklistTemplate
           .filter((c) => c.description.trim())
-          .map((c) => ({ ...c, section: c.section || null, unit: c.unit || null, reference: c.reference || null })),
+          .map((c) => ({
+            ...c,
+            section: c.section || null,
+            unit: c.unit || null,
+            reference: c.reference || null,
+            estimatedMinutes: c.estimatedMinutes === "" ? null : Number(c.estimatedMinutes),
+          })),
         toleranceDaysBefore: values.toleranceDaysBefore ?? null,
         toleranceDaysAfter: values.toleranceDaysAfter ?? null,
         procedure: values.procedure || null,
+        // Lubrificacao so viaja em plano de lubrificacao - noutro tipo o backend recusa.
+        ...(values.planType === "LUBRICATION"
+          ? {
+              lubricantSparePartId: values.lubricantSparePartId || null,
+              lubricationPoints: values.lubricationPoints === "" ? null : Number(values.lubricationPoints),
+              lubricantQtyPerPoint: values.lubricantQtyPerPoint === "" ? null : Number(values.lubricantQtyPerPoint),
+              lubricationMethod: values.lubricationMethod || null,
+            }
+          : { lubricantSparePartId: null, lubricationPoints: null, lubricantQtyPerPoint: null, lubricationMethod: null }),
         estimatedLaborHours: values.estimatedLaborHours ?? null,
         parts: values.parts
           .filter((p) => p.sparePartId)
@@ -365,14 +398,7 @@ export default function MaintenancePlanForm() {
             <SelectInput
               label="Tipo de plano"
               required
-              options={[
-                { value: "PREVENTIVE", label: "Preventiva" },
-                { value: "INSPECTION", label: "Inspecao" },
-                { value: "LUBRICATION", label: "Lubrificacao" },
-                { value: "CALIBRATION", label: "Calibracao" },
-                { value: "REGULATORY", label: "Legal / Normativa" },
-                { value: "OTHER", label: "Outro" },
-              ]}
+              options={Object.entries(TIPOS_DE_PLANO).map(([valor, rotulo]) => ({ value: valor, label: rotulo }))}
               {...register("planType")}
             />
             <SelectInput
@@ -683,6 +709,44 @@ export default function MaintenancePlanForm() {
         </div>
 
         <div className={step === 2 ? "space-y-6" : "hidden"}>
+        {/* Lubrificacao: so aparece no plano desse tipo. Um plano de lubrificacao sem dizer
+            qual graxa, em quantos pontos e quanto em cada um nao e' um plano - e' um
+            lembrete. */}
+        {planType === "LUBRICATION" && (
+          <div className="card space-y-4 p-5">
+            <div>
+              <h2 className="font-semibold text-navy-900">Lubrificacao</h2>
+              <p className="text-xs text-graphite-500">
+                O lubrificante vem do almoxarifado, para que o consumo baixe do mesmo estoque das outras pecas.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <SelectInput
+                label="Lubrificante"
+                placeholder={clientId ? "Selecione a peca" : "Selecione o cliente primeiro"}
+                disabled={!clientId}
+                options={pecaOptions}
+                {...register("lubricantSparePartId")}
+              />
+              <TextInput label="Numero de pontos" type="number" min="1" {...register("lubricationPoints")} />
+              <TextInput
+                label="Quantidade por ponto"
+                type="number"
+                step="any"
+                min="0"
+                hint={quantidadeTotalDeLubrificante ? `Total: ${quantidadeTotalDeLubrificante}` : undefined}
+                {...register("lubricantQtyPerPoint")}
+              />
+              <SelectInput
+                label="Metodo de aplicacao"
+                placeholder="Nao informado"
+                options={Object.entries(METODOS_DE_LUBRIFICACAO).map(([valor, rotulo]) => ({ value: valor, label: rotulo }))}
+                {...register("lubricationMethod")}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="card space-y-4 p-5">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-navy-900">Materiais previstos</h2>
@@ -758,8 +822,15 @@ export default function MaintenancePlanForm() {
                     </button>
                   )}
                 </div>
-                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                <div className="mt-2 grid gap-2 sm:grid-cols-4">
                   <TextInput label="Secao" placeholder="Ex.: Preparacao" {...register(`checklistTemplate.${index}.section`)} />
+                  <TextInput
+                    label="Tempo (min)"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    {...register(`checklistTemplate.${index}.estimatedMinutes`)}
+                  />
                   <SelectInput
                     label="Tipo de resposta"
                     options={[

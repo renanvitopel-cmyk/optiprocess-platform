@@ -10,7 +10,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { clientDisplayName, formatDate, formatReportCategory } from "../../lib/format";
 import { EmptyState } from "../../components/EmptyState";
 
-const TYPE_LABELS: Record<string, string> = { PREVENTIVE: "Preventiva", CORRECTIVE: "Corretiva", PREDICTIVE: "Preditiva" };
+import { TIPOS_DE_OS as TYPE_LABELS } from "../../lib/maintenanceLabels";
 
 export default function PortalDashboard() {
   const { user } = useAuth();

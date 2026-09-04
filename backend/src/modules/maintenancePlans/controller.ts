@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority, MaintenanceFrequencyUnit, OperationalCalendar, MeterResetRule, MaintenanceTriggerMode, MaintenanceOrderStatus, MaterialPolicy, ChecklistResponseType } from "@prisma/client";
+import { MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority, MaintenanceFrequencyUnit, OperationalCalendar, MeterResetRule, MaintenanceTriggerMode, MaintenanceOrderStatus, MaterialPolicy, ChecklistResponseType, LubricationMethod } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -130,6 +130,8 @@ const checklistItemSchema = z.object({
   targetValue: z.coerce.number().nullish(),
   requiresPhoto: z.boolean().optional(),
   reference: z.string().nullish(),
+  // Tempo esperado nesta operacao - somado, da a duracao estimada do servico.
+  estimatedMinutes: z.coerce.number().int().nonnegative().nullish(),
 });
 const planPartSchema = z.object({
   sparePartId: z.string().uuid(),
@@ -191,6 +193,11 @@ const planSchema = z.object({
   estimatedLaborHours: z.coerce.number().nonnegative().nullish(),
   // Procedimento/cuidados do plano - vira a descricao da OS gerada.
   instructions: z.string().nullish(),
+  // Lubrificacao: so faz sentido em plano do tipo Lubrificacao (validado na escrita).
+  lubricantSparePartId: z.string().uuid().nullish(),
+  lubricationPoints: z.coerce.number().int().positive().nullish(),
+  lubricantQtyPerPoint: z.coerce.number().positive().nullish(),
+  lubricationMethod: z.nativeEnum(LubricationMethod).nullish(),
   templateId: z.string().uuid().nullish(),
   parts: z.array(planPartSchema).optional(),
 });
@@ -234,6 +241,19 @@ async function assertPartsBelongToClient(parts: { sparePartId: string }[], clien
   if (found.some((p) => p.clientId !== clientId)) throw new ValidationError("Uma das pecas informadas pertence a outra empresa.");
 }
 
+/** Os campos de lubrificacao so descrevem alguma coisa num plano de lubrificacao; noutro
+ * tipo eles ficariam guardados sem significado nenhum. */
+function assertLubrificacaoCoerente(
+  planType: MaintenancePlanType | undefined,
+  dados: { lubricantSparePartId?: string | null; lubricationPoints?: number | null; lubricantQtyPerPoint?: number | null; lubricationMethod?: LubricationMethod | null },
+) {
+  const preencheu =
+    !!dados.lubricantSparePartId || dados.lubricationPoints != null || dados.lubricantQtyPerPoint != null || !!dados.lubricationMethod;
+  if (preencheu && planType && planType !== "LUBRICATION") {
+    throw new ValidationError("Os dados de lubrificacao so se aplicam a plano do tipo Lubrificacao.");
+  }
+}
+
 export const createMaintenancePlan = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = planSchema.parse(req.body);
@@ -252,6 +272,7 @@ export const createMaintenancePlan = asyncHandler(async (req: Request, res: Resp
   if (instrument.clientId !== clientId) throw new ValidationError("Esse ativo pertence a outra empresa.");
 
   if (data.parts?.length) await assertPartsBelongToClient(data.parts, clientId);
+  assertLubrificacaoCoerente(data.planType, data);
 
   const { checklistTemplate, parts, ...planData } = data;
   // Periodicidade em dias e' derivada da unidade escolhida - "a cada 3 meses" vira 90
@@ -572,6 +593,7 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
           maxValue: c.maxValue,
           targetValue: c.targetValue,
           requiresPhoto: c.requiresPhoto,
+          estimatedMinutes: c.estimatedMinutes,
           reference: c.reference,
         })),
       },

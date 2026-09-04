@@ -658,7 +658,7 @@ export interface FailureCode {
 }
 
 export type MaintenanceTriggerType = "TIME" | "METER" | "CONDITION";
-export type MaintenanceOrderType = "PREVENTIVE" | "CORRECTIVE" | "PREDICTIVE";
+export type MaintenanceOrderType = "PREVENTIVE" | "CORRECTIVE" | "PREDICTIVE" | "LUBRICATION" | "INSPECTION" | "PROJECT";
 export type MaintenancePriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type MaintenanceOrderStatus =
   | "OPEN"
@@ -680,6 +680,8 @@ export type ChecklistResponseType = "YES_NO_NA" | "TEXT" | "NUMBER" | "PHOTO" | 
 export interface MaintenancePlanChecklistItem {
   id?: string;
   description: string;
+  /** Tempo esperado nesta operacao - somado, da a duracao estimada do servico. */
+  estimatedMinutes?: number | null;
   sortOrder?: number;
   /** Agrupa itens em etapas ("Preparacao", "Execucao", "Encerramento"). */
   section?: string | null;
@@ -707,7 +709,19 @@ export interface MaintenancePlanPart {
 }
 
 export type MaintenancePlanStatus = "DRAFT" | "ACTIVE" | "SUSPENDED" | "CLOSED";
-export type MaintenancePlanType = "PREVENTIVE" | "INSPECTION" | "LUBRICATION" | "CALIBRATION" | "REGULATORY" | "OTHER";
+export type MaintenancePlanType =
+  | "PREVENTIVE"
+  | "PREDICTIVE"
+  | "INSPECTION"
+  | "LUBRICATION"
+  | "CALIBRATION"
+  | "ELECTRICAL"
+  | "MECHANICAL"
+  | "REGULATORY"
+  | "OTHER";
+
+/** Como o lubrificante e' aplicado no ponto. */
+export type LubricationMethod = "MANUAL_GUN" | "AUTOMATIC_CENTRAL" | "OIL_BATH" | "IMMERSION" | "BRUSH" | "SPRAY";
 export type MaintenancePlanScope = "SINGLE_ASSET" | "ASSET_FAMILY";
 export type MaintenanceFrequencyUnit = "DAY" | "WEEK" | "MONTH" | "YEAR";
 export type OperationalCalendar = "ALL_DAYS" | "BUSINESS_DAYS";
@@ -787,6 +801,12 @@ export interface MaintenancePlan {
   estimatedLaborHours: number | null;
   /** Procedimento/cuidados do plano - vira a descricao da OS gerada. */
   instructions?: string | null;
+  /** Lubrificacao - so em plano do tipo Lubrificacao. */
+  lubricantSparePartId?: string | null;
+  lubricantSparePart?: { id: string; name: string; unit: string } | null;
+  lubricationPoints?: number | null;
+  lubricantQtyPerPoint?: number | null;
+  lubricationMethod?: LubricationMethod | null;
   templateId: string | null;
   template?: { id: string; name: string } | null;
   checklistTemplate: MaintenancePlanChecklistItem[];
@@ -822,6 +842,8 @@ export interface MaintenanceWorkOrderChecklistItem {
   id: string;
   workOrderId: string;
   description: string;
+  /** Tempo esperado nesta operacao - somado, da a duracao estimada do servico. */
+  estimatedMinutes?: number | null;
   result: ChecklistItemResult;
   notes: string | null;
   sortOrder: number;
@@ -990,6 +1012,9 @@ export interface AssetPartHistoryEntry {
   lastWorkOrder: { id: string; number: string } | null;
 }
 
+/** Corretiva com a maquina rodando ou corretiva de quebra (maquina parada). */
+export type CorrectiveType = "IN_OPERATION" | "BREAKDOWN";
+
 export type FailureSeverity = "LOW" | "MODERATE" | "HIGH" | "CRITICAL";
 
 /** OS corretiva vista pelo angulo da falha (tela de Falhas/RCA). */
@@ -1003,7 +1028,9 @@ export interface FailureRecord {
   failureStartedAt: string | null;
   failureEndedAt: string | null;
   failureSeverity: FailureSeverity | null;
+  failureDescription: string | null;
   failureRootCause: string | null;
+  failureCorrectiveAction: string | null;
   productionLoss: number | null;
   executionNotes: string | null;
   /** Calculado a partir da janela da falha - nao e' digitado. */
@@ -1055,11 +1082,15 @@ export interface MaintenanceWorkOrder {
   executionNotes: string | null;
   /** Registro do encerramento (pendencias, combinados, o que observar). */
   closureNotes: string | null;
+  /** Em operacao ou de quebra - so na corretiva. */
+  correctiveType: CorrectiveType | null;
   /** Registro de falha - preenchido pelo tecnico na OS corretiva. */
   failureStartedAt: string | null;
   failureEndedAt: string | null;
   failureSeverity: FailureSeverity | null;
+  failureDescription: string | null;
   failureRootCause: string | null;
+  failureCorrectiveAction: string | null;
   productionLoss: number | null;
   approvedById: string | null;
   approvedBy?: { id: string; name: string } | null;

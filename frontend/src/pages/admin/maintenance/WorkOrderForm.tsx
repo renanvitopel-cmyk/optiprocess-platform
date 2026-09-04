@@ -19,11 +19,15 @@ import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { useCmms } from "../../../lib/cmms";
+import { OPCOES_DE_TIPO, GRAVIDADES_DE_FALHA, valorDoTipo } from "../../../lib/maintenanceLabels";
+import type { FailureSeverity } from "../../../api/types";
 
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
   instrumentId: z.string().uuid("Selecione o ativo."),
-  type: z.enum(["PREVENTIVE", "CORRECTIVE", "PREDICTIVE"]),
+  // Um seletor so, ja separando a corretiva em operacao da de quebra - o par (tipo,
+  // tipo de corretiva) e' remontado no envio.
+  tipoSelecionado: z.string().min(1, "Selecione o tipo de servico."),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   title: z.string().min(3, "Informe um titulo curto.").max(200),
   description: z.string().min(2, "Descreva o servico."),
@@ -36,7 +40,20 @@ const schema = z.object({
   estimatedHours: z.coerce.number().nonnegative().optional(),
   failureCodeId: z.string().uuid().optional().or(z.literal("")),
   observations: z.string().optional(),
-  checklist: z.array(z.object({ description: z.string().min(1, "Descreva o item.") })),
+  // Registro de falha (obrigatorio para concluir uma corretiva de quebra).
+  failureStartedAt: z.string().optional(),
+  failureEndedAt: z.string().optional(),
+  failureSeverity: z.enum(["LOW", "MODERATE", "HIGH", "CRITICAL"]).optional().or(z.literal("")),
+  failureDescription: z.string().optional(),
+  failureRootCause: z.string().optional(),
+  failureCorrectiveAction: z.string().optional(),
+  productionLoss: z.coerce.number().nonnegative().optional(),
+  checklist: z.array(
+    z.object({
+      description: z.string().min(1, "Descreva o item."),
+      estimatedMinutes: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
+    }),
+  ),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -61,14 +78,17 @@ export default function WorkOrderForm() {
     defaultValues: {
       clientId: ownClientId ?? searchParams.get("clientId") ?? "",
       instrumentId: searchParams.get("instrumentId") ?? "",
-      type: "CORRECTIVE",
+      tipoSelecionado: "CORRECTIVE_IN_OPERATION",
       priority: "MEDIUM",
-      checklist: [{ description: "" }],
+      checklist: [{ description: "", estimatedMinutes: "" }],
     },
   });
   const { fields, append, remove } = useFieldArray({ control, name: "checklist" });
   const clientId = watch("clientId");
-  const type = watch("type");
+  const tipoSelecionado = watch("tipoSelecionado");
+  const opcaoDeTipo = OPCOES_DE_TIPO.find((o) => o.valor === tipoSelecionado);
+  const ehCorretiva = opcaoDeTipo?.type === "CORRECTIVE";
+  const ehQuebra = opcaoDeTipo?.correctiveType === "BREAKDOWN";
   const instrumentId = watch("instrumentId");
 
   // Equipe da propria empresa - e' quem de fato executa a OS no CMMS do cliente.
@@ -102,7 +122,7 @@ export default function WorkOrderForm() {
       reset({
         clientId: existing.clientId,
         instrumentId: existing.instrumentId,
-        type: existing.type,
+        tipoSelecionado: valorDoTipo(existing.type, existing.correctiveType),
         priority: existing.priority,
         title: existing.title ?? "",
         description: existing.description,
@@ -115,22 +135,64 @@ export default function WorkOrderForm() {
         estimatedHours: existing.estimatedHours ?? undefined,
         failureCodeId: existing.failureCodeId ?? "",
         observations: existing.observations ?? "",
-        checklist: existing.checklist?.length ? existing.checklist.map((c) => ({ description: c.description })) : [{ description: "" }],
+        failureStartedAt: existing.failureStartedAt?.slice(0, 16) ?? "",
+        failureEndedAt: existing.failureEndedAt?.slice(0, 16) ?? "",
+        failureSeverity: existing.failureSeverity ?? "",
+        failureDescription: existing.failureDescription ?? "",
+        failureRootCause: existing.failureRootCause ?? "",
+        failureCorrectiveAction: existing.failureCorrectiveAction ?? "",
+        productionLoss: existing.productionLoss ?? undefined,
+        checklist: existing.checklist?.length
+          ? existing.checklist.map((c) => ({ description: c.description, estimatedMinutes: c.estimatedMinutes ?? "" }))
+          : [{ description: "", estimatedMinutes: "" }],
       });
     }
   }, [existing, reset]);
 
   async function onSubmit(values: FormValues) {
     try {
+      // Os campos de falha saem do "resto" e voltam so quando a OS e' corretiva - senao
+      // viajariam como "" numa preventiva.
+      const {
+        tipoSelecionado: escolha,
+        failureStartedAt: _fs,
+        failureEndedAt: _fe,
+        failureSeverity: _sev,
+        failureDescription: _fd,
+        failureRootCause: _frc,
+        failureCorrectiveAction: _fca,
+        productionLoss: _pl,
+        ...resto
+      } = values;
+      const opcao = OPCOES_DE_TIPO.find((o) => o.valor === escolha);
+      // Campos de falha so viajam quando a OS e' corretiva - noutro tipo o backend recusa,
+      // e com razao: nao descreveriam nada.
+      const registroDeFalha = opcao?.type === "CORRECTIVE"
+        ? {
+            failureStartedAt: values.failureStartedAt || null,
+            failureEndedAt: values.failureEndedAt || null,
+            failureSeverity: (values.failureSeverity || null) as FailureSeverity | null,
+            failureDescription: values.failureDescription || null,
+            failureRootCause: values.failureRootCause || null,
+            failureCorrectiveAction: values.failureCorrectiveAction || null,
+            productionLoss: values.productionLoss ?? null,
+          }
+        : {};
+
       const payload = {
-        ...values,
+        ...resto,
+        type: opcao!.type,
+        correctiveType: opcao!.correctiveType,
+        ...registroDeFalha,
         technicianId: values.technicianId || null,
         assignedResourceId: values.assignedResourceId || null,
         costCenterId: values.costCenterId || null,
         failureCodeId: values.failureCodeId || null,
         plannedStart: values.plannedStart || null,
         plannedEnd: values.plannedEnd || null,
-        checklist: values.checklist.filter((c) => c.description.trim()),
+        checklist: values.checklist
+          .filter((c) => c.description.trim())
+          .map((c) => ({ description: c.description, estimatedMinutes: c.estimatedMinutes === "" ? null : Number(c.estimatedMinutes) })),
       };
       const saved = isEdit ? await updateMaintenanceWorkOrder(id!, payload) : await createMaintenanceWorkOrder(payload);
       notify("success", isEdit ? "OS atualizada." : "OS criada.");
@@ -176,14 +238,12 @@ export default function WorkOrderForm() {
           />
           <div className={`grid gap-4 ${isClient ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
             <SelectInput
-              label="Tipo"
+              label="Tipo de servico"
               required
-              options={[
-                { value: "CORRECTIVE", label: "Corretiva" },
-                { value: "PREVENTIVE", label: "Preventiva" },
-                { value: "PREDICTIVE", label: "Preditiva" },
-              ]}
-              {...register("type")}
+              hint={ehQuebra ? "Quebra: o registro da falha e' obrigatorio para concluir." : undefined}
+              options={OPCOES_DE_TIPO.map((o) => ({ value: o.valor, label: o.rotulo }))}
+              error={errors.tipoSelecionado?.message}
+              {...register("tipoSelecionado")}
             />
             <SelectInput
               label="Prioridade"
@@ -225,9 +285,10 @@ export default function WorkOrderForm() {
               options={(costCenters ?? []).map((c) => ({ value: c.id, label: c.code ? `${c.code} - ${c.name}` : c.name }))}
               {...register("costCenterId")}
             />
-            {type === "CORRECTIVE" && (
+            {ehCorretiva && (
               <SelectInput
-                label="Codigo de falha"
+                label="Categoria da falha"
+                required={ehQuebra}
                 placeholder="Selecione a causa"
                 options={(failureCodes ?? []).map((f) => ({ value: f.id, label: `${f.code} - ${f.description}` }))}
                 {...register("failureCodeId")}
@@ -236,6 +297,61 @@ export default function WorkOrderForm() {
           </div>
           <TextareaInput label="Observacoes (opcional)" rows={2} {...register("observations")} />
         </div>
+
+        {/* Registro de falha: aparece na corretiva, com destaque quando e' quebra - e' o que
+            o backend vai cobrar para deixar concluir. Fica no proprio formulario (e nao
+            escondido numa aba) porque e' preenchido junto com o atendimento. */}
+        {ehCorretiva && (
+          <div className={`card space-y-4 p-5 ${ehQuebra ? "border-2 border-safety-red/40" : ""}`}>
+            <div>
+              <h2 className="flex flex-wrap items-center gap-2 font-semibold text-navy-900">
+                Registro da falha
+                {ehQuebra ? (
+                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-safety-red">
+                    obrigatorio na corretiva de quebra
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-graphite-500">opcional em operacao</span>
+                )}
+              </h2>
+              <p className="text-xs text-graphite-500">
+                Alimenta o Pareto de falhas e a tela de Falhas e RCA. O tempo parado e' calculado das datas.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <TextInput label="Inicio da falha" type="datetime-local" required={ehQuebra} {...register("failureStartedAt")} />
+              <TextInput label="Termino da falha" type="datetime-local" required={ehQuebra} {...register("failureEndedAt")} />
+              <SelectInput
+                label="Gravidade"
+                placeholder="Nao informada"
+                required={ehQuebra}
+                options={GRAVIDADES_DE_FALHA.map((g) => ({ value: g.valor, label: g.rotulo }))}
+                {...register("failureSeverity")}
+              />
+              <TextInput
+                label="Perda de producao"
+                type="number"
+                step="any"
+                min="0"
+                hint="Estimativa, na unidade da empresa."
+                {...register("productionLoss")}
+              />
+            </div>
+
+            <TextareaInput
+              label="Descricao da falha / sintoma"
+              required={ehQuebra}
+              rows={2}
+              hint="O laudo de quem foi ver - diferente do pedido que abriu a OS."
+              {...register("failureDescription")}
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextareaInput label="Causa identificada" rows={2} hint="A causa raiz de verdade sai da RCA." {...register("failureRootCause")} />
+              <TextareaInput label="Acao corretiva tomada" rows={2} {...register("failureCorrectiveAction")} />
+            </div>
+          </div>
+        )}
 
         <div className="card space-y-4 p-5">
           <div>
@@ -260,8 +376,11 @@ export default function WorkOrderForm() {
 
         <div className="card space-y-4 p-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-navy-900">Checklist de execucao</h2>
-            <button type="button" className="btn-ghost btn-sm" onClick={() => append({ description: "" })}>
+            <div>
+              <h2 className="font-semibold text-navy-900">Operacoes do servico</h2>
+              <p className="text-xs text-graphite-500">O que fazer, em ordem, e o tempo esperado de cada uma (em minutos).</p>
+            </div>
+            <button type="button" className="btn-ghost btn-sm" onClick={() => append({ description: "", estimatedMinutes: "" })}>
               <Plus className="h-4 w-4" /> Adicionar item
             </button>
           </div>
@@ -270,9 +389,16 @@ export default function WorkOrderForm() {
               <div key={field.id} className="flex items-center gap-2">
                 <TextInput
                   className="flex-1"
-                  placeholder={`Item ${index + 1}`}
+                  placeholder={`Operacao ${index + 1}`}
                   error={errors.checklist?.[index]?.description?.message}
                   {...register(`checklist.${index}.description`)}
+                />
+                <TextInput
+                  className="w-28 shrink-0"
+                  type="number"
+                  min="0"
+                  placeholder="min"
+                  {...register(`checklist.${index}.estimatedMinutes`)}
                 />
                 {fields.length > 1 && (
                   <button type="button" onClick={() => remove(index)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover item">

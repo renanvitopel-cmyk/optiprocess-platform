@@ -46,7 +46,7 @@ const RESULT_OPTIONS: { value: ChecklistItemResult; label: string; tone: string 
   { value: "NA", label: "N/A", tone: "bg-graphite-100 text-graphite-600 border-graphite-200" },
 ];
 
-const TYPE_LABELS: Record<string, string> = { PREVENTIVE: "Preventiva", CORRECTIVE: "Corretiva", PREDICTIVE: "Preditiva" };
+import { rotuloDoTipo, GRAVIDADES_DE_FALHA } from "../../../lib/maintenanceLabels";
 const PRIORITY_LABELS: Record<string, string> = { LOW: "Baixa", MEDIUM: "Media", HIGH: "Alta", CRITICAL: "Critica" };
 const HOUR_TYPE_LABELS: Record<LaborHourType, string> = { NORMAL: "Normal", OVERTIME: "Extra", NIGHT: "Noturna" };
 
@@ -422,6 +422,18 @@ export default function WorkOrderDetail() {
   const horasApontadas = (workOrder.laborEntries ?? []).reduce((soma, e) => soma + e.hours, 0);
   const horasRealizadas = horasApontadas > 0 ? horasApontadas : workOrder.laborHours ?? null;
 
+  const ehQuebra = workOrder.correctiveType === "BREAKDOWN";
+
+  // O mesmo que o backend cobra na conclusao - mostrado antes, para nao virar surpresa na
+  // hora de fechar a OS.
+  const faltaParaConcluir = [
+    !workOrder.failureStartedAt && "inicio da falha",
+    !workOrder.failureEndedAt && "termino da falha",
+    !workOrder.failureCodeId && "categoria da falha",
+    !workOrder.failureSeverity && "gravidade",
+    !workOrder.failureDescription?.trim() && "descricao da falha",
+  ].filter(Boolean) as string[];
+
   // Tempo parado sai da janela informada - nunca e' digitado, para nao divergir das datas.
   const downtimeDaFalha =
     workOrder.failureStartedAt && workOrder.failureEndedAt
@@ -519,7 +531,7 @@ export default function WorkOrderDetail() {
               <StatusBadge status={workOrder.status} />
             )}
             <span className="rounded-full border border-navy-200 bg-navy-50 px-2.5 py-0.5 text-xs font-medium text-navy-700">
-              {TYPE_LABELS[workOrder.type]}
+              {rotuloDoTipo(workOrder.type, workOrder.correctiveType)}
             </span>
             <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs font-medium text-graphite-700">
               Prioridade: {PRIORITY_LABELS[workOrder.priority]}
@@ -706,6 +718,11 @@ export default function WorkOrderDetail() {
                   Alimenta o Pareto de falhas e a tela de Falhas/RCA. O tempo parado sai das datas abaixo.
                 </p>
               </div>
+              {ehQuebra && faltaParaConcluir.length > 0 && (
+                <span className="w-full rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-safety-red">
+                  Corretiva de quebra: falta {faltaParaConcluir.join(", ")} para conseguir concluir esta OS.
+                </span>
+              )}
               {downtimeDaFalha != null && (
                 <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-safety-red">
                   Parada de {downtimeDaFalha.toFixed(1)}h
@@ -743,10 +760,9 @@ export default function WorkOrderDetail() {
                   onChange={(e) => handleSalvarFalha({ failureSeverity: (e.target.value || null) as FailureSeverity | null })}
                 >
                   <option value="">Nao informada</option>
-                  <option value="LOW">Baixa - sem parar producao</option>
-                  <option value="MODERATE">Moderada - perda parcial</option>
-                  <option value="HIGH">Alta - linha parada</option>
-                  <option value="CRITICAL">Critica - seguranca ou meio ambiente</option>
+                  {GRAVIDADES_DE_FALHA.map((g) => (
+                    <option key={g.valor} value={g.valor}>{g.rotulo}</option>
+                  ))}
                 </select>
               </label>
               <label className="block">
@@ -763,6 +779,34 @@ export default function WorkOrderDetail() {
                 />
               </label>
             </div>
+
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-graphite-700">
+                Descricao da falha / sintoma{ehQuebra && <span className="ml-1 text-safety-red">*</span>}
+              </span>
+              <textarea
+                className="input min-h-[70px]"
+                placeholder="O que aconteceu, na descricao de quem foi ver."
+                defaultValue={workOrder.failureDescription ?? ""}
+                disabled={!canManage || isCompleted}
+                onBlur={(e) => {
+                  if (e.target.value !== (workOrder.failureDescription ?? "")) handleSalvarFalha({ failureDescription: e.target.value || null });
+                }}
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-graphite-700">Acao corretiva tomada</span>
+              <textarea
+                className="input min-h-[70px]"
+                placeholder="O que foi feito para corrigir a falha."
+                defaultValue={workOrder.failureCorrectiveAction ?? ""}
+                disabled={!canManage || isCompleted}
+                onBlur={(e) => {
+                  if (e.target.value !== (workOrder.failureCorrectiveAction ?? "")) handleSalvarFalha({ failureCorrectiveAction: e.target.value || null });
+                }}
+              />
+            </label>
 
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-graphite-700">Causa identificada no atendimento</span>

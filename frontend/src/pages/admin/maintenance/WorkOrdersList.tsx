@@ -10,11 +10,7 @@ import { StatusBadge } from "../../../components/StatusBadge";
 import { clientDisplayName, formatDate } from "../../../lib/format";
 import { useCmms } from "../../../lib/cmms";
 
-const TYPE_LABELS: Record<MaintenanceOrderType, string> = {
-  PREVENTIVE: "Preventiva",
-  CORRECTIVE: "Corretiva",
-  PREDICTIVE: "Preditiva",
-};
+import { rotuloDoTipo } from "../../../lib/maintenanceLabels";
 
 export default function WorkOrdersList() {
   const navigate = useNavigate();
@@ -95,7 +91,7 @@ export default function WorkOrdersList() {
           { header: "Numero", accessor: (o) => <span className="font-medium text-navy-900">{o.number}</span> },
           ...(isClient ? [] : [{ header: "Cliente", accessor: (o: MaintenanceWorkOrder) => clientDisplayName(o.client) }]),
           { header: "Ativo", accessor: (o) => o.instrument?.tag ?? "-" },
-          { header: "Tipo", accessor: (o) => TYPE_LABELS[o.type] },
+          { header: "Tipo", accessor: (o) => rotuloDoTipo(o.type, o.correctiveType) },
           ...(isClient ? [] : [{ header: "Tecnico", accessor: (o: MaintenanceWorkOrder) => o.technician?.name ?? "-" }]),
           { header: "Agendada", accessor: (o) => formatDate(o.scheduledDate) },
           { header: "Status", accessor: (o) => <StatusBadge status={o.status} /> },

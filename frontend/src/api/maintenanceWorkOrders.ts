@@ -23,6 +23,7 @@ import type {
   WorkOrderThirdPartyService,
   FailureRecord,
   FailureSeverity,
+  CorrectiveType,
 } from "./types";
 
 export interface ListWorkOrdersParams {
@@ -69,9 +70,12 @@ export interface WorkOrderInput {
   failureStartedAt?: string | null;
   failureEndedAt?: string | null;
   failureSeverity?: FailureSeverity | null;
+  correctiveType?: CorrectiveType | null;
+  failureDescription?: string | null;
   failureRootCause?: string | null;
+  failureCorrectiveAction?: string | null;
   productionLoss?: number | null;
-  checklist?: { description: string }[];
+  checklist?: { description: string; estimatedMinutes?: number | null }[];
 }
 
 export async function createMaintenanceWorkOrder(input: WorkOrderInput): Promise<MaintenanceWorkOrder> {

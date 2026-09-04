@@ -104,9 +104,12 @@ enum MaintenancePlanStatus {
 // indicadores (ex.: quanto da carga e' inspecao x lubrificacao x legal).
 enum MaintenancePlanType {
   PREVENTIVE
+  PREDICTIVE
   INSPECTION
   LUBRICATION
   CALIBRATION
+  ELECTRICAL
+  MECHANICAL
   REGULATORY
   OTHER
 }
@@ -149,6 +152,9 @@ enum MaintenanceOrderType {
   PREVENTIVE
   CORRECTIVE
   PREDICTIVE
+  LUBRICATION
+  INSPECTION
+  PROJECT
 }
 
 enum MaintenancePriority {
@@ -1553,6 +1559,15 @@ model MaintenancePlan {
   requiresApproval         Boolean @default(false)
   // Uma OS por ativo (padrao) ou uma OS agrupando os ativos da familia.
   groupWorkOrder Boolean @default(false)
+  // --- Lubrificacao (so preenchido em plano do tipo Lubrificacao) --------------------
+  // Qual lubrificante, quantos pontos, quanto em cada ponto e como aplicar. O lubrificante
+  // vem do almoxarifado para que o consumo do plano baixe do mesmo estoque das outras pecas.
+  lubricantSparePartId String?
+  lubricantSparePart   SparePart? @relation("PlanLubricant", fields: [lubricantSparePartId], references: [id])
+  lubricationPoints    Int?
+  lubricantQtyPerPoint Float?
+  lubricationMethod    LubricationMethod?
+
   // Instrucoes gerais do plano (procedimento, cuidados, referencia de manual) - texto
   // livre que acompanha toda OS gerada a partir dele.
   instructions String?
@@ -1678,6 +1693,8 @@ model MaintenancePlanChecklistItem {
   maxValue     Float?
   targetValue  Float?
   requiresPhoto Boolean              @default(false)
+  // Quanto tempo se espera gastar neste item - somado, da a duracao estimada do servico.
+  estimatedMinutes Int?
   // Procedimento, desenho, manual ou video que apoia este item.
   reference    String?
 
@@ -1686,6 +1703,26 @@ model MaintenancePlanChecklistItem {
 }
 
 // Ordem de Manutencao ("OM") - entidade propria do CMMS, separada de ServiceOrder.
+// Corretiva em operacao: o equipamento continua rodando e o servico foi planejado (folga
+// detectada, ajuste, troca programada). Corretiva de quebra: o equipamento parou. Sao
+// realidades distintas - a de quebra exige o registro da falha para ser concluida, a outra
+// nao - e ficam num campo proprio, e nao em MaintenanceOrderType, para que tudo que hoje
+// filtra "corretiva" (Pareto, MTTR, disponibilidade) continue enxergando as duas.
+// Como o lubrificante e' aplicado no ponto.
+enum LubricationMethod {
+  MANUAL_GUN
+  AUTOMATIC_CENTRAL
+  OIL_BATH
+  IMMERSION
+  BRUSH
+  SPRAY
+}
+
+enum CorrectiveType {
+  IN_OPERATION
+  BREAKDOWN
+}
+
 // Impacto da falha no processo - preenchido por quem atendeu a quebra, no momento em que
 // atendeu. Diferente da prioridade da OS (que e' sobre urgencia de atender).
 enum FailureSeverity {
@@ -1707,6 +1744,8 @@ model MaintenanceWorkOrder {
   planId       String?
   plan         MaintenancePlan?       @relation(fields: [planId], references: [id])
   type         MaintenanceOrderType
+  // Preenchido apenas quando type = CORRECTIVE. Nulo nas OS anteriores a essa distincao.
+  correctiveType CorrectiveType?
   priority     MaintenancePriority    @default(MEDIUM)
   status       MaintenanceOrderStatus @default(OPEN)
   // Titulo curto ("Troca do rolamento do mancal LA") - e' o que aparece nas listas e no
@@ -1754,8 +1793,14 @@ model MaintenanceWorkOrder {
   failureStartedAt DateTime?
   failureEndedAt   DateTime?
   failureSeverity  FailureSeverity?
+  // O que aconteceu, na descricao de quem atendeu. Separado da descricao de abertura da OS:
+  // uma e' o pedido ("maquina fazendo barulho"), a outra e' o laudo de quem foi ver.
+  failureDescription String?
   // Causa imediata identificada no atendimento. Uma causa raiz de verdade sai da RCA.
   failureRootCause String?
+  // O que foi feito para corrigir a falha especificamente (executionNotes descreve todo o
+  // servico da OS, que pode incluir outras atividades).
+  failureCorrectiveAction String?
   // Perda de producao estimada, na unidade que a empresa usa (pecas, toneladas, horas).
   productionLoss   Float?
   // Registro do encerramento: o que ficou pendente, o que foi combinado, o que observar.
@@ -1864,6 +1909,8 @@ model MaintenanceWorkOrderChecklistItem {
   maxValue     Float?
   targetValue  Float?
   requiresPhoto Boolean              @default(false)
+  // Quanto tempo se espera gastar neste item - somado, da a duracao estimada do servico.
+  estimatedMinutes Int?
   reference    String?
   // O que o executante preencheu, conforme o tipo de resposta.
   numericValue Float?
@@ -1917,6 +1964,7 @@ model SparePart {
   @@index([clientId])
   @@index([active])
   @@map("spare_parts")
+  planosDeLubrificacao MaintenancePlan[] @relation("PlanLubricant")
 }
 
 model SparePartMovement {

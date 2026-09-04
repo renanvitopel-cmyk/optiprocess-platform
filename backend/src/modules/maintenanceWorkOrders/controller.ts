@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { MaintenanceOrderType, MaintenancePriority, MaintenanceOrderStatus, ChecklistItemResult, AttachmentCategory, LaborHourType, FailureSeverity } from "@prisma/client";
+import { MaintenanceOrderType, MaintenancePriority, MaintenanceOrderStatus, ChecklistItemResult, AttachmentCategory, LaborHourType, FailureSeverity, CorrectiveType } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -96,12 +96,18 @@ export const getMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Re
   res.json(workOrder);
 });
 
-const checklistItemInput = z.object({ description: z.string().min(1) });
+// Operacao do servico: o que fazer e quanto tempo se espera gastar nela.
+const checklistItemInput = z.object({
+  description: z.string().min(1),
+  estimatedMinutes: z.coerce.number().int().nonnegative().nullish(),
+});
 
 const workOrderSchema = z.object({
   clientId: z.string().uuid().optional(),
   instrumentId: z.string().uuid(),
   type: z.nativeEnum(MaintenanceOrderType),
+  // So para corretiva: em operacao (maquina rodando) ou de quebra (maquina parada).
+  correctiveType: z.nativeEnum(CorrectiveType).nullish(),
   priority: z.nativeEnum(MaintenancePriority).optional(),
   title: z.string().max(200).nullish(),
   description: z.string().min(2, "Descreva o servico."),
@@ -121,7 +127,9 @@ const workOrderSchema = z.object({
   failureStartedAt: z.coerce.date().nullish(),
   failureEndedAt: z.coerce.date().nullish(),
   failureSeverity: z.nativeEnum(FailureSeverity).nullish(),
+  failureDescription: z.string().nullish(),
   failureRootCause: z.string().nullish(),
+  failureCorrectiveAction: z.string().nullish(),
   productionLoss: z.coerce.number().nonnegative().nullish(),
   checklist: z.array(checklistItemInput).optional(),
 });
@@ -134,17 +142,53 @@ async function assertCostCenterBelongsToClient(costCenterId: string | null | und
   if (cc.clientId !== clientId) throw new ValidationError("Esse centro de custo e' de outra empresa.");
 }
 
+/** "Em operacao" ou "de quebra" so existe dentro da corretiva. */
+function assertTipoDeCorretivaCoerente(tipo: MaintenanceOrderType | undefined, correctiveType: CorrectiveType | null | undefined) {
+  if (correctiveType && tipo && tipo !== "CORRECTIVE") {
+    throw new ValidationError("Em operacao / de quebra so se aplica a ordem corretiva.");
+  }
+}
+
+/** Campos do registro de falha que uma corretiva de quebra precisa ter para ser concluida.
+ * A cobranca e' na conclusao, e nao na abertura: na hora em que a maquina para, quem abre a
+ * OS quase nunca sabe ainda a gravidade nem quando a producao voltou. */
+function faltaNoRegistroDeFalha(os: {
+  failureStartedAt: Date | null;
+  failureEndedAt: Date | null;
+  failureSeverity: FailureSeverity | null;
+  failureCodeId: string | null;
+  failureDescription: string | null;
+}): string[] {
+  const falta: string[] = [];
+  if (!os.failureStartedAt) falta.push("inicio da falha");
+  if (!os.failureEndedAt) falta.push("termino da falha");
+  if (!os.failureCodeId) falta.push("categoria da falha");
+  if (!os.failureSeverity) falta.push("gravidade");
+  if (!os.failureDescription?.trim()) falta.push("descricao da falha");
+  return falta;
+}
+
 /** O registro de falha pertence a corretiva: numa preventiva/preditiva ele nao descreve
  * nada real e sujaria o Pareto de falhas. */
 function assertRegistroDeFalhaCoerente(
   tipo: MaintenanceOrderType | undefined,
-  dados: { failureStartedAt?: Date | null; failureEndedAt?: Date | null; failureSeverity?: FailureSeverity | null; failureRootCause?: string | null; productionLoss?: number | null },
+  dados: {
+    failureStartedAt?: Date | null;
+    failureEndedAt?: Date | null;
+    failureSeverity?: FailureSeverity | null;
+    failureDescription?: string | null;
+    failureRootCause?: string | null;
+    failureCorrectiveAction?: string | null;
+    productionLoss?: number | null;
+  },
 ) {
   const preencheu =
     dados.failureStartedAt != null ||
     dados.failureEndedAt != null ||
     dados.failureSeverity != null ||
-    (dados.failureRootCause != null && dados.failureRootCause !== "") ||
+    !!dados.failureDescription ||
+    !!dados.failureRootCause ||
+    !!dados.failureCorrectiveAction ||
     dados.productionLoss != null;
 
   if (preencheu && tipo && tipo !== "CORRECTIVE") {
@@ -196,6 +240,10 @@ export const createMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
   await assertCostCenterBelongsToClient(data.costCenterId, clientId);
   assertJanelaCoerente(data.plannedStart, data.plannedEnd);
   assertRegistroDeFalhaCoerente(data.type, data);
+  assertTipoDeCorretivaCoerente(data.type, data.correctiveType);
+  if (data.type === "CORRECTIVE" && !data.correctiveType) {
+    throw new ValidationError("Informe se a corretiva e' em operacao ou de quebra.");
+  }
 
   const number = await nextClientMaintenanceOrderNumber(clientId);
   const { checklist, ...orderData } = data;
@@ -210,7 +258,7 @@ export const createMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
       costCenterId: orderData.costCenterId ?? instrument.costCenterId,
       status: "OPEN",
       createdById: req.user?.sub,
-      checklist: { create: (checklist ?? []).map((c, i) => ({ description: c.description, sortOrder: i })) },
+      checklist: { create: (checklist ?? []).map((c, i) => ({ description: c.description, estimatedMinutes: c.estimatedMinutes ?? null, sortOrder: i })) },
     },
     include: detailInclude,
   });
@@ -239,11 +287,14 @@ export const updateMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
   await assertResourceBelongsToClient(data.assignedResourceId, existing.clientId);
   await assertCostCenterBelongsToClient(data.costCenterId, existing.clientId);
   assertJanelaCoerente(data.plannedStart ?? existing.plannedStart, data.plannedEnd ?? existing.plannedEnd);
+  assertTipoDeCorretivaCoerente(data.type ?? existing.type, data.correctiveType ?? existing.correctiveType);
   assertRegistroDeFalhaCoerente(data.type ?? existing.type, {
     failureStartedAt: data.failureStartedAt ?? existing.failureStartedAt,
     failureEndedAt: data.failureEndedAt ?? existing.failureEndedAt,
     failureSeverity: data.failureSeverity ?? existing.failureSeverity,
+    failureDescription: data.failureDescription ?? existing.failureDescription,
     failureRootCause: data.failureRootCause ?? existing.failureRootCause,
+    failureCorrectiveAction: data.failureCorrectiveAction ?? existing.failureCorrectiveAction,
     productionLoss: data.productionLoss ?? existing.productionLoss,
   });
 
@@ -319,6 +370,22 @@ export const completeMaintenanceWorkOrder = asyncHandler(async (req: Request, re
   assertOwnClient(req, existing.clientId);
   if (existing.checklist.some((c) => c.result === "PENDING")) {
     throw new ValidationError("Resolva todos os itens do checklist antes de concluir a ordem.");
+  }
+
+  // Toda corretiva concluida diz o que foi: intervencao com a maquina rodando ou quebra.
+  // Sem isso nao da pra separar o que parou producao do que nao parou.
+  if (existing.type === "CORRECTIVE" && !existing.correctiveType) {
+    throw new ValidationError("Informe se esta corretiva foi em operacao ou de quebra antes de concluir.");
+  }
+
+  // Quebra sem registro de falha nao fecha: e' o unico momento em que alguem ainda sabe
+  // quando parou, quanto tempo ficou parada e por que. Depois de fechada, ninguem lembra -
+  // e o Pareto de falhas passa a mentir por omissao.
+  if (existing.correctiveType === "BREAKDOWN") {
+    const falta = faltaNoRegistroDeFalha(existing);
+    if (falta.length > 0) {
+      throw new ValidationError(`Corretiva de quebra: preencha o registro da falha antes de concluir (falta: ${falta.join(", ")}).`);
+    }
   }
 
   const { meterReadingAtExecution, closureNotes } = z
@@ -428,6 +495,9 @@ export const updateChecklistItem = asyncHandler(async (req: Request, res: Respon
           clientId: workOrder.clientId,
           instrumentId: workOrder.instrumentId,
           type: "CORRECTIVE",
+          // A anomalia foi vista numa inspecao, com o equipamento em uso - nao e' uma
+          // quebra. Quem atender pode reclassificar se encontrar a maquina parada.
+          correctiveType: "IN_OPERATION",
           status: "OPEN",
           priority: "HIGH",
           description,

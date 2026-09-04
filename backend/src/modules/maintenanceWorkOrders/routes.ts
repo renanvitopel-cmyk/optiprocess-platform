@@ -29,6 +29,8 @@ import {
   getWorkOrderAttachmentUrl,
   getMaintenanceDashboard,
   getFailureAnalysis,
+  getMaintenanceSchedule,
+  scheduleMaintenanceWorkOrder,
 } from "./controller";
 
 export const maintenanceWorkOrdersRouter = Router();
@@ -37,6 +39,7 @@ maintenanceWorkOrdersRouter.use(requireAuth);
 
 maintenanceWorkOrdersRouter.get("/dashboard", getMaintenanceDashboard);
 maintenanceWorkOrdersRouter.get("/failure-analysis", getFailureAnalysis);
+maintenanceWorkOrdersRouter.get("/schedule", getMaintenanceSchedule);
 maintenanceWorkOrdersRouter.get("/", listMaintenanceWorkOrders);
 maintenanceWorkOrdersRouter.get("/:id", getMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.post("/", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), createMaintenanceWorkOrder);
@@ -44,6 +47,8 @@ maintenanceWorkOrdersRouter.patch("/:id", requireRole("ADMIN", "TECHNICIAN", "CL
 maintenanceWorkOrdersRouter.delete("/:id", requireRole("ADMIN", "CLIENT"), deleteMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.post("/:id/start", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), startMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.post("/:id/complete", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), completeMaintenanceWorkOrder);
+
+maintenanceWorkOrdersRouter.patch("/:id/schedule", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), scheduleMaintenanceWorkOrder);
 
 maintenanceWorkOrdersRouter.patch("/:id/checklist/:itemId", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), updateChecklistItem);
 

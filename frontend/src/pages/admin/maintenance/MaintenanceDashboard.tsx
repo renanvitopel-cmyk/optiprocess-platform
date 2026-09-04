@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Wrench, Gauge, ClipboardList, ClipboardPlus, ShieldCheck, Activity, TimerReset, ListChecks, Boxes, GitBranch, Radar, HardHat, OctagonPause, Kanban, BarChart3, Search, LayoutTemplate } from "lucide-react";
+import { Wrench, Gauge, ClipboardList, ClipboardPlus, ShieldCheck, Activity, TimerReset, ListChecks, Boxes, GitBranch, Radar, HardHat, OctagonPause, Kanban, BarChart3, Search, LayoutTemplate, CalendarDays } from "lucide-react";
 import { getMaintenanceDashboard } from "../../../api/maintenanceWorkOrders";
 import { listClients } from "../../../api/clients";
 import { PageHeader } from "../../../components/PageHeader";
@@ -54,6 +54,9 @@ export default function MaintenanceDashboard() {
         </Link>
         <Link to={`${base}/kanban${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <Kanban className="h-4 w-4" /> Kanban
+        </Link>
+        <Link to={`${base}/programacao`} className="btn-outline">
+          <CalendarDays className="h-4 w-4" /> Programacao (calendario)
         </Link>
         <Link to={`${base}/planos${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <ShieldCheck className="h-4 w-4" /> Planos de manutencao

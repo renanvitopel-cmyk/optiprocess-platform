@@ -67,6 +67,7 @@ const MaintenancePlanDetail = lazy(() => import("./pages/admin/maintenance/Maint
 const MaintenancePlanTemplatesList = lazy(() => import("./pages/admin/maintenance/MaintenancePlanTemplatesList"));
 const WorkOrdersList = lazy(() => import("./pages/admin/maintenance/WorkOrdersList"));
 const KanbanBoard = lazy(() => import("./pages/admin/maintenance/KanbanBoard"));
+const SchedulingBoard = lazy(() => import("./pages/admin/maintenance/SchedulingBoard"));
 const RcaList = lazy(() => import("./pages/admin/maintenance/RcaList"));
 const RcaForm = lazy(() => import("./pages/admin/maintenance/RcaForm"));
 const FailureAnalysis = lazy(() => import("./pages/admin/maintenance/FailureAnalysis"));
@@ -157,6 +158,7 @@ export default function App() {
                 <Route path="manutencao/modelos-de-plano" element={<MaintenancePlanTemplatesList />} />
                 <Route path="manutencao/ordens" element={<WorkOrdersList />} />
                 <Route path="manutencao/kanban" element={<KanbanBoard />} />
+                <Route path="manutencao/programacao" element={<SchedulingBoard />} />
                 <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
                 <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
                 <Route path="manutencao/ordens/:id" element={<WorkOrderDetail />} />
@@ -216,6 +218,7 @@ export default function App() {
                 <Route path="manutencao/modelos-de-plano" element={<MaintenancePlanTemplatesList />} />
                 <Route path="manutencao/ordens" element={<WorkOrdersList />} />
                 <Route path="manutencao/kanban" element={<KanbanBoard />} />
+                <Route path="manutencao/programacao" element={<SchedulingBoard />} />
                 <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
                 <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
                 <Route path="manutencao/ordens/:id" element={<WorkOrderDetail />} />

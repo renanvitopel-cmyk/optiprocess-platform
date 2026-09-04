@@ -7,12 +7,14 @@ import type {
   FailureAnalysisData,
   LaborHourType,
   MaintenanceDashboardData,
+  MaintenanceScheduleData,
   MaintenanceOrderStatus,
   MaintenanceOrderType,
   MaintenancePartUsed,
   MaintenancePriority,
   MaintenanceWorkOrder,
   MaintenanceWorkOrderChecklistItem,
+  ScheduleCard,
   SparePartMovement,
   SparePartReservation,
   WorkOrderLaborEntry,
@@ -211,5 +213,19 @@ export async function getMaintenanceDashboard(params: {
 
 export async function getFailureAnalysis(params: { clientId?: string; dateFrom?: string; dateTo?: string }): Promise<FailureAnalysisData> {
   const { data } = await api.get<FailureAnalysisData>("/maintenance-work-orders/failure-analysis", { params });
+  return data;
+}
+
+export async function getMaintenanceSchedule(params: { clientId?: string; from?: string; to?: string }): Promise<MaintenanceScheduleData> {
+  const { data } = await api.get<MaintenanceScheduleData>("/maintenance-work-orders/schedule", { params });
+  return data;
+}
+
+/** Arrasta-e-solta do quadro: define dia + responsavel, ou devolve para a fila (nulls). */
+export async function scheduleMaintenanceWorkOrder(
+  id: string,
+  input: { scheduledDate: string | null; assignedResourceId: string | null },
+): Promise<ScheduleCard> {
+  const { data } = await api.patch<ScheduleCard>(`/maintenance-work-orders/${id}/schedule`, input);
   return data;
 }

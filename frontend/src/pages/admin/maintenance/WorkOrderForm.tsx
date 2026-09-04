@@ -11,6 +11,7 @@ import { ClientPicker } from "../../../components/ClientPicker";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
 import { listFailureCodes } from "../../../api/failureCodes";
+import { listLaborResources } from "../../../api/laborResources";
 import { getInstrument } from "../../../api/instruments";
 import { createMaintenanceWorkOrder, getMaintenanceWorkOrder, updateMaintenanceWorkOrder } from "../../../api/maintenanceWorkOrders";
 import { useToast } from "../../../components/Toast";
@@ -25,6 +26,7 @@ const schema = z.object({
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   description: z.string().min(2, "Descreva o servico."),
   technicianId: z.string().uuid().optional().or(z.literal("")),
+  assignedResourceId: z.string().uuid().optional().or(z.literal("")),
   scheduledDate: z.string().optional(),
   failureCodeId: z.string().uuid().optional().or(z.literal("")),
   laborHours: z.coerce.number().optional(),
@@ -64,6 +66,13 @@ export default function WorkOrderForm() {
   const type = watch("type");
   const instrumentId = watch("instrumentId");
 
+  // Equipe da propria empresa - e' quem de fato executa a OS no CMMS do cliente.
+  const { data: laborResources } = useQuery({
+    queryKey: ["labor-resources-picker", clientId],
+    queryFn: () => listLaborResources({ clientId, active: true, pageSize: 200 }),
+    enabled: !!clientId,
+  });
+
   // Sugere a prioridade a partir da criticidade do ativo escolhido - o tecnico ainda
   // pode trocar (por isso so sobrescreve enquanto o campo nao foi tocado a mao).
   const { data: selectedInstrument } = useQuery({
@@ -86,6 +95,7 @@ export default function WorkOrderForm() {
         priority: existing.priority,
         description: existing.description,
         technicianId: existing.technicianId ?? "",
+        assignedResourceId: existing.assignedResourceId ?? "",
         scheduledDate: existing.scheduledDate?.slice(0, 10) ?? "",
         failureCodeId: existing.failureCodeId ?? "",
         laborHours: existing.laborHours ?? undefined,
@@ -100,6 +110,7 @@ export default function WorkOrderForm() {
       const payload = {
         ...values,
         technicianId: values.technicianId || null,
+        assignedResourceId: values.assignedResourceId || null,
         failureCodeId: values.failureCodeId || null,
         checklist: values.checklist.filter((c) => c.description.trim()),
       };
@@ -159,6 +170,15 @@ export default function WorkOrderForm() {
             {!isClient && (
               <UserPicker label="Tecnico responsavel" roles={["ADMIN", "TECHNICIAN"]} error={errors.technicianId?.message} {...register("technicianId")} />
             )}
+            <SelectInput
+              label="Quem vai executar"
+              placeholder={clientId ? "A definir na programacao" : "Selecione o cliente primeiro"}
+              disabled={!clientId}
+              hint="Equipe da empresa - tambem da para definir arrastando no quadro de programacao."
+              options={(laborResources?.items ?? []).map((r) => ({ value: r.id, label: `${r.name} (${r.type})` }))}
+              error={errors.assignedResourceId?.message}
+              {...register("assignedResourceId")}
+            />
           </div>
           <TextareaInput label="Descricao do servico" required rows={3} error={errors.description?.message} {...register("description")} />
           <div className="grid gap-4 sm:grid-cols-3">

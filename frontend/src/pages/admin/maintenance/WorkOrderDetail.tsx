@@ -445,6 +445,11 @@ export default function WorkOrderDetail() {
             <p className="text-sm text-graphite-700">{workOrder.description}</p>
             <dl className="grid gap-4 sm:grid-cols-2">
               {!isClient && <Info label="Tecnico" value={workOrder.technician?.name ?? "-"} />}
+              <Info
+                label="Quem vai executar"
+                value={workOrder.assignedResource ? `${workOrder.assignedResource.name} (${workOrder.assignedResource.type})` : "A definir"}
+              />
+              <Info label="Programada para" value={workOrder.scheduledDate ? formatDateTime(workOrder.scheduledDate).slice(0, 10) : "-"} />
               <Info label="Codigo de falha" value={workOrder.failureCode ? `${workOrder.failureCode.code} - ${workOrder.failureCode.description}` : "-"} />
               <Info label="Iniciada em" value={formatDateTime(workOrder.startedAt)} />
               <Info label="Concluida em" value={formatDateTime(workOrder.completedAt)} />

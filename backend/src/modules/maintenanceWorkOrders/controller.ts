@@ -16,6 +16,7 @@ const detailInclude = {
   instrument: { select: { id: true, type: true, model: true, serialNumber: true, tag: true } },
   plan: { select: { id: true, name: true } },
   technician: { select: { id: true, name: true } },
+  assignedResource: { select: { id: true, name: true, type: true } },
   failureCode: true,
   checklist: { orderBy: { sortOrder: "asc" as const } },
   // Rastreabilidade fim-a-fim: de onde esta OS veio (SS que a originou, ou OS preventiva
@@ -97,12 +98,21 @@ const workOrderSchema = z.object({
   priority: z.nativeEnum(MaintenancePriority).optional(),
   description: z.string().min(2, "Descreva o servico."),
   technicianId: z.string().uuid().nullish(),
+  assignedResourceId: z.string().uuid().nullish(),
   scheduledDate: z.coerce.date().nullish(),
   failureCodeId: z.string().uuid().nullish(),
   laborHours: z.coerce.number().nullish(),
   observations: z.string().nullish(),
   checklist: z.array(checklistItemInput).optional(),
 });
+
+/** A mao de obra atribuida a OS tem que ser da mesma empresa da OS. */
+async function assertResourceBelongsToClient(assignedResourceId: string | null | undefined, clientId: string) {
+  if (!assignedResourceId) return;
+  const resource = await prisma.laborResource.findFirst({ where: { id: assignedResourceId, deletedAt: null }, select: { clientId: true } });
+  if (!resource) throw new NotFoundError("Mao de obra");
+  if (resource.clientId !== clientId) throw new ValidationError("Essa mao de obra e' de outra empresa.");
+}
 
 /** Um codigo de falha so pode ser usado pela empresa dona dele (ou por qualquer uma,
  * quando faz parte do catalogo padrao da OptiProcess). */
@@ -125,6 +135,7 @@ export const createMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
   if (instrument.clientId !== clientId) throw new ValidationError("Esse ativo pertence a outra empresa.");
 
   await assertFailureCodeUsable(data.failureCodeId, clientId);
+  await assertResourceBelongsToClient(data.assignedResourceId, clientId);
 
   const number = await nextClientMaintenanceOrderNumber(clientId);
   const { checklist, ...orderData } = data;
@@ -162,6 +173,7 @@ export const updateMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
   assertOwnClient(req, existing.clientId);
 
   await assertFailureCodeUsable(data.failureCodeId, existing.clientId);
+  await assertResourceBelongsToClient(data.assignedResourceId, existing.clientId);
 
   const { checklist, ...orderData } = data;
   if (req.user?.role === "CLIENT") delete orderData.clientId;
@@ -928,4 +940,107 @@ export const getFailureAnalysis = asyncHandler(async (req: Request, res: Respons
     byInstrument,
     byArea,
   });
+});
+
+// ---------------------------------------------------------------------------
+// Quadro de programacao do PCM: OS pendentes de um lado, semana x mao de obra do
+// outro. O arrasta-e-solta da tela chama scheduleMaintenanceWorkOrder.
+// ---------------------------------------------------------------------------
+
+const TERMINAL_STATUSES = ["COMPLETED", "CANCELED"] as const;
+
+const scheduleCardSelect = {
+  id: true,
+  number: true,
+  description: true,
+  type: true,
+  priority: true,
+  status: true,
+  scheduledDate: true,
+  laborHours: true,
+  assignedResourceId: true,
+  instrument: { select: { id: true, tag: true, type: true } },
+} as const;
+
+export const getMaintenanceSchedule = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const { clientId, from, to } = req.query as { clientId?: string; from?: string; to?: string };
+
+  const scope = { ...clientScopeFilter(req), ...(clientId ? { clientId } : {}) };
+  // Sem empresa definida nao ha quadro: a mao de obra (as linhas) e' sempre por empresa.
+  const resolvedClientId = (scope as { clientId?: string }).clientId;
+  if (!resolvedClientId) {
+    res.json({ clientId: null, resources: [], scheduled: [], unscheduled: [] });
+    return;
+  }
+
+  const start = from ? new Date(from) : new Date();
+  const end = to ? new Date(to) : new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const openFilter = { deletedAt: null, clientId: resolvedClientId, status: { notIn: [...TERMINAL_STATUSES] } };
+
+  const [resources, scheduled, unscheduled] = await Promise.all([
+    prisma.laborResource.findMany({
+      where: { clientId: resolvedClientId, deletedAt: null, active: true },
+      select: { id: true, name: true, type: true },
+      orderBy: { name: "asc" },
+    }),
+    // Programadas na janela pedida (com ou sem responsavel definido).
+    prisma.maintenanceWorkOrder.findMany({
+      where: { ...openFilter, scheduledDate: { gte: start, lte: end } },
+      select: scheduleCardSelect,
+      orderBy: { scheduledDate: "asc" },
+    }),
+    // Pendentes de programacao: sem data marcada. Sao as "OS gerais" que o PCM distribui.
+    prisma.maintenanceWorkOrder.findMany({
+      where: { ...openFilter, scheduledDate: null },
+      select: scheduleCardSelect,
+      orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+      take: 200,
+    }),
+  ]);
+
+  res.json({ clientId: resolvedClientId, resources, scheduled, unscheduled });
+});
+
+const scheduleSchema = z.object({
+  // null nos dois campos = devolve a OS para a lista de pendentes.
+  scheduledDate: z.coerce.date().nullish(),
+  assignedResourceId: z.string().uuid().nullish(),
+});
+
+export const scheduleMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const data = scheduleSchema.parse(req.body);
+  const existing = await prisma.maintenanceWorkOrder.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  if (!existing) throw new NotFoundError("Ordem de manutencao");
+  assertOwnClient(req, existing.clientId);
+  if (TERMINAL_STATUSES.includes(existing.status as (typeof TERMINAL_STATUSES)[number])) {
+    throw new ValidationError("OS concluida ou cancelada nao entra na programacao.");
+  }
+  await assertResourceBelongsToClient(data.assignedResourceId, existing.clientId);
+
+  const workOrder = await prisma.maintenanceWorkOrder.update({
+    where: { id: existing.id },
+    data: {
+      scheduledDate: data.scheduledDate ?? null,
+      assignedResourceId: data.assignedResourceId ?? null,
+      // Programar uma OS que ainda estava "Aberta" ja a marca como Programada - e' o
+      // significado real de arrastar ela para um dia no quadro.
+      ...(data.scheduledDate && existing.status === "OPEN" ? { status: "PROGRAMMED" as const } : {}),
+    },
+    select: { ...scheduleCardSelect, assignedResource: { select: { id: true, name: true } } },
+  });
+
+  await writeAuditLog({
+    userId: req.user?.sub,
+    action: "UPDATE",
+    entityType: "MaintenanceWorkOrder",
+    entityId: workOrder.id,
+    description: data.scheduledDate
+      ? `OS ${workOrder.number} programada para ${new Date(data.scheduledDate).toLocaleDateString("pt-BR")}${workOrder.assignedResource ? ` com ${workOrder.assignedResource.name}` : ""}`
+      : `OS ${workOrder.number} devolvida para a fila de programacao`,
+  });
+
+  res.json(workOrder);
 });

@@ -843,6 +843,9 @@ export interface MaintenanceWorkOrder {
   description: string;
   technicianId: string | null;
   technician?: { id: string; name: string } | null;
+  /** Mao de obra do proprio cliente que vai executar (eixo do quadro de programacao). */
+  assignedResourceId: string | null;
+  assignedResource?: { id: string; name: string; type: string } | null;
   scheduledDate: string | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -868,6 +871,27 @@ export interface MaintenanceWorkOrder {
   originChecklistItem?: { id: string; description: string } | null;
   spawnedWorkOrders?: { id: string; number: string; status: MaintenanceOrderStatus; type: MaintenanceOrderType }[];
   createdAt: string;
+}
+
+/** Cartao enxuto de OS usado no quadro de programacao do PCM. */
+export interface ScheduleCard {
+  id: string;
+  number: string;
+  description: string;
+  type: MaintenanceOrderType;
+  priority: MaintenancePriority;
+  status: MaintenanceOrderStatus;
+  scheduledDate: string | null;
+  laborHours: number | null;
+  assignedResourceId: string | null;
+  instrument?: { id: string; tag: string | null; type: string } | null;
+}
+
+export interface MaintenanceScheduleData {
+  clientId: string | null;
+  resources: { id: string; name: string; type: string }[];
+  scheduled: ScheduleCard[];
+  unscheduled: ScheduleCard[];
 }
 
 export type RcaStatus = "OPEN" | "IN_PROGRESS" | "CLOSED";

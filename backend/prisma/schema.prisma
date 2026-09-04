@@ -983,6 +983,8 @@ model LaborResource {
   deletedAt          DateTime?
 
   workOrderEntries WorkOrderLabor[]
+  // OS programadas para esta pessoa no quadro de programacao do PCM.
+  assignedWorkOrders MaintenanceWorkOrder[] @relation("WorkOrderAssignedResource")
 
   @@index([clientId])
   @@map("labor_resources")
@@ -1466,6 +1468,11 @@ model MaintenanceWorkOrder {
   description  String
   technicianId String?
   technician   User?                  @relation("MaintenanceWorkOrderTechnician", fields: [technicianId], references: [id])
+  // Quem vai executar, vindo do catalogo de mao de obra do proprio cliente - e' o eixo
+  // do quadro de programacao do PCM. Diferente de technicianId, que aponta para um
+  // usuario interno da OptiProcess (so faz sentido quando quem opera e' a equipe interna).
+  assignedResourceId String?
+  assignedResource   LaborResource?     @relation("WorkOrderAssignedResource", fields: [assignedResourceId], references: [id])
   scheduledDate DateTime?
   // Alimentam MTTR (tempo de reparo) e disponibilidade.
   startedAt    DateTime?
@@ -1510,6 +1517,8 @@ model MaintenanceWorkOrder {
   @@index([planId])
   @@index([status])
   @@index([originWorkOrderId])
+  @@index([assignedResourceId])
+  @@index([scheduledDate])
   @@map("maintenance_work_orders")
 }
 

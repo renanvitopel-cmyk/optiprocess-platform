@@ -236,8 +236,10 @@ export const createMaintenancePlan = asyncHandler(async (req: Request, res: Resp
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = planSchema.parse(req.body);
   const clientId = resolveClientId(req, data.clientId);
-  if (data.triggerType === "TIME" && !data.frequencyDays) {
-    throw new ValidationError("Informe a periodicidade em dias para um plano por tempo.");
+  // A periodicidade agora vem como "a cada X <unidade>"; frequencyDays e' o valor derivado,
+  // mantido para os planos antigos que so tinham dias.
+  if (data.triggerType === "TIME" && !data.frequencyEvery && !data.frequencyDays) {
+    throw new ValidationError("Informe a periodicidade para um plano por tempo.");
   }
   if (data.triggerType === "METER" && (!data.meterId || !data.meterInterval)) {
     throw new ValidationError("Informe o medidor e o intervalo para um plano por medidor.");

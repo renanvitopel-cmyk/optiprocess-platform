@@ -90,7 +90,8 @@ export const deleteAssetType = asyncHandler(async (req: Request, res: Response) 
     throw new ForbiddenError("Este tipo faz parte do catalogo padrao e nao pode ser removido.");
   }
 
-  const inUse = await prisma.instrument.count({ where: { type: { equals: existing.name, mode: "insensitive" } } });
+  // Ativo removido nao conta como uso: senao o tipo ficaria preso para sempre.
+  const inUse = await prisma.instrument.count({ where: { type: { equals: existing.name, mode: "insensitive" }, deletedAt: null } });
   if (inUse > 0) throw new ValidationError("Este tipo ja esta em uso por algum ativo. Desative-o em vez de remover.");
 
   await prisma.assetType.delete({ where: { id: existing.id } });

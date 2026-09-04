@@ -66,7 +66,7 @@ export const getOwnClient = asyncHandler(async (req: Request, res: Response) => 
   if (!client) throw new NotFoundError("Cliente");
 
   const usage = await getClientPlanUsage(client.id);
-  res.json({ ...client, planUsage: { users: usage.users, instruments: usage.instruments } });
+  res.json({ ...client, planUsage: { users: usage.users, instruments: usage.instruments, requesters: usage.requesters } });
 });
 
 export const getClient = asyncHandler(async (req: Request, res: Response) => {
@@ -89,7 +89,7 @@ export const getClient = asyncHandler(async (req: Request, res: Response) => {
   });
   if (!client) throw new NotFoundError("Cliente");
   const usage = await getClientPlanUsage(client.id);
-  res.json({ ...client, planUsage: { users: usage.users, instruments: usage.instruments } });
+  res.json({ ...client, planUsage: { users: usage.users, instruments: usage.instruments, requesters: usage.requesters } });
 });
 
 const clientSchema = z.object({

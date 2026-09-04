@@ -9,6 +9,9 @@ import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { assertUserLimitNotExceeded } from "../../lib/planLimits";
 
+/** Perfis que pertencem a uma empresa e por isso exigem clientId. */
+const PERFIS_DE_CLIENTE: Role[] = ["CLIENT", "REQUESTER"];
+
 const userSelect = {
   id: true,
   name: true,
@@ -64,9 +67,13 @@ const createUserSchema = z.object({
 export const createUser = asyncHandler(async (req: Request, res: Response) => {
   const data = createUserSchema.parse(req.body);
 
-  if (data.role === "CLIENT" && !data.clientId) {
+  // CLIENT e REQUESTER sao perfis de uma empresa: sem clientId eles nao alcancam dado
+  // nenhum (o escopo por empresa e' o que define o que enxergam) - e ficavam com o portal
+  // vazio, sem explicacao.
+  if (PERFIS_DE_CLIENTE.includes(data.role) && !data.clientId) {
     throw new ValidationError("Usuarios do tipo Cliente precisam estar vinculados a uma empresa.");
   }
+  // Solicitante nao ocupa vaga: o limite so vale para os acessos contratados.
   if (data.role === "CLIENT" && data.clientId) await assertUserLimitNotExceeded(data.clientId);
 
   const passwordHash = await hashPassword(data.password);
@@ -76,7 +83,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
       email: data.email.toLowerCase(),
       passwordHash,
       role: data.role,
-      clientId: data.role === "CLIENT" ? data.clientId : null,
+      clientId: PERFIS_DE_CLIENTE.includes(data.role) ? data.clientId : null,
     },
     select: userSelect,
   });
@@ -107,7 +114,8 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   // So conta contra o limite do plano quando o usuario esta passando a ocupar uma vaga
   // nova naquele cliente (role virando CLIENT, ou mudando de empresa) - reativar
   // (active:true) um usuario que ja pertencia ao cliente nao e' uma vaga nova.
-  const nextClientId = data.role === "CLIENT" || existing.role === "CLIENT" ? (data.clientId !== undefined ? data.clientId : existing.clientId) : null;
+  const ehPerfilDeCliente = PERFIS_DE_CLIENTE.includes(data.role ?? existing.role) || PERFIS_DE_CLIENTE.includes(existing.role);
+  const nextClientId = ehPerfilDeCliente ? (data.clientId !== undefined ? data.clientId : existing.clientId) : null;
   const clientChanged = nextClientId && nextClientId !== existing.clientId;
   if (clientChanged) await assertUserLimitNotExceeded(nextClientId);
 
@@ -117,7 +125,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
       name: data.name,
       role: data.role,
       active: data.active,
-      clientId: data.role === "CLIENT" || existing.role === "CLIENT" ? data.clientId : undefined,
+      clientId: ehPerfilDeCliente ? data.clientId : undefined,
     },
     select: userSelect,
   });

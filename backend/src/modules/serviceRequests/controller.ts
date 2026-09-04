@@ -20,6 +20,19 @@ const detailInclude = {
   workOrder: { select: { id: true, number: true, status: true } },
 };
 
+/** O Solicitante so enxerga o que ele mesmo pediu.
+ *
+ * Ele e' operador de fabrica, nao PCM: ver a fila inteira da empresa nao ajuda no trabalho
+ * dele e expoe o que acontece em areas que nao sao dele. Para os demais perfis o filtro e'
+ * vazio (a equipe do cliente ve tudo da empresa). */
+function escopoDoSolicitante(req: Request): { requestedById?: string } {
+  if (req.user?.role === "REQUESTER") {
+    if (!req.user.sub) throw new ForbiddenError();
+    return { requestedById: req.user.sub };
+  }
+  return {};
+}
+
 export const listServiceRequests = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
@@ -34,6 +47,7 @@ export const listServiceRequests = asyncHandler(async (req: Request, res: Respon
   const where = {
     deletedAt: null,
     ...clientScopeFilter(req),
+    ...escopoDoSolicitante(req),
     ...(clientId ? { clientId } : {}),
     ...(status ? { status } : {}),
     ...(instrumentId ? { instrumentId } : {}),
@@ -57,7 +71,7 @@ export const listServiceRequests = asyncHandler(async (req: Request, res: Respon
 export const getServiceRequest = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const request = await prisma.serviceRequest.findFirst({
-    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req), ...escopoDoSolicitante(req) },
     include: detailInclude,
   });
   if (!request) throw new NotFoundError("Solicitacao de servico");
@@ -289,7 +303,7 @@ async function listServiceRequestAttachments(requestId: string) {
 
 export const listServiceRequestAttachmentsRoute = asyncHandler(async (req: Request, res: Response) => {
   const request = await prisma.serviceRequest.findFirst({
-    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req), ...escopoDoSolicitante(req) },
     select: { id: true },
   });
   if (!request) throw new NotFoundError("Solicitacao de servico");
@@ -327,7 +341,7 @@ export const uploadServiceRequestAttachment = asyncHandler(async (req: Request, 
 
 export const deleteServiceRequestAttachment = asyncHandler(async (req: Request, res: Response) => {
   const request = await prisma.serviceRequest.findFirst({
-    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req), ...escopoDoSolicitante(req) },
     select: { id: true },
   });
   if (!request) throw new NotFoundError("Solicitacao de servico");
@@ -345,7 +359,7 @@ export const deleteServiceRequestAttachment = asyncHandler(async (req: Request, 
 
 export const getServiceRequestAttachmentUrl = asyncHandler(async (req: Request, res: Response) => {
   const request = await prisma.serviceRequest.findFirst({
-    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req), ...escopoDoSolicitante(req) },
     select: { id: true },
   });
   if (!request) throw new NotFoundError("Solicitacao de servico");

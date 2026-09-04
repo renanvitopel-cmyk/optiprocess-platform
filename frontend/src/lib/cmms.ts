@@ -8,14 +8,17 @@ import { useAuth } from "../auth/AuthContext";
  */
 export function useCmms() {
   const { user } = useAuth();
-  const isClient = user?.role === "CLIENT";
+  // O Solicitante tambem esta preso a propria empresa (o backend forca o clientId), entao
+  // as telas compartilhadas se comportam como no portal do cliente. O que ele NAO faz e'
+  // gerenciar - isso fica em canManage abaixo.
+  const isClient = user?.role === "CLIENT" || user?.role === "REQUESTER";
 
   return {
     isClient,
     // O CMMS e' do cliente: quem gerencia e' a equipe dele. O ADMIN da OptiProcess entra
     // por acesso master (suporte/administracao da plataforma); TECHNICIAN e COMMERCIAL
     // cuidam dos servicos prestados pela OptiProcess, nao da manutencao interna do cliente.
-    canManage: isClient || user?.role === "ADMIN",
+    canManage: user?.role === "CLIENT" || user?.role === "ADMIN",
     ownClientId: user?.clientId ?? undefined,
     base: isClient ? "/portal/manutencao" : "/gestao/manutencao",
     assetsBase: isClient ? "/portal/instrumentos" : "/gestao/instrumentos",

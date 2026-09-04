@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole, CMMS_ROLES } from "../../middleware/rbac";
+import { requireRole, CMMS_ROLES, SERVICE_REQUEST_ROLES } from "../../middleware/rbac";
 import { uploadAny } from "../../middleware/upload";
 import {
   listServiceRequests,
@@ -19,11 +19,13 @@ import {
 export const serviceRequestsRouter = Router();
 
 // O CMMS e' do cliente: quem abre, tria e converte a solicitacao e' a equipe dele.
-serviceRequestsRouter.use(requireAuth, requireRole(...CMMS_ROLES));
+// Abrir e acompanhar solicitacao inclui o Solicitante; decidir o que fazer com ela
+// (triagem, conversao em OS, edicao, exclusao) continua sendo da equipe do cliente.
+serviceRequestsRouter.use(requireAuth, requireRole(...SERVICE_REQUEST_ROLES));
 
 serviceRequestsRouter.get("/", listServiceRequests);
 serviceRequestsRouter.get("/:id", getServiceRequest);
-serviceRequestsRouter.post("/", requireRole(...CMMS_ROLES), createServiceRequest);
+serviceRequestsRouter.post("/", requireRole(...SERVICE_REQUEST_ROLES), createServiceRequest);
 serviceRequestsRouter.patch("/:id", requireRole(...CMMS_ROLES), updateServiceRequest);
 serviceRequestsRouter.delete("/:id", requireRole(...CMMS_ROLES), deleteServiceRequest);
 

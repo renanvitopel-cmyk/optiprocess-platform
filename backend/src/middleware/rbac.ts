@@ -33,10 +33,20 @@ export const STAFF_ROLES: Role[] = ["ADMIN", "TECHNICIAN", "COMMERCIAL"];
  */
 export const CMMS_ROLES: Role[] = ["ADMIN", "CLIENT"];
 
-/** Garante que um usuario CLIENT so acesse dados do proprio clientId.
+/** Perfis presos a uma empresa: tudo o que fazem e' dentro do proprio clientId. O
+ * Solicitante entra aqui junto do CLIENT - a diferenca entre os dois nao e' o escopo de
+ * empresa, e' o que cada um pode fazer dentro dela. */
+export const CLIENT_SCOPED_ROLES: Role[] = ["CLIENT", "REQUESTER"];
+
+/** true quando o usuario da requisicao esta preso a uma empresa (e, portanto, tem clientId). */
+function presoAoCliente(req: Request): req is Request & { user: { role: Role; clientId?: string | null; sub: string } } {
+  return !!req.user && CLIENT_SCOPED_ROLES.includes(req.user.role);
+}
+
+/** Garante que um usuario preso a uma empresa (CLIENT/REQUESTER) so acesse dados dela.
  * Uso: validar o :clientId de rota, ou aplicar como filtro obrigatorio em queries. */
 export function assertOwnClient(req: Request, clientId: string): void {
-  if (req.user?.role === "CLIENT" && req.user.clientId !== clientId) {
+  if (presoAoCliente(req) && req.user.clientId !== clientId) {
     throw new ForbiddenError("Voce nao tem acesso aos dados de outra empresa.");
   }
 }
@@ -49,7 +59,7 @@ export function assertOwnClient(req: Request, clientId: string): void {
  * nunca confiando em um clientId vindo da query string do proprio cliente.
  */
 export function clientScopeFilter(req: Request): { clientId?: string } {
-  if (req.user?.role === "CLIENT") {
+  if (presoAoCliente(req)) {
     if (!req.user.clientId) throw new ForbiddenError();
     return { clientId: req.user.clientId };
   }
@@ -59,12 +69,19 @@ export function clientScopeFilter(req: Request): { clientId?: string } {
 export const CLIENT_PORTAL_ROLES: Role[] = ["ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT"];
 
 /**
+ * Quem pode abrir solicitacao de servico: a equipe do cliente, o Solicitante (que so faz
+ * isso) e o ADMIN pelo acesso master. E' a unica porta do Solicitante no sistema - ele nao
+ * alcanca ativos, ordens, planos nem estoque.
+ */
+export const SERVICE_REQUEST_ROLES: Role[] = ["ADMIN", "CLIENT", "REQUESTER"];
+
+/**
  * Espelho do clientScopeFilter para criacao: um usuario CLIENT sempre grava no proprio
  * clientId (o que vier no corpo e' ignorado), enquanto a equipe interna precisa informar
  * explicitamente para qual empresa o registro esta sendo criado.
  */
 export function resolveClientId(req: Request, bodyClientId?: string | null): string {
-  if (req.user?.role === "CLIENT") {
+  if (presoAoCliente(req)) {
     if (!req.user.clientId) throw new ForbiddenError();
     return req.user.clientId;
   }
@@ -81,7 +98,9 @@ export function resolveClientId(req: Request, bodyClientId?: string | null): str
  * pelo admin na ficha do cliente.
  */
 export async function contractedServicesFilter(req: Request): Promise<ServiceCategory[] | null> {
-  if (req.user?.role !== "CLIENT") return null;
+  // O Solicitante tambem e' do cliente: se a empresa nao contratou o CMMS, ele nao abre
+  // solicitacao nenhuma - a checagem vale para os dois perfis.
+  if (!presoAoCliente(req)) return null;
   if (!req.user.clientId) throw new ForbiddenError();
 
   const client = await prisma.client.findUnique({

@@ -125,7 +125,20 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
 
 /** Filtra o menu do portal pelas areas de servico que o cliente contratou, descartando
  * secoes que ficaram vazias depois do filtro. */
-export function getPortalNav(contractedServices: ServiceCategory[]): PortalNavSection[] {
+/** O Solicitante ve um menu de duas linhas: abrir solicitacao e o proprio perfil. Mostrar
+ * o resto desabilitado so criaria a impressao de que ele deveria ter acesso. */
+const NAV_DO_SOLICITANTE: PortalNavSection[] = [
+  {
+    items: [
+      { to: "/portal/manutencao/solicitacoes", label: "Minhas solicitacoes", icon: ClipboardPlus },
+      { to: "/portal/perfil", label: "Meu perfil", icon: User },
+    ],
+  },
+];
+
+export function getPortalNav(contractedServices: ServiceCategory[], role?: string): PortalNavSection[] {
+  if (role === "REQUESTER") return NAV_DO_SOLICITANTE;
+
   return PORTAL_NAV_SECTIONS.map((section) => ({
     ...section,
     items: section.items.filter((item) => !item.requires || item.requires.some((c) => contractedServices.includes(c))),

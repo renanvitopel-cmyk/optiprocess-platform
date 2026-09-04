@@ -22,7 +22,7 @@ export function ClientPortalLayout() {
   });
   const { user, logout } = useAuth();
   const contractedServices = user?.client?.contractedServices ?? [];
-  const portalNav = getPortalNav(contractedServices);
+  const portalNav = getPortalNav(contractedServices, user?.role);
   // Quem assinou o CMMS esta usando o RLP Maintenance - a marca do portal dele e' a do
   // produto. Cliente que so tem servicos da OptiProcess (calibracao, laudos) continua
   // vendo a marca da OptiProcess, que e' quem presta o servico.

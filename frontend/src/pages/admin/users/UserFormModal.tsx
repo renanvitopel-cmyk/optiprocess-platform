@@ -13,7 +13,7 @@ import { getApiErrorMessage } from "../../../api/client";
 const baseSchema = z.object({
   name: z.string().min(2, "Informe o nome."),
   email: z.string().email("E-mail invalido."),
-  role: z.enum(["ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT"]),
+  role: z.enum(["ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT", "REQUESTER"]),
   clientId: z.string().uuid().optional().or(z.literal("")),
 });
 const createSchema = baseSchema.extend({ password: z.string().min(8, "Minimo de 8 caracteres.") });
@@ -85,11 +85,19 @@ export function UserFormModal({
             { value: "TECHNICIAN", label: "Tecnico" },
             { value: "COMMERCIAL", label: "Comercial" },
             { value: "CLIENT", label: "Cliente" },
+            { value: "REQUESTER", label: "Solicitante (so abre solicitacoes)" },
           ]}
+          hint={
+            role === "REQUESTER"
+              ? "Abre e acompanha as proprias solicitacoes de servico, e mais nada. Nao consome vaga do plano - e' ilimitado."
+              : undefined
+          }
           error={errors.role?.message}
           {...register("role")}
         />
-        {role === "CLIENT" && <ClientPicker label="Empresa vinculada" required error={errors.clientId?.message} {...register("clientId")} />}
+        {(role === "CLIENT" || role === "REQUESTER") && (
+          <ClientPicker label="Empresa vinculada" required error={errors.clientId?.message} {...register("clientId")} />
+        )}
       </form>
     </Modal>
   );

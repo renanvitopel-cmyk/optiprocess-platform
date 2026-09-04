@@ -110,6 +110,16 @@ export default function PortalContract() {
         </div>
       )}
 
+      {uso?.requesters != null && (
+        <div className="mb-8 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+          <p className="text-sm text-graphite-700">
+            <span className="font-semibold text-navy-900">{uso.requesters}</span> solicitante(s) cadastrado(s) - eles
+            abrem e acompanham as proprias solicitacoes de servico e <span className="font-medium">nao consomem vaga</span>{" "}
+            do plano, em qualquer plano.
+          </p>
+        </div>
+      )}
+
       <div>
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-semibold text-navy-900">Usuarios da sua empresa</h2>

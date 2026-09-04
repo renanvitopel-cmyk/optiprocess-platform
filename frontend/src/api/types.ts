@@ -1,4 +1,6 @@
-export type Role = "ADMIN" | "TECHNICIAN" | "COMMERCIAL" | "CLIENT";
+/** REQUESTER (Solicitante) so abre e acompanha as proprias solicitacoes de servico - e'
+ * ilimitado em qualquer plano. */
+export type Role = "ADMIN" | "TECHNICIAN" | "COMMERCIAL" | "CLIENT" | "REQUESTER";
 
 export interface AuthUser {
   id: string;
@@ -77,7 +79,7 @@ export interface Client {
   planId: string | null;
   plan?: Plan | null;
   planStartedAt: string | null;
-  planUsage?: { users: PlanUsage; instruments: PlanUsage };
+  planUsage?: { users: PlanUsage; instruments: PlanUsage; requesters?: number };
   notes: string | null;
   createdAt: string;
   contacts?: ClientContact[];

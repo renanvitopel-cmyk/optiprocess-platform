@@ -21,6 +21,11 @@ enum Role {
   TECHNICIAN
   COMMERCIAL
   CLIENT
+  // Solicitante: pessoa da fabrica (operador, lider de turno) que so abre e acompanha as
+  // proprias solicitacoes de servico. Nao entra em ativos, ordens, planos nem estoque, e
+  // por isso e' ilimitado em todos os planos - cobrar por quem so pede conserto afastaria
+  // justamente quem precisa avisar que a maquina esta ruim.
+  REQUESTER
 }
 
 enum ClientStatus {

@@ -153,6 +153,8 @@ export interface Instrument {
   tag: string | null;
   /** Nome do ativo em linguagem de gente - junto do TAG e' o que identifica nas telas. */
   description: string | null;
+  /** Sujeito a calibracao - so estes aparecem na lista de Ativos da OptiProcess. */
+  calibratable: boolean;
   manufacturer: string | null;
   model: string | null;
   serialNumber: string | null;

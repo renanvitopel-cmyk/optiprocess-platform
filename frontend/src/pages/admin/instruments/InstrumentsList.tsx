@@ -15,6 +15,9 @@ export default function InstrumentsList() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const clientId = searchParams.get("clientId") ?? undefined;
+  // As telas do CMMS chamam esta lista com scope=cmms para ver a arvore completa do
+  // cliente; sem isso a equipe da OptiProcess ve so os ativos calibraveis.
+  const scope = searchParams.get("scope") ?? undefined;
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const canManage = user?.role === "ADMIN" || user?.role === "TECHNICIAN";
@@ -27,15 +30,19 @@ export default function InstrumentsList() {
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["instruments", search, status, criticality, operationalStatus, page, clientId],
-    queryFn: () => listInstruments({ search: search || undefined, status: status || undefined, criticality: criticality || undefined, operationalStatus: operationalStatus || undefined, page, pageSize: 15, clientId }),
+    queryKey: ["instruments", scope, search, status, criticality, operationalStatus, page, clientId],
+    queryFn: () => listInstruments({ scope, search: search || undefined, status: status || undefined, criticality: criticality || undefined, operationalStatus: operationalStatus || undefined, page, pageSize: 15, clientId }),
   });
 
   return (
     <div>
       <PageHeader
-        title="Ativos"
-        description="Equipamentos dos clientes sujeitos a calibracao"
+        title={scope === "cmms" ? "Ativos do CMMS" : "Ativos"}
+        description={
+          scope === "cmms"
+            ? "Arvore completa de manutencao do cliente"
+            : "Equipamentos dos clientes sujeitos a calibracao"
+        }
         actions={
           <>
             {clientId && (

@@ -81,6 +81,15 @@ enum MaintenanceTriggerMode {
   ALL_DUE   // so quando todos vencerem
 }
 
+// O que fazer quando falta material obrigatorio na hora de gerar a OS. Nao existe
+// "melhor esforco silencioso": em qualquer opcao o planejador fica sabendo o motivo.
+enum MaterialPolicy {
+  RESERVE_AUTO             // reserva o que da e registra o que faltou
+  BLOCK_AWAITING_MATERIAL  // gera a OS ja em "Aguardando material"
+  ALERT_ONLY               // gera sem reservar, com alerta
+  DO_NOT_GENERATE          // nao gera se faltar material obrigatorio
+}
+
 // Ciclo de vida do plano. Substitui o boolean "active" como fonte da verdade (o boolean
 // continua no banco, sincronizado, para nao quebrar consultas antigas): Rascunho e' o
 // plano em montagem, Suspenso para de gerar OS mas volta, Encerrado e' aposentado.
@@ -611,6 +620,10 @@ model Instrument {
   resolution                 String?
   unit                       String?
   installationLocation       String?
+  // Marca o ativo como sujeito a calibracao. E' o que separa os dois mundos: a lista de
+  // Ativos da OptiProcess mostra so os calibraveis (o que ela presta servico), enquanto o
+  // CMMS do cliente enxerga toda a arvore dele - linha, maquina, componente.
+  calibratable               Boolean           @default(false)
   // Opcional: so faz sentido para ativos com calibracao periodica rastreada. Uma empresa
   // que contratou so o CMMS (sem Calibracao) cadastra o ativo sem preencher isso.
   calibrationFrequencyMonths Int?
@@ -1511,6 +1524,18 @@ model MaintenancePlan {
   meterResetRule           MeterResetRule @default(CONTINUE)
   // Com mais de um gatilho configurado, quando a OS nasce.
   triggerMode MaintenanceTriggerMode @default(FIRST_DUE)
+  // ----- Como a OS gerada nasce -----
+  // Em que status a OS entra: normalmente Programada (ja com data) ou Planejada.
+  initialWorkOrderStatus MaintenanceOrderStatus @default(PROGRAMMED)
+  // Pre-requisitos de seguranca/operacao que a OS carrega do plano.
+  requiresShutdown         Boolean @default(false)
+  estimatedShutdownHours   Float?
+  requiresOperationalRelease Boolean @default(false)
+  requiresLoto             Boolean @default(false)
+  requiresApproval         Boolean @default(false)
+  // Uma OS por ativo (padrao) ou uma OS agrupando os ativos da familia.
+  groupWorkOrder Boolean @default(false)
+  materialPolicy MaterialPolicy @default(RESERVE_AUTO)
   // Gatilho por condicao: ponto de medicao que, ao entrar em alarme, gera a OS do plano.
   conditionMeterId String?
   conditionMeter   Meter? @relation("PlanConditionMeter", fields: [conditionMeterId], references: [id])
@@ -1562,6 +1587,14 @@ model MaintenancePlanPart {
   sparePartId String
   sparePart   SparePart       @relation(fields: [sparePartId], references: [id])
   quantity    Int
+  // Obrigatorio decide se a falta bloqueia a geracao (conforme a politica do plano).
+  required    Boolean         @default(true)
+  // Substituto aceito quando o principal falta - evita parar o servico por causa de
+  // um item que tem equivalente no almoxarifado.
+  alternativeSparePartId String?
+  alternativeSparePart   SparePart? @relation("PlanPartAlternative", fields: [alternativeSparePartId], references: [id])
+  suggestedSupplier String?
+  notes             String?
 
   @@index([planId])
   @@index([sparePartId])
@@ -1682,6 +1715,7 @@ model MaintenanceWorkOrder {
   // (assignedResourceId). Apontar horas nao exige estar aqui - a lista serve para
   // combinar quem entra no servico, nao para bloquear o apontamento.
   assignees WorkOrderAssignee[]
+  materialLogs WorkOrderMaterialLog[]
 
   @@unique([clientId, number])
   @@index([clientId])
@@ -1706,6 +1740,25 @@ model WorkOrderAssignee {
   @@unique([workOrderId, laborResourceId])
   @@index([workOrderId])
   @@map("work_order_assignees")
+}
+
+// Registro do que aconteceu com cada material previsto quando a OS foi gerada. Existe
+// para o planejador saber POR QUE um item nao foi reservado, em vez de descobrir na hora
+// da execucao que a peca nao esta separada.
+model WorkOrderMaterialLog {
+  id          String   @id @default(uuid())
+  workOrderId String
+  workOrder   MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  sparePartId String
+  sparePart   SparePart @relation("MaterialLogPart", fields: [sparePartId], references: [id])
+  quantityNeeded Int
+  reserved       Boolean
+  // Motivo quando nao reservou: saldo insuficiente, peca inativa, etc.
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@index([workOrderId])
+  @@map("work_order_material_logs")
 }
 
 model MaintenanceWorkOrderChecklistItem {
@@ -1757,6 +1810,8 @@ model SparePart {
   assetLinks   AssetPart[]
   reservations SparePartReservation[]
   planParts    MaintenancePlanPart[]
+  planPartsAsAlternative MaintenancePlanPart[]  @relation("PlanPartAlternative")
+  materialLogs           WorkOrderMaterialLog[] @relation("MaterialLogPart")
 
   @@index([clientId])
   @@index([active])

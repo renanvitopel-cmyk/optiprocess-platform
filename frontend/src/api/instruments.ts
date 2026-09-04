@@ -3,6 +3,8 @@ import type { PagedResult } from "./client";
 import type { AssetPart, AssetPartHistoryEntry, AttachmentCategory, CalibrationAttachment, Instrument, InstrumentCostSummary, InstrumentStatus, MaintenancePriority, OperationalStatus } from "./types";
 
 export interface ListInstrumentsParams {
+  /** "cmms" pede a arvore completa do cliente; sem isso a equipe interna ve so calibraveis. */
+  scope?: string;
   page?: number;
   pageSize?: number;
   clientId?: string;

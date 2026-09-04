@@ -30,7 +30,8 @@ async function attachAssetTypeLevel<T extends { type: string }>(instruments: T[]
 export const listInstruments = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
-  const { clientId, search, status, parentId, criticality, plantId, areaId, systemId, costCenterId, operationalStatus } = req.query as {
+  const { clientId, search, status, parentId, criticality, plantId, areaId, systemId, costCenterId, operationalStatus, scope } = req.query as {
+    scope?: string;
     clientId?: string;
     search?: string;
     status?: InstrumentStatus;
@@ -42,6 +43,14 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
     costCenterId?: string;
     operationalStatus?: OperationalStatus;
   };
+
+  /**
+   * A OptiProcess presta calibracao; o CMMS e' do cliente. Por isso a lista de Ativos da
+   * equipe interna mostra so o que e' calibravel - a arvore de manutencao do cliente
+   * (linha, maquina, componente) nao e' assunto dela. scope=cmms pede a arvore completa,
+   * usado pelas telas do CMMS (o cliente, no portal, sempre ve tudo que e' dele).
+   */
+  const somenteCalibraveis = req.user?.role !== "CLIENT" && scope !== "cmms";
 
   const where = {
     deletedAt: null,
@@ -55,6 +64,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
     ...(systemId ? { systemId } : {}),
     ...(costCenterId ? { costCenterId } : {}),
     ...(operationalStatus ? { operationalStatus } : {}),
+    ...(somenteCalibraveis ? { calibratable: true } : {}),
     ...(search
       ? {
           OR: [
@@ -134,6 +144,8 @@ const instrumentSchema = z.object({
   tag: z.string().min(1, "Informe o TAG do ativo."),
   // Nome do ativo em linguagem de gente - junto do TAG e' o que identifica nas telas.
   description: z.string().nullish(),
+  // Marca o ativo como sujeito a calibracao (entra na lista da OptiProcess).
+  calibratable: z.boolean().optional(),
   // Ficha do fabricante e' opcional: nem todo ativo de manutencao tem numero de serie.
   manufacturer: z.string().nullish(),
   model: z.string().nullish(),
@@ -361,9 +373,15 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
   const isAdmin = req.user?.role === "ADMIN";
   const costCenterOverride = isAdmin && !!data.costCenterId && data.costCenterId !== context.costCenterId;
 
+  // Ativo cadastrado pela equipe da OptiProcess nasce calibravel - e' o motivo de ela
+  // estar cadastrando. Preencher periodicidade de calibracao tambem marca.
+  const calibratable =
+    data.calibratable ?? (req.user?.role !== "CLIENT" || data.calibrationFrequencyMonths != null);
+
   const instrument = await prisma.instrument.create({
     data: {
       ...data,
+      calibratable,
       clientId,
       plantId: context.plantId,
       areaId: context.areaId,

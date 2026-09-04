@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Modal } from "../../../components/Modal";
-import { TextInput, SelectInput } from "../../../components/form/Field";
+import { TextInput, SelectInput, CheckboxInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
 import { AssetTypeInput } from "../../../components/AssetTypeInput";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
@@ -26,6 +26,7 @@ const schema = z.object({
   operationalStatus: z.enum(["IN_OPERATION", "STOPPED", "STANDBY", "DEACTIVATED", "IN_MAINTENANCE"]).optional(),
   parentId: z.string().uuid().optional().or(z.literal("")),
   installationLocation: z.string().optional(),
+  calibratable: z.boolean().optional(),
   costCenterId: z.string().uuid().optional().or(z.literal("")),
   // Ficha do fabricante - opcional, fica recolhida.
   manufacturer: z.string().optional(),
@@ -119,6 +120,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               operationalStatus: instrument.operationalStatus,
               parentId: instrument.parentId ?? "",
               installationLocation: instrument.installationLocation ?? "",
+              calibratable: instrument.calibratable,
               costCenterId: instrument.costCenterId ?? "",
               manufacturer: instrument.manufacturer ?? "",
               model: instrument.model ?? "",
@@ -280,6 +282,14 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
         </Section>
 
         <Section title="Calibracao" hint="so para ativos com calibracao periodica">
+          <CheckboxInput
+            label="Ativo calibravel - aparece na lista de Ativos da OptiProcess"
+            {...register("calibratable")}
+          />
+          <p className="text-xs text-graphite-500">
+            Marque so equipamentos que passam por calibracao. Linha, area, maquina e componente do CMMS
+            ficam desmarcados e nao aparecem para a equipe da OptiProcess.
+          </p>
           <div className="grid gap-4 sm:grid-cols-3">
             <TextInput
               label="Periodicidade (meses)"

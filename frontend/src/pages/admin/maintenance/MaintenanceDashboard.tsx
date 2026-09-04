@@ -60,7 +60,7 @@ export default function MaintenanceDashboard() {
         <Link to={`${base}/planos${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
           <ShieldCheck className="h-4 w-4" /> Planos preventivos
         </Link>
-        <Link to={`${assetsBase}${clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">
+        <Link to={`${assetsBase}?scope=cmms${clientId ? `&clientId=${clientId}` : ""}`} className="btn-outline">
           <Gauge className="h-4 w-4" /> Ativos
         </Link>
         <Link to={`${partsBase}${!isClient && clientId ? `?clientId=${clientId}` : ""}`} className="btn-outline">

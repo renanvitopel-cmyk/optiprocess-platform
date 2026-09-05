@@ -46,6 +46,7 @@ export const createServiceRequestCategory = asyncHandler(async (req: Request, re
     where: { clientId: data.clientId ?? null, name: { equals: data.name, mode: "insensitive" } },
   });
   if (existing) {
+    // Este catalogo nao tem exclusao logica: remover apaga de vez. Basta reativar.
     if (!existing.active) {
       const reactivated = await prisma.serviceRequestCategory.update({ where: { id: existing.id }, data: { active: true } });
       return res.status(200).json(reactivated);

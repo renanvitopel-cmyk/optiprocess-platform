@@ -35,6 +35,7 @@ import { maintenancePlanTemplatesRouter } from "./modules/maintenancePlanTemplat
 import { maintenanceWorkOrdersRouter } from "./modules/maintenanceWorkOrders/routes";
 import { sparePartsRouter } from "./modules/spareParts/routes";
 import { lubricationRouter } from "./modules/lubrication/routes";
+import { importsRouter } from "./modules/imports/routes";
 import { plantsRouter } from "./modules/plants/routes";
 import { areasRouter } from "./modules/areas/routes";
 import { assetSystemsRouter } from "./modules/assetSystems/routes";
@@ -92,6 +93,7 @@ export function createApp() {
   app.use("/api/maintenance-work-orders", maintenanceWorkOrdersRouter);
   app.use("/api/spare-parts", sparePartsRouter);
   app.use("/api/lubrificacao", lubricationRouter);
+  app.use("/api/importacao", importsRouter);
   app.use("/api/plants", plantsRouter);
   app.use("/api/areas", areasRouter);
   app.use("/api/asset-systems", assetSystemsRouter);

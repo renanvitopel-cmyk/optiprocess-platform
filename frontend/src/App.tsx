@@ -76,6 +76,7 @@ const LubricationPointsList = lazy(() => import("./pages/admin/lubrication/Lubri
 const LubricationRoutesList = lazy(() => import("./pages/admin/lubrication/LubricationRoutesList"));
 const LubricantsList = lazy(() => import("./pages/admin/lubrication/LubricantsList"));
 const LubricationForecast = lazy(() => import("./pages/admin/lubrication/LubricationForecast"));
+const DataImport = lazy(() => import("./pages/admin/imports/DataImport"));
 const PortalContract = lazy(() => import("./pages/portal/PortalContract"));
 const LubricationHistory = lazy(() => import("./pages/admin/lubrication/LubricationHistory"));
 const FailureAnalysis = lazy(() => import("./pages/admin/maintenance/FailureAnalysis"));
@@ -190,6 +191,7 @@ export default function App() {
                   <Route path="lubrificacao/lubrificantes" element={<LubricantsList />} />
                   <Route path="lubrificacao/previsao" element={<LubricationForecast />} />
                   <Route path="lubrificacao/historico" element={<LubricationHistory />} />
+                  <Route path="manutencao/importar" element={<DataImport />} />
                   <Route path="manutencao/almoxarifado" element={<SparePartsList />} />
                   <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
                 </Route>
@@ -259,6 +261,7 @@ export default function App() {
                 <Route path="lubrificacao/lubrificantes" element={<LubricantsList />} />
                 <Route path="lubrificacao/previsao" element={<LubricationForecast />} />
                 <Route path="lubrificacao/historico" element={<LubricationHistory />} />
+                <Route path="manutencao/importar" element={<DataImport />} />
                 <Route path="almoxarifado" element={<PortalSpareParts />} />
                 <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
                 <Route path="perfil" element={<PortalProfile />} />

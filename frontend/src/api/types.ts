@@ -1530,3 +1530,11 @@ export interface SparePartHistory {
     observacao: string | null;
   }[];
 }
+
+/** Resultado de uma importacao por planilha (conferencia ou gravacao). */
+export interface ResultadoDaImportacao {
+  simulacao: boolean;
+  resumo: Record<string, { criados: number; ignorados: number; comErro: number }>;
+  problemas: { aba: string; linha: number; mensagem: string }[];
+  ignorados: { aba: string; linha: number; motivo: string }[];
+}

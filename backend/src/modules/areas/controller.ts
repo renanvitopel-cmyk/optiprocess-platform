@@ -62,8 +62,15 @@ export const createArea = asyncHandler(async (req: Request, res: Response) => {
     where: { plantId: data.plantId, name: { equals: data.name, mode: "insensitive" } },
   });
   if (existing) {
-    if (!existing.active) {
-      const reactivated = await prisma.area.update({ where: { id: existing.id }, data: { active: true } });
+    // Registro inativo OU removido volta a valer com o mesmo nome. O removido
+    // some da lista mas continua no banco (exclusao logica, para nao perder
+    // historico); sem este ramo, cadastrar de novo dizia "ja existe" sobre algo
+    // que a tela nao mostra - e nao havia como sair desse impasse.
+    if (!existing.active || existing.deletedAt) {
+      const reactivated = await prisma.area.update({
+        where: { id: existing.id },
+        data: { active: true, deletedAt: null },
+      });
       return res.status(200).json(reactivated);
     }
     throw new ValidationError(`A area "${data.name}" ja existe nesta planta.`);

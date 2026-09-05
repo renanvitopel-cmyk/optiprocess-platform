@@ -26,6 +26,7 @@ import {
   LayoutGrid,
   Briefcase,
   Settings,
+  FileSpreadsheet,
 } from "lucide-react";
 import type { ServiceCategory } from "../api/types";
 
@@ -131,6 +132,7 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
     icon: Settings,
     items: [
       { to: "/portal/instrumentos/cadastros", label: "Cadastros", icon: SlidersHorizontal, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
+      { to: "/portal/manutencao/importar", label: "Importar dados", icon: FileSpreadsheet, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/contrato", label: "Meu contrato", icon: ReceiptText },
       { to: "/portal/perfil", label: "Meu perfil", icon: User },
     ],

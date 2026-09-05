@@ -96,7 +96,15 @@ export function ClientPortalLayout() {
                 <ChevronDown className={`ml-auto h-4 w-4 shrink-0 text-navy-500 transition-transform ${aberta ? "" : "-rotate-90"}`} />
               </button>
             ))}
-          <div className={`flex flex-col gap-0.5 ${aberta ? "" : "hidden"}`}>
+          {/* Itens de uma secao entram recuados, com um fio a esquerda: sem isso ficavam
+              alinhados com o proprio titulo e nada dizia que estavam dentro dele. Na barra
+              estreita nao ha recuo - os icones ficam centralizados e nao ha hierarquia
+              visivel para marcar. */}
+          <div
+            className={`flex flex-col gap-0.5 ${aberta ? "" : "hidden"} ${
+              section.title && !isCollapsed ? "ml-[18px] border-l border-navy-800 pl-1.5" : ""
+            }`}
+          >
             {section.items.map((item) => (
               <NavLink
                 key={item.to}

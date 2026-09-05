@@ -78,14 +78,27 @@ export default function MaintenancePlanDetail() {
     }
   }
 
-  async function handleGenerate() {
+  async function handleGenerate(forcar = false) {
     setGenerating(true);
     try {
-      const workOrder = await generateWorkOrderFromPlan(id);
+      const workOrder = await generateWorkOrderFromPlan(id, forcar);
       notify("success", `OS ${workOrder.number} gerada.`);
       navigate(`${base}/ordens/${workOrder.id}`);
     } catch (error) {
-      notify("error", getApiErrorMessage(error));
+      const mensagem = getApiErrorMessage(error);
+      // O backend recusa antecipar a geracao antes da antecedencia configurada. Em vez de
+      // so mostrar o erro, oferece a antecipacao explicita - que e' uma decisao legitima
+      // do planejador, desde que consciente.
+      if (!forcar && mensagem.includes("geracao forcada")) {
+        if (window.confirm(`${mensagem}
+
+Gerar a OS agora mesmo assim?`)) {
+          setGenerating(false);
+          return handleGenerate(true);
+        }
+      } else {
+        notify("error", mensagem);
+      }
     } finally {
       setGenerating(false);
     }
@@ -109,7 +122,7 @@ export default function MaintenancePlanDetail() {
           canManage && (
             <>
               {due && plan.status === "ACTIVE" && (
-                <button className="btn-primary" onClick={handleGenerate} disabled={generating}>
+                <button className="btn-primary" onClick={() => handleGenerate()} disabled={generating}>
                   <PlayCircle className="h-4 w-4" /> {generating ? "Gerando..." : "Gerar OS"}
                 </button>
               )}

@@ -459,7 +459,7 @@ export const deleteMaintenancePlan = asyncHandler(async (req: Request, res: Resp
  * chamada pelo automatico (`automatica`), devolve o motivo em vez de lancar erro: um plano
  * que nao pode gerar nao pode derrubar a rodada dos outros.
  */
-async function criarOsDoPlano(planId: string, opcoes: { userId?: string; automatica?: boolean }) {
+async function criarOsDoPlano(planId: string, opcoes: { userId?: string; automatica?: boolean; forcar?: boolean }) {
   const plan = await prisma.maintenancePlan.findFirst({
     where: { id: planId, deletedAt: null },
     include: {
@@ -479,21 +479,29 @@ async function criarOsDoPlano(planId: string, opcoes: { userId?: string; automat
     throw new ValidationError(`${motivo[plan.status] ?? "Plano inativo."} So plano Ativo gera ordem de manutencao.`);
   }
 
-  // Uma OS por ciclo. Sem isso, o disparo automatico rodando de hora em hora criaria uma
-  // OS nova a cada passada enquanto o vencimento nao fosse atendido - e o botao "Gerar OS"
-  // clicado duas vezes faria o mesmo. O ciclo e' identificado pela data programada.
-  if (plan.nextDueDate) {
-    const jaExiste = await prisma.maintenanceWorkOrder.findFirst({
-      where: {
-        planId: plan.id,
-        deletedAt: null,
-        status: { notIn: ["COMPLETED", "CANCELED"] },
-        scheduledDate: plan.nextDueDate,
-      },
-      select: { number: true },
-    });
-    if (jaExiste) {
-      throw new ValidationError(`A OS ${jaExiste.number} ja atende o vencimento de ${plan.nextDueDate.toLocaleDateString("pt-BR")}. Conclua ou cancele antes de gerar outra.`);
+  // Uma OS aberta por vez. Sem isso, a rodada automatica criaria uma OS a cada passada e o
+  // botao "Gerar OS" clicado duas vezes faria o mesmo - so que a segunda ja pertenceria ao
+  // ciclo seguinte, nascendo meses antes da hora. Enquanto a preventiva anterior nao for
+  // concluida ou cancelada, o plano nao gera outra.
+  const emAberto = await prisma.maintenanceWorkOrder.findFirst({
+    where: { planId: plan.id, deletedAt: null, status: { notIn: ["COMPLETED", "CANCELED"] } },
+    select: { number: true, scheduledDate: true },
+    orderBy: { createdAt: "desc" },
+  });
+  if (emAberto) {
+    const quando = emAberto.scheduledDate ? ` (programada para ${emAberto.scheduledDate.toLocaleDateString("pt-BR")})` : "";
+    throw new ValidationError(`A OS ${emAberto.number}${quando} deste plano ainda esta aberta. Conclua ou cancele antes de gerar outra.`);
+  }
+
+  // Gerar a mao antes da antecedencia configurada tira o sentido da configuracao: a OS
+  // nasceria muito antes da hora e ficaria ocupando a fila. Quem quiser antecipar de
+  // proposito passa `forcar`, e a decisao fica explicita.
+  if (!opcoes.automatica && !opcoes.forcar && plan.triggerType === "TIME" && plan.nextDueDate) {
+    const geracao = computeGenerationDate(plan.nextDueDate, plan.generateAdvanceDays);
+    if (geracao && geracao > new Date()) {
+      throw new ValidationError(
+        `Este plano gera a OS a partir de ${geracao.toLocaleDateString("pt-BR")} (vencimento em ${plan.nextDueDate.toLocaleDateString("pt-BR")}). Para antecipar assim mesmo, confirme a geracao forcada.`,
+      );
     }
   }
 
@@ -712,7 +720,9 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
   if (!plan) throw new NotFoundError("Plano de manutencao");
   assertOwnClient(req, plan.clientId);
 
-  const workOrder = await criarOsDoPlano(req.params.id, { userId: req.user?.sub });
+  // ?forcar=true: antecipar de proposito, quando o planejador decide puxar a preventiva.
+  const forcar = req.query.forcar === "true" || req.body?.forcar === true;
+  const workOrder = await criarOsDoPlano(req.params.id, { userId: req.user?.sub, forcar });
   res.status(201).json(workOrder);
 });
 

@@ -83,8 +83,10 @@ export async function deleteMaintenancePlan(id: string): Promise<void> {
   await api.delete(`/maintenance-plans/${id}`);
 }
 
-export async function generateWorkOrderFromPlan(id: string): Promise<{ id: string; number: string }> {
-  const { data } = await api.post(`/maintenance-plans/${id}/generate`);
+/** Gera a OS do plano. `forcar` antecipa a geracao antes da antecedencia configurada -
+ * usado quando o planejador decide puxar a preventiva de proposito. */
+export async function generateWorkOrderFromPlan(id: string, forcar = false): Promise<{ id: string; number: string }> {
+  const { data } = await api.post<{ id: string; number: string }>(`/maintenance-plans/${id}/generate`, { forcar });
   return data;
 }
 
@@ -128,5 +130,15 @@ export async function getMaintenancePlanIndicators(id: string): Promise<PlanIndi
 
 export async function duplicateMaintenancePlan(id: string): Promise<MaintenancePlan> {
   const { data } = await api.post<MaintenancePlan>(`/maintenance-plans/${id}/duplicate`);
+  return data;
+}
+
+/** Roda a geracao automatica agora, em vez de esperar a proxima passada horaria. */
+export async function runPlanGeneration(): Promise<{
+  avaliados: number;
+  gerados: { planId: string; code: string | null; workOrderNumber: string }[];
+  ignorados: { planId: string; code: string | null; motivo: string }[];
+}> {
+  const { data } = await api.post("/maintenance-plans/gerar-vencidos");
   return data;
 }

@@ -50,21 +50,37 @@ export const TextareaInput = forwardRef<HTMLTextAreaElement, TextareaProps>(func
 });
 
 type SelectProps = SelectHTMLAttributes<HTMLSelectElement> &
-  Omit<WrapperProps, "children"> & { options: { value: string; label: string }[]; placeholder?: string };
+  Omit<WrapperProps, "children"> & {
+    options: { value: string; label: string }[];
+    /** Agrupa as opcoes por categoria (optgroup). Usado quando o que separa as opcoes muda
+     * o comportamento - ex.: o nivel do tipo de ativo, que decide quais campos sao exigidos. */
+    grupos?: { titulo: string; options: { value: string; label: string }[] }[];
+    placeholder?: string;
+  };
 
 export const SelectInput = forwardRef<HTMLSelectElement, SelectProps>(function SelectInput(
-  { label, hint, error, required, className, options, placeholder, ...rest },
+  { label, hint, error, required, className, options, grupos, placeholder, ...rest },
   ref,
 ) {
   return (
     <FieldWrapper label={label} hint={hint} error={error} required={required} className={className}>
       <select ref={ref} className={`input ${error ? "input-error" : ""}`} {...rest}>
         {placeholder && <option value="">{placeholder}</option>}
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
+        {grupos
+          ? grupos.map((g) => (
+              <optgroup key={g.titulo} label={g.titulo}>
+                {g.options.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))
+          : options.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
       </select>
     </FieldWrapper>
   );

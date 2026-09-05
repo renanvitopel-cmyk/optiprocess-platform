@@ -2,6 +2,17 @@ import { forwardRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listAssetTypes } from "../api/assetTypes";
 import { SelectInput } from "./form/Field";
+import { ASSET_LEVEL_LABELS } from "../lib/assetHierarchy";
+import type { AssetHierarchyLevel } from "../api/types";
+
+/** O que cada nivel exige - dito no proprio seletor, na hora da escolha. */
+const DICA_DO_NIVEL: Record<AssetHierarchyLevel, string> = {
+  PLANT: " - fica na raiz, sem ativo pai",
+  AREA: " - exige ativo pai",
+  MACHINE: " - exige ativo pai, fabricante, modelo e numero de serie",
+  SUBASSEMBLY: " - exige ativo pai",
+  PART: " - exige ativo pai",
+};
 
 interface Props {
   label?: string;
@@ -30,9 +41,31 @@ export const AssetTypeInput = forwardRef<HTMLSelectElement, Props>(function Asse
     staleTime: 60_000,
   });
 
-  const options = (types ?? []).map((t) => ({ value: t.name, label: t.name }));
+  // Agrupado por NIVEL, porque e' o nivel que decide as regras do cadastro: so Planta fica
+  // na raiz, e Maquina exige fabricante/modelo/numero de serie. Numa lista corrida de
+  // "Bomba, Motor, Planta, Valvula" nao havia como perceber isso antes de escolher.
+  const ordem: (AssetHierarchyLevel | "SEM_NIVEL")[] = ["PLANT", "AREA", "MACHINE", "SUBASSEMBLY", "PART", "SEM_NIVEL"];
+  const porNivel = new Map<string, { value: string; label: string }[]>();
+  for (const t of types ?? []) {
+    const chave = t.level ?? "SEM_NIVEL";
+    const lista = porNivel.get(chave) ?? [];
+    lista.push({ value: t.name, label: t.name });
+    porNivel.set(chave, lista);
+  }
+
+  const grupos = ordem
+    .filter((nivel) => (porNivel.get(nivel)?.length ?? 0) > 0)
+    .map((nivel) => ({
+      titulo:
+        nivel === "SEM_NIVEL"
+          ? "Sem nivel definido - nenhuma regra e' aplicada"
+          : `${ASSET_LEVEL_LABELS[nivel as AssetHierarchyLevel]}${DICA_DO_NIVEL[nivel as AssetHierarchyLevel]}`,
+      options: (porNivel.get(nivel) ?? []).sort((a, b) => a.label.localeCompare(b.label)),
+    }));
+
+  const options = grupos.flatMap((g) => g.options);
   if (currentValue && !options.some((o) => o.value.toLowerCase() === currentValue.toLowerCase())) {
-    options.unshift({ value: currentValue, label: `${currentValue} (fora do catalogo)` });
+    grupos.unshift({ titulo: "Fora do catalogo", options: [{ value: currentValue, label: currentValue }] });
   }
 
   return (
@@ -40,8 +73,9 @@ export const AssetTypeInput = forwardRef<HTMLSelectElement, Props>(function Asse
       ref={ref}
       label={label}
       placeholder="Selecione..."
-      hint="Cadastre um tipo novo em Ativos > Tipos de ativo."
+      hint="O nivel do tipo define as regras do cadastro. Cadastre tipos novos em Ativos > Tipos de ativo."
       options={options}
+      grupos={grupos}
       {...rest}
     />
   );

@@ -87,6 +87,7 @@ const ServiceRequestForm = lazy(() => import("./pages/admin/maintenance/ServiceR
 const ServiceRequestDetail = lazy(() => import("./pages/admin/maintenance/ServiceRequestDetail"));
 const FailureCodesList = lazy(() => import("./pages/admin/maintenance/FailureCodesList"));
 const StoppageReasonsList = lazy(() => import("./pages/admin/maintenance/StoppageReasonsList"));
+const LaborTypesList = lazy(() => import("./pages/admin/maintenance/LaborTypesList"));
 const SparePartsList = lazy(() => import("./pages/admin/maintenance/SparePartsList"));
 const LaborResourcesList = lazy(() => import("./pages/admin/maintenance/LaborResourcesList"));
 
@@ -194,6 +195,7 @@ export default function App() {
                   <Route path="manutencao/importar" element={<DataImport />} />
                   <Route path="manutencao/almoxarifado" element={<SparePartsList />} />
                   <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
+                  <Route path="manutencao/tipos-mao-de-obra" element={<LaborTypesList />} />
                 </Route>
 
                 <Route path="produtos" element={<ProductsListAdmin />} />
@@ -264,6 +266,7 @@ export default function App() {
                 <Route path="manutencao/importar" element={<DataImport />} />
                 <Route path="almoxarifado" element={<PortalSpareParts />} />
                 <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
+                <Route path="manutencao/tipos-mao-de-obra" element={<LaborTypesList />} />
                 <Route path="perfil" element={<PortalProfile />} />
               </Route>
             </Route>

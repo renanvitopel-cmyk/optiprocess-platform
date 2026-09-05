@@ -67,6 +67,26 @@ const laborResourceSchema = z.object({
   hourlyRate: z.coerce.number().nonnegative().nullish(),
 });
 
+/** O tipo tem que vir do catalogo "Tipos de mao de obra" (o padrao da OptiProcess mais o
+ * que a propria empresa cadastrou). Enquanto era texto livre, o mesmo cargo entrava como
+ * "Tecnico mecanico", "Tec. mecanico" e "mecanico" - tres funcoes diferentes na hora de
+ * somar HH e custo por especialidade. */
+async function assertTipoNoCatalogo(clientId: string, type: string): Promise<void> {
+  const noCatalogo = await prisma.laborType.findFirst({
+    where: {
+      active: true,
+      name: { equals: type, mode: "insensitive" },
+      OR: [{ clientId: null }, { clientId }],
+    },
+    select: { id: true },
+  });
+  if (!noCatalogo) {
+    throw new ValidationError(
+      `O tipo "${type}" nao esta no catalogo de mao de obra. Cadastre-o em Cadastros > Tipos de mao de obra antes de usar aqui.`,
+    );
+  }
+}
+
 export const createLaborResource = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = laborResourceSchema.parse(req.body);
@@ -77,6 +97,8 @@ export const createLaborResource = asyncHandler(async (req: Request, res: Respon
   } else if (!data.clientId) {
     throw new ValidationError("Selecione o cliente.");
   }
+
+  await assertTipoNoCatalogo(data.clientId!, data.type);
 
   const resource = await prisma.laborResource.create({ data: { ...data, clientId: data.clientId!, createdById: req.user?.sub } });
 
@@ -102,6 +124,12 @@ export const updateLaborResource = asyncHandler(async (req: Request, res: Respon
   if (req.user?.role === "CLIENT") {
     if (existing.clientId !== req.user.clientId) throw new ForbiddenError();
     delete data.clientId;
+  }
+
+  // So cobro o catalogo quando o tipo esta realmente mudando: recurso antigo com tipo
+  // fora do catalogo continua editavel (nome, valor/hora, foto) sem virar refem disso.
+  if (data.type && data.type.toLowerCase() !== existing.type.toLowerCase()) {
+    await assertTipoNoCatalogo(existing.clientId, data.type);
   }
 
   const resource = await prisma.laborResource.update({ where: { id: existing.id }, data });

@@ -1,8 +1,15 @@
-import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search } from "lucide-react";
-import { listLaborResources, createLaborResource, updateLaborResource, uploadLaborResourcePhoto } from "../../../api/laborResources";
+import { Plus, Search, Pencil, Trash2, Camera, X } from "lucide-react";
+import {
+  listLaborResources,
+  createLaborResource,
+  updateLaborResource,
+  deleteLaborResource,
+  uploadLaborResourcePhoto,
+  deleteLaborResourcePhoto,
+} from "../../../api/laborResources";
 import { listClients } from "../../../api/clients";
 import type { LaborResource } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
@@ -10,6 +17,7 @@ import { DataTable } from "../../../components/DataTable";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { EmptyState } from "../../../components/EmptyState";
 import { Modal } from "../../../components/Modal";
+import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { iniciaisDe } from "../../../lib/pessoas";
 import { TextInput } from "../../../components/form/Field";
 import { LaborTypeInput } from "../../../components/LaborTypeInput";
@@ -22,7 +30,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 const schema = z.object({
-  type: z.string().min(1, "Informe o tipo de mao de obra."),
+  type: z.string().min(1, "Selecione o tipo de mao de obra."),
   name: z.string().min(2, "Informe o nome."),
   registrationNumber: z.string().optional(),
   hourlyRate: z.coerce.number().nonnegative().optional().or(z.literal("")),
@@ -37,7 +45,13 @@ export default function LaborResourcesList() {
   const clientId = isClient ? (ownClientId ?? "") : (searchParams.get("clientId") ?? "");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<LaborResource | null>(null);
+  const [removendo, setRemovendo] = useState<LaborResource | null>(null);
+  // Foto escolhida no formulario: so sobe depois de salvar, porque num cadastro novo o
+  // recurso ainda nao tem id pra onde mandar o arquivo.
+  const [fotoNova, setFotoNova] = useState<File | null>(null);
+  const [tirarFoto, setTirarFoto] = useState(false);
 
   const { data: clients } = useQuery({
     queryKey: ["clients-picker-cmms"],
@@ -54,25 +68,55 @@ export default function LaborResourcesList() {
     resolver: zodResolver(schema),
   });
 
-  async function enviarFoto(recurso: LaborResource, arquivo: File) {
-    try {
-      await uploadLaborResourcePhoto(recurso.id, arquivo);
-      notify("success", "Foto atualizada.");
-      queryClient.invalidateQueries({ queryKey: ["labor-resources"] });
-      // O quadro do PCM mostra a mesma foto - sem isso ela so apareceria la no proximo F5.
-      queryClient.invalidateQueries({ queryKey: ["maintenance-schedule"] });
-    } catch (error) {
-      notify("error", getApiErrorMessage(error));
-    }
+  // Previa da foto escolhida agora; o objeto de URL e' liberado ao trocar/fechar pra nao
+  // deixar o blob preso na memoria da aba.
+  const [previaLocal, setPreviaLocal] = useState<string | null>(null);
+  useEffect(() => {
+    if (!fotoNova) { setPreviaLocal(null); return; }
+    const url = URL.createObjectURL(fotoNova);
+    setPreviaLocal(url);
+    return () => URL.revokeObjectURL(url);
+  }, [fotoNova]);
+
+  const fotoAtual = previaLocal ?? (tirarFoto ? null : (editing?.photoUrl ?? null));
+  const nomeParaIniciais = editing?.name ?? "";
+
+  function abrirFormulario(recurso: LaborResource | null) {
+    reset({
+      type: recurso?.type ?? "",
+      name: recurso?.name ?? "",
+      registrationNumber: recurso?.registrationNumber ?? "",
+      hourlyRate: recurso?.hourlyRate != null ? recurso.hourlyRate : "",
+    });
+    setEditing(recurso);
+    setFotoNova(null);
+    setTirarFoto(false);
+    setFormOpen(true);
+  }
+
+  function atualizarListas() {
+    queryClient.invalidateQueries({ queryKey: ["labor-resources"] });
+    // O quadro do PCM mostra a mesma foto e o mesmo nome - sem isso so mudaria no proximo F5.
+    queryClient.invalidateQueries({ queryKey: ["maintenance-schedule"] });
   }
 
   async function onSubmit(values: FormValues) {
     try {
-      await createLaborResource({ ...values, clientId: clientId || undefined, hourlyRate: values.hourlyRate === "" ? null : values.hourlyRate });
-      notify("success", "Mao de obra cadastrada.");
+      const payload = { ...values, hourlyRate: values.hourlyRate === "" ? null : values.hourlyRate };
+      const recurso = editing
+        ? await updateLaborResource(editing.id, payload)
+        : await createLaborResource({ ...payload, clientId: clientId || undefined });
+
+      if (fotoNova) await uploadLaborResourcePhoto(recurso.id, fotoNova);
+      else if (tirarFoto && editing?.photoUrl) await deleteLaborResourcePhoto(recurso.id);
+
+      notify("success", editing ? "Mao de obra atualizada." : "Mao de obra cadastrada.");
       reset();
-      setCreateOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["labor-resources"] });
+      setFormOpen(false);
+      setEditing(null);
+      setFotoNova(null);
+      setTirarFoto(false);
+      atualizarListas();
     } catch (error) {
       notify("error", getApiErrorMessage(error));
     }
@@ -81,7 +125,19 @@ export default function LaborResourcesList() {
   async function toggleActive(resource: LaborResource) {
     try {
       await updateLaborResource(resource.id, { active: !resource.active });
-      queryClient.invalidateQueries({ queryKey: ["labor-resources"] });
+      atualizarListas();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    }
+  }
+
+  async function confirmarRemocao() {
+    if (!removendo) return;
+    try {
+      await deleteLaborResource(removendo.id);
+      notify("success", "Mao de obra removida.");
+      setRemovendo(null);
+      atualizarListas();
     } catch (error) {
       notify("error", getApiErrorMessage(error));
     }
@@ -95,7 +151,7 @@ export default function LaborResourcesList() {
         breadcrumbs={[{ label: "RLP Maintenance CMMS", to: base }, { label: "Mao de obra" }]}
         actions={
           (isClient || clientId) && (
-            <button className="btn-primary" onClick={() => setCreateOpen(true)}>
+            <button className="btn-primary" onClick={() => abrirFormulario(null)}>
               <Plus className="h-4 w-4" /> Nova mao de obra
             </button>
           )
@@ -138,29 +194,16 @@ export default function LaborResourcesList() {
             {
               header: "Nome",
               accessor: (r) => (
-                <div className="flex items-center gap-2.5">
-                  {/* Clicar na foto troca a imagem - o mesmo gesto que se faz na ficha do
-                      ativo, sem abrir formulario para uma coisa so. */}
-                  <label className="cursor-pointer" title={r.photoUrl ? "Trocar a foto" : "Adicionar foto"}>
-                    {r.photoUrl ? (
-                      <img src={r.photoUrl} alt="" className="h-9 w-9 rounded-full border border-gray-200 object-cover hover:opacity-80" />
-                    ) : (
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-100 text-xs font-semibold text-navy-700 hover:bg-navy-200">
-                        {iniciaisDe(r.name)}
-                      </span>
-                    )}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const arquivo = e.target.files?.[0];
-                        if (arquivo) void enviarFoto(r, arquivo);
-                      }}
-                    />
-                  </label>
+                <button className="flex items-center gap-2.5 text-left" onClick={() => abrirFormulario(r)} title="Abrir ficha">
+                  {r.photoUrl ? (
+                    <img src={r.photoUrl} alt="" className="h-9 w-9 rounded-full border border-gray-200 object-cover" />
+                  ) : (
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-100 text-xs font-semibold text-navy-700">
+                      {iniciaisDe(r.name)}
+                    </span>
+                  )}
                   <span className="font-medium text-navy-900">{r.name}</span>
-                </div>
+                </button>
               ),
             },
             { header: "Tipo", accessor: (r) => r.type },
@@ -174,18 +217,31 @@ export default function LaborResourcesList() {
                 </button>
               ),
             },
+            {
+              header: "",
+              accessor: (r) => (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => abrirFormulario(r)} className="text-graphite-400 hover:text-navy-700" aria-label="Editar">
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => setRemovendo(r)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ),
+            },
           ]}
         />
       )}
 
       <Modal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        title="Nova mao de obra"
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        title={editing ? "Editar mao de obra" : "Nova mao de obra"}
         size="sm"
         footer={
           <>
-            <button type="button" className="btn-outline" onClick={() => setCreateOpen(false)}>Cancelar</button>
+            <button type="button" className="btn-outline" onClick={() => setFormOpen(false)}>Cancelar</button>
             <button type="submit" form="labor-resource-form" className="btn-primary" disabled={isSubmitting}>
               {isSubmitting ? "Salvando..." : "Salvar"}
             </button>
@@ -193,14 +249,65 @@ export default function LaborResourcesList() {
         }
       >
         <form id="labor-resource-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+          {/* A foto vem primeiro porque e' o que identifica a pessoa no quadro do PCM -
+              antes ela so existia num clique escondido na miniatura da listagem. */}
+          <div className="flex items-center gap-4">
+            {fotoAtual ? (
+              <img src={fotoAtual} alt="" className="h-16 w-16 rounded-full border border-gray-200 object-cover" />
+            ) : (
+              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-navy-100 text-lg font-semibold text-navy-700">
+                {iniciaisDe(nomeParaIniciais) || <Camera className="h-6 w-6 text-navy-400" />}
+              </span>
+            )}
+            <div>
+              <label className="btn-outline inline-flex cursor-pointer items-center gap-2 text-sm">
+                <Camera className="h-4 w-4" /> {fotoAtual ? "Trocar foto" : "Adicionar foto"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const arquivo = e.target.files?.[0];
+                    if (arquivo) { setFotoNova(arquivo); setTirarFoto(false); }
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {fotoAtual && (
+                <button
+                  type="button"
+                  className="ml-2 inline-flex items-center gap-1 text-sm text-graphite-500 hover:text-safety-red"
+                  onClick={() => { setFotoNova(null); setTirarFoto(true); }}
+                >
+                  <X className="h-3.5 w-3.5" /> Remover
+                </button>
+              )}
+              <p className="mt-1 text-xs text-graphite-500">Aparece em miniatura na programacao do PCM.</p>
+            </div>
+          </div>
+
           <TextInput label="Nome" required placeholder="Ex.: Joao Silva" error={errors.name?.message} {...register("name")} />
-          <LaborTypeInput required error={errors.type?.message} {...register("type")} />
+          <LaborTypeInput required currentValue={editing?.type} error={errors.type?.message} {...register("type")} />
           <div className="grid gap-4 sm:grid-cols-2">
             <TextInput label="DRT (opcional)" hint="Registro profissional (CREA, CFT, DRT...), quando aplicavel." {...register("registrationNumber")} />
             <TextInput label="Valor/hora (opcional)" type="number" step="any" {...register("hourlyRate")} />
           </div>
+          <p className="text-xs text-graphite-500">
+            A funcao vem do catalogo em{" "}
+            <Link to={`${base}/tipos-mao-de-obra`} className="text-navy-700 underline">Tipos de mao de obra</Link>.
+          </p>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!removendo}
+        title="Remover mao de obra"
+        description={`"${removendo?.name ?? ""}" sai da lista e deixa de aparecer na programacao. O historico de OS ja executadas por essa pessoa nao e' apagado.`}
+        confirmLabel="Remover"
+        danger
+        onConfirm={confirmarRemocao}
+        onCancel={() => setRemovendo(null)}
+      />
     </div>
   );
 }

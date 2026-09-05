@@ -1,29 +1,49 @@
 import { forwardRef } from "react";
-import { listLaborTypes, createLaborType } from "../api/laborTypes";
-import { CatalogInput } from "./CatalogInput";
+import { useQuery } from "@tanstack/react-query";
+import { listLaborTypes } from "../api/laborTypes";
+import { SelectInput } from "./form/Field";
 
 interface Props {
   label?: string;
   error?: string;
   required?: boolean;
   name: string;
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  /** Tipo atual do recurso sendo editado - se ele nao estiver mais no catalogo ativo
+   * (cadastrado antes desta lista existir, ou desativado depois), entra como opcao extra
+   * pra abrir o formulario de edicao nao trocar a funcao da pessoa em silencio. */
+  currentValue?: string | null;
+  onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLSelectElement>) => void;
 }
 
-export const LaborTypeInput = forwardRef<HTMLInputElement, Props>(function LaborTypeInput(
-  { label = "Tipo de mao de obra", ...rest },
+/**
+ * Lista fechada do catalogo "Tipos de mao de obra". Era texto livre com sugestoes, e o
+ * mesmo cargo acabava cadastrado como "Tecnico mecanico", "Tec. mecanico" e "mecanico" -
+ * na hora de somar HH e custo por especialidade viravam tres funcoes distintas. Tipo novo
+ * agora e' cadastrado de proposito em Cadastros > Tipos de mao de obra.
+ */
+export const LaborTypeInput = forwardRef<HTMLSelectElement, Props>(function LaborTypeInput(
+  { label = "Tipo de mao de obra", currentValue, ...rest },
   ref,
 ) {
+  const { data: types } = useQuery({
+    queryKey: ["labor-types-picker"],
+    queryFn: () => listLaborTypes({ active: true }),
+    staleTime: 60_000,
+  });
+
+  const options = (types ?? []).map((t) => ({ value: t.name, label: t.name }));
+  if (currentValue && !options.some((o) => o.value.toLowerCase() === currentValue.toLowerCase())) {
+    options.unshift({ value: currentValue, label: `${currentValue} (fora do catalogo)` });
+  }
+
   return (
-    <CatalogInput
+    <SelectInput
       ref={ref}
       label={label}
-      placeholder="Ex.: Tecnico mecanico, Tecnico eletrico, Engenheiro..."
-      hint="Comece a digitar para ver sugestoes do catalogo, ou digite um tipo novo."
-      queryKey="labor-types-picker"
-      list={() => listLaborTypes({ active: true })}
-      create={(name) => createLaborType({ name })}
+      placeholder="Selecione o tipo"
+      hint="Para incluir uma funcao nova, use Cadastros > Tipos de mao de obra."
+      options={options}
       {...rest}
     />
   );

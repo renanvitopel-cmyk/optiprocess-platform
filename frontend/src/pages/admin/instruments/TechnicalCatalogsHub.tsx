@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Tags, Factory, Workflow, Wallet, ChevronRight, ListChecks, OctagonPause, LayoutTemplate, HardHat, ClipboardPlus } from "lucide-react";
+import { Tags, Factory, Workflow, Wallet, ChevronRight, ListChecks, OctagonPause, LayoutTemplate, HardHat, ClipboardPlus, IdCard } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
 import { useCmms } from "../../../lib/cmms";
 
@@ -34,6 +34,7 @@ export default function TechnicalCatalogsHub() {
       description: "Quem executa a manutencao - alimenta a programacao e o custo de mao de obra.",
       items: [
         { to: laborBase, icon: HardHat, title: "Mao de obra", description: "Equipe de manutencao, funcao e valor/hora" },
+        { to: `${base}/tipos-mao-de-obra`, icon: IdCard, title: "Tipos de mao de obra", description: "Funcoes da equipe (Tecnico mecanico, Eletricista, Lubrificador...)" },
         { to: `${base}/solicitacoes`, icon: ClipboardPlus, title: "Solicitacoes de servico", description: "Fila de pedidos abertos pela operacao" },
       ],
     },

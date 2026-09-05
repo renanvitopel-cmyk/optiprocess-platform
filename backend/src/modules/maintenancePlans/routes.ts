@@ -8,6 +8,7 @@ import {
   updateMaintenancePlan,
   deleteMaintenancePlan,
   generateWorkOrderFromPlan,
+  runPlanGeneration,
   getMaintenancePlanIndicators,
   duplicateMaintenancePlan,
 } from "./controller";
@@ -16,6 +17,7 @@ export const maintenancePlansRouter = Router();
 
 maintenancePlansRouter.use(requireAuth, requireRole(...CMMS_ROLES));
 
+maintenancePlansRouter.post("/gerar-vencidos", requireRole(...CMMS_ROLES), runPlanGeneration);
 maintenancePlansRouter.get("/", listMaintenancePlans);
 maintenancePlansRouter.get("/:id", getMaintenancePlan);
 maintenancePlansRouter.get("/:id/indicators", getMaintenancePlanIndicators);

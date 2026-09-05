@@ -190,6 +190,37 @@ export default function MaintenancePlanDetail() {
                 Sem OS concluida com custo apontado - o custo aparece quando a primeira execucao for encerrada.
               </p>
             )}
+
+            {/* Planejado ao lado do realizado. So material entra no planejado: o plano
+                guarda a HH prevista, mas nao um valor/hora - e uma taxa media inventada
+                faria a comparacao confrontar um numero medido com um chute. */}
+            <div className="mt-4 rounded-lg bg-gray-50 px-4 py-3 text-sm">
+              {indicators.cost.planned != null ? (
+                <>
+                  <p className="text-graphite-700">
+                    Material previsto: <span className="font-semibold text-navy-900">{formatCurrency(indicators.cost.planned)}</span>
+                    {indicators.cost.plannedPerCycle != null && (
+                      <span className="text-graphite-500"> ({formatCurrency(indicators.cost.plannedPerCycle)} por execucao)</span>
+                    )}
+                    {indicators.cost.tracked && (
+                      <>
+                        {" x realizado em pecas: "}
+                        <span className="font-semibold text-navy-900">{formatCurrency(indicators.cost.parts)}</span>
+                      </>
+                    )}
+                  </p>
+                  <p className="mt-1 text-xs text-graphite-500">
+                    O planejado cobre so o material previsto. Mao de obra planejada aparece em horas no cartao
+                    "HH planejada x realizada" - o plano nao guarda valor/hora.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-graphite-500">
+                  Sem custo planejado: o plano nao tem material previsto, ou alguma peca esta sem custo unitario
+                  cadastrado no almoxarifado.
+                </p>
+              )}
+            </div>
             {indicators.materialUsage.length > 0 && (
               <div className="mt-4">
                 <p className="mb-1.5 text-xs uppercase tracking-wide text-graphite-400">Consumo de material acumulado</p>

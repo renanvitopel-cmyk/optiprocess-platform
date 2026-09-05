@@ -450,10 +450,18 @@ export const deleteMaintenancePlan = asyncHandler(async (req: Request, res: Resp
 /** Gera uma Ordem de Manutencao preventiva a partir do plano, copiando o checklist e
  * avancando a proxima data/leitura de referencia - mesma logica de "Nova calibracao"
  * a partir do Ativo, so que sem worker/cron (nao ha infraestrutura para isso aqui). */
-export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: Response) => {
-  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+/**
+ * Gera a Ordem de Manutencao de um plano: copia checklist e procedimento, resolve o
+ * material conforme a politica, cria a OS e avanca o ciclo do plano.
+ *
+ * Usada nos dois caminhos - o botao "Gerar OS" e o disparo automatico quando a
+ * antecedencia e' atingida - para que os dois facam exatamente a mesma coisa. Quando
+ * chamada pelo automatico (`automatica`), devolve o motivo em vez de lancar erro: um plano
+ * que nao pode gerar nao pode derrubar a rodada dos outros.
+ */
+async function criarOsDoPlano(planId: string, opcoes: { userId?: string; automatica?: boolean }) {
   const plan = await prisma.maintenancePlan.findFirst({
-    where: { id: req.params.id, deletedAt: null },
+    where: { id: planId, deletedAt: null },
     include: {
       checklistTemplate: { orderBy: { sortOrder: "asc" } },
       meter: true,
@@ -462,7 +470,6 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
     },
   });
   if (!plan) throw new NotFoundError("Plano de manutencao");
-  assertOwnClient(req, plan.clientId);
   if (plan.status !== "ACTIVE") {
     const motivo: Record<string, string> = {
       DRAFT: "Este plano ainda e' um rascunho.",
@@ -470,6 +477,24 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
       CLOSED: "Este plano foi encerrado.",
     };
     throw new ValidationError(`${motivo[plan.status] ?? "Plano inativo."} So plano Ativo gera ordem de manutencao.`);
+  }
+
+  // Uma OS por ciclo. Sem isso, o disparo automatico rodando de hora em hora criaria uma
+  // OS nova a cada passada enquanto o vencimento nao fosse atendido - e o botao "Gerar OS"
+  // clicado duas vezes faria o mesmo. O ciclo e' identificado pela data programada.
+  if (plan.nextDueDate) {
+    const jaExiste = await prisma.maintenanceWorkOrder.findFirst({
+      where: {
+        planId: plan.id,
+        deletedAt: null,
+        status: { notIn: ["COMPLETED", "CANCELED"] },
+        scheduledDate: plan.nextDueDate,
+      },
+      select: { number: true },
+    });
+    if (jaExiste) {
+      throw new ValidationError(`A OS ${jaExiste.number} ja atende o vencimento de ${plan.nextDueDate.toLocaleDateString("pt-BR")}. Conclua ou cancele antes de gerar outra.`);
+    }
   }
 
   /**
@@ -578,7 +603,7 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
       // que dava a OS por executada antes de alguem encostar nela).
       estimatedHours: plan.estimatedLaborHours,
       observations: observacoesDeGeracao || null,
-      createdById: req.user?.sub,
+      createdById: opcoes.userId,
       // O item da OS leva a regra junto (tipo de resposta, faixa, foto): se o plano for
       // editado depois, a OS ja executada continua contando a historia que valia na epoca.
       checklist: {
@@ -629,7 +654,7 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
           sparePartId: item.sparePartId,
           workOrderId: workOrder.id,
           quantity: item.quantity,
-          createdById: req.user?.sub,
+          createdById: opcoes.userId,
         });
         reservou = true;
       } catch (erro) {
@@ -651,16 +676,45 @@ export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: 
   }
 
   await writeAuditLog({
-    userId: req.user?.sub,
+    userId: opcoes.userId,
     action: "CREATE",
     entityType: "MaintenanceWorkOrder",
     entityId: workOrder.id,
     description: `OS ${workOrder.number} gerada a partir do plano "${plan.name}"`,
   });
 
-  res.status(201).json(workOrder);
+  return workOrder;
+}
+
+
+/** Ponto de entrada do disparo automatico - o mesmo caminho do botao, sem HTTP no meio. */
+export function criarOsDoPlanoParaAutomacao(planId: string, opcoes: { userId?: string }) {
+  return criarOsDoPlano(planId, { ...opcoes, automatica: true });
+}
+
+/** Endpoint da rodada de geracao: util para disparar a mao ou por um cron externo. */
+export const runPlanGeneration = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  // CLIENT so dispara a rodada da propria empresa; a equipe interna pode rodar tudo.
+  const escopo = clientScopeFilter(req);
+  const { gerarOsVencidas } = await import("../../lib/planRunner.js");
+  const resultado = await gerarOsVencidas({ clientId: escopo.clientId, userId: req.user?.sub });
+  res.json(resultado);
 });
 
+/** Botao "Gerar OS" do plano. */
+export const generateWorkOrderFromPlan = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const plan = await prisma.maintenancePlan.findFirst({
+    where: { id: req.params.id, deletedAt: null },
+    select: { clientId: true },
+  });
+  if (!plan) throw new NotFoundError("Plano de manutencao");
+  assertOwnClient(req, plan.clientId);
+
+  const workOrder = await criarOsDoPlano(req.params.id, { userId: req.user?.sub });
+  res.status(201).json(workOrder);
+});
 
 /**
  * Indicadores do plano: cumprimento, atraso, HH e custo planejado x realizado, consumo de
@@ -677,9 +731,26 @@ export const getMaintenancePlanIndicators = asyncHandler(async (req: Request, re
       nextDueDate: true,
       lastExecutionAt: true,
       generateAdvanceDays: true,
+      parts: { select: { quantity: true, sparePart: { select: { unitCost: true } } } },
     },
   });
   if (!plan) throw new NotFoundError("Plano de manutencao");
+
+  // Custo planejado de UM ciclo, so a parte que tem base real: o material previsto pelo
+  // custo unitario vigente de cada peca. Mao de obra planejada ficaria de fora porque o
+  // plano guarda a HH prevista, mas nao um valor/hora - e inventar uma taxa media faria o
+  // "planejado x realizado" comparar um numero medido com um chute. A HH prevista x
+  // realizada continua sendo comparada em horas, logo acima.
+  //
+  // Peca sem custo unitario cadastrado zera a base: nesse caso devolve null, porque um
+  // "R$ 0,00 planejado" ao lado de um custo real faria todo plano parecer estourado.
+  const custoPlanejadoPorCiclo = plan.parts.length
+    ? plan.parts.reduce<number | null>((soma, p) => {
+        if (soma === null) return null;
+        const unitario = p.sparePart?.unitCost;
+        return unitario == null ? null : soma + unitario * p.quantity;
+      }, 0)
+    : null;
 
   const workOrders = await prisma.maintenanceWorkOrder.findMany({
     where: { planId: plan.id, deletedAt: null },
@@ -752,6 +823,11 @@ export const getMaintenancePlanIndicators = asyncHandler(async (req: Request, re
       thirdParty: custoTerceiros,
       total: custoPecas + custoMaoDeObra + custoTerceiros,
       tracked: concluidas.length > 0,
+      // Planejado x realizado precisa comparar o mesmo numero de execucoes: o custo de um
+      // ciclo multiplicado pelas OS concluidas. So material - ver o comentario acima.
+      plannedPerCycle: custoPlanejadoPorCiclo,
+      planned: custoPlanejadoPorCiclo != null ? custoPlanejadoPorCiclo * concluidas.length : null,
+      plannedCovers: "material" as const,
     },
     materialUsage: [...consumo.values()].sort((a, b) => b.quantity - a.quantity),
     failuresFound: falhasEncontradas,

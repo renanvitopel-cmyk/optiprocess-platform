@@ -97,7 +97,18 @@ export interface PlanIndicators {
   /** null = sem OS concluida ainda; a tela mostra "Dados insuficientes", nao 0%. */
   compliancePct: number | null;
   laborHours: { planned: number | null; actual: number | null };
-  cost: { parts: number; labor: number; thirdParty: number; total: number; tracked: boolean };
+  cost: {
+    parts: number;
+    labor: number;
+    thirdParty: number;
+    total: number;
+    tracked: boolean;
+    /** Custo previsto de um ciclo e do periodo. Cobre so material: o plano guarda HH
+     * prevista, mas nao valor/hora - ver plannedCovers. */
+    plannedPerCycle: number | null;
+    planned: number | null;
+    plannedCovers?: "material";
+  };
   materialUsage: { name: string; unit: string; quantity: number }[];
   failuresFound: number;
   workOrders: {

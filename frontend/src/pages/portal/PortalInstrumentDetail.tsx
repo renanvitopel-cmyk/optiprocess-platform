@@ -17,6 +17,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { PortalInstrumentFormModal } from "./PortalInstrumentFormModal";
 import { MeterFormModal } from "../admin/instruments/MeterFormModal";
 import { InstrumentAttachments } from "../../components/InstrumentAttachments";
+import { AssetPhoto } from "../../components/AssetPhoto";
 import { useAuth } from "../../auth/AuthContext";
 import { useToast } from "../../components/Toast";
 import { getApiErrorMessage } from "../../api/client";
@@ -147,7 +148,14 @@ export default function PortalInstrumentDetail() {
         </Link>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <AssetPhoto
+          instrumentId={instrument.id}
+          tag={instrument.tag}
+          photoUrl={instrument.photoUrl}
+          podeEditar
+          aoMudar={() => queryClient.invalidateQueries({ queryKey: ["portal-instrument", id] })}
+        />
         <StatusBadge status={instrument.derivedStatus ?? instrument.status} />
         <StatusBadge status={instrument.criticality} label={`Criticidade: ${PRIORITY_LABELS[instrument.criticality]}`} />
         <StatusBadge status={instrument.operationalStatus} />

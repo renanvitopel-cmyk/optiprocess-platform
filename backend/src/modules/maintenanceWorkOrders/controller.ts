@@ -1315,7 +1315,7 @@ export const getMaintenanceBacklog = asyncHandler(async (req: Request, res: Resp
       priority: true,
       scheduledDate: true,
       estimatedHours: true,
-      costCenter: { select: { id: true, name: true } },
+      costCenter: { select: { id: true, name: true, code: true } },
       instrument: {
         select: {
           id: true, tag: true, description: true, type: true,
@@ -1338,7 +1338,12 @@ export const getMaintenanceBacklog = asyncHandler(async (req: Request, res: Resp
     if (groupBy === "instrument") {
       return { id: o.instrument?.id ?? "sem", nome: o.instrument ? `${o.instrument.tag ?? o.instrument.type}${o.instrument.description ? ` - ${o.instrument.description}` : ""}` : "Sem ativo" };
     }
-    if (groupBy === "costCenter") return { id: o.costCenter?.id ?? "sem", nome: o.costCenter?.name ?? "Sem centro de custo" };
+    if (groupBy === "costCenter") {
+      // Identidade do centro de custo e' o numero; o nome fica junto so quando existe.
+      const cc = o.costCenter;
+      const rotulo = cc ? [cc.code, cc.name].filter(Boolean).join(" - ") || "Sem numero" : "Sem centro de custo";
+      return { id: cc?.id ?? "sem", nome: rotulo };
+    }
     return { id: o.instrument?.plant?.id ?? "sem", nome: o.instrument?.plant?.name ?? "Sem planta" };
   }
 

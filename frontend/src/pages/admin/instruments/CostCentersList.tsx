@@ -7,8 +7,15 @@ export default function CostCentersList() {
   return (
     <SimpleCatalogList
       title="Centros de custo"
-      description="Classificacao contabil usada para apurar custo de manutencao por centro"
+      description="Classificacao contabil do custo de manutencao - identificada pelo numero"
       itemLabel="Centro de custo"
+      /* O centro de custo e' identificado pelo NUMERO - o nome dele costuma repetir o da
+         area, e ai o seletor mostrava "Linha 4" para escolher "Linha 4". */
+      codeFirst
+      codeRequired
+      codeLabel="Numero do centro de custo"
+      codePlaceholder="Ex.: 4101-02"
+      nameLabel="Descricao"
       namePlaceholder="Ex.: Manutencao Industrial"
       breadcrumbs={[{ label: "Ativos", to: assetsBase }, { label: "Cadastros tecnicos", to: `${assetsBase}/cadastros` }, { label: "Centros de custo" }]}
       base="cost-centers"

@@ -16,8 +16,16 @@ import { getApiErrorMessage } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { clientDisplayName } from "../lib/format";
 
-const schema = z.object({ name: z.string().min(2, "Informe o nome."), code: z.string().optional() });
-type FormValues = z.infer<typeof schema>;
+/** Alguns catalogos sao identificados pelo NOME (planta, tipo de ativo) e outros pelo
+ * NUMERO (centro de custo). O schema muda conforme isso, para a obrigatoriedade cair no
+ * campo certo em vez de exigir os dois de todo mundo. */
+function montarSchema(numeroObrigatorio: boolean) {
+  return z.object({
+    name: z.string().min(2, "Informe o nome."),
+    code: numeroObrigatorio ? z.string().min(1, "Informe o numero.") : z.string().optional(),
+  });
+}
+type FormValues = { name: string; code?: string };
 
 interface CatalogItem {
   id: string;
@@ -32,6 +40,13 @@ interface Props<T extends CatalogItem> {
   description: string;
   itemLabel: string;
   namePlaceholder?: string;
+  /** Rotulos e obrigatoriedade do segundo campo - centro de custo usa "Numero", obrigatorio. */
+  nameLabel?: string;
+  codeLabel?: string;
+  codePlaceholder?: string;
+  codeRequired?: boolean;
+  /** Mostra o numero antes do nome na lista e no formulario: e' ele que identifica o item. */
+  codeFirst?: boolean;
   breadcrumbs: { label: string; to?: string }[];
   base: string;
   list: (params: { clientId?: string; active?: boolean }) => Promise<T[]>;
@@ -45,7 +60,7 @@ interface Props<T extends CatalogItem> {
  * gestao, forcado a propria empresa no portal). Reaproveitavel por qualquer catalogo
  * novo que seja so {nome, codigo} sem cascata de nivel acima. */
 export function SimpleCatalogList<T extends CatalogItem>({
-  title, description, itemLabel, namePlaceholder, breadcrumbs, base, list, create, update, del,
+  title, description, itemLabel, namePlaceholder, nameLabel, codeLabel, codePlaceholder, codeRequired, codeFirst, breadcrumbs, base, list, create, update, del,
 }: Props<T>) {
   const queryClient = useQueryClient();
   const { notify } = useToast();
@@ -71,7 +86,7 @@ export function SimpleCatalogList<T extends CatalogItem>({
   });
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(montarSchema(!!codeRequired)),
   });
 
   function openCreate() {
@@ -163,8 +178,15 @@ export function SimpleCatalogList<T extends CatalogItem>({
           keyField={(i) => i.id}
           emptyTitle={`Nenhum(a) ${itemLabel.toLowerCase()} cadastrado(a)`}
           columns={[
-            { header: "Nome", accessor: (i) => <span className="font-medium text-navy-900">{i.name}</span> },
-            { header: "Codigo", accessor: (i) => <span className="text-xs text-graphite-500">{i.code ?? "-"}</span> },
+            ...(codeFirst
+              ? [
+                  { header: codeLabel ?? "Codigo", accessor: (i: T) => <span className="font-medium text-navy-900">{i.code ?? "-"}</span> },
+                  { header: nameLabel ?? "Nome", accessor: (i: T) => <span className="text-graphite-700">{i.name}</span> },
+                ]
+              : [
+                  { header: nameLabel ?? "Nome", accessor: (i: T) => <span className="font-medium text-navy-900">{i.name}</span> },
+                  { header: codeLabel ?? "Codigo", accessor: (i: T) => <span className="text-xs text-graphite-500">{i.code ?? "-"}</span> },
+                ]),
             {
               header: "Status",
               accessor: (i) =>
@@ -209,8 +231,31 @@ export function SimpleCatalogList<T extends CatalogItem>({
         }
       >
         <form id="simple-catalog-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-          <TextInput label="Nome" required placeholder={namePlaceholder} error={errors.name?.message} {...register("name")} />
-          <TextInput label="Codigo (opcional)" placeholder="Ex.: F01" error={errors.code?.message} {...register("code")} />
+          {/* O campo que identifica o item vem primeiro. Num centro de custo isso e' o
+              numero: o nome dele costuma repetir o da area e nao serve para distinguir. */}
+          {codeFirst ? (
+            <>
+              <TextInput
+                label={codeLabel ?? "Codigo"}
+                required={codeRequired}
+                placeholder={codePlaceholder ?? "Ex.: F01"}
+                error={errors.code?.message}
+                {...register("code")}
+              />
+              <TextInput label={nameLabel ?? "Nome"} required placeholder={namePlaceholder} error={errors.name?.message} {...register("name")} />
+            </>
+          ) : (
+            <>
+              <TextInput label={nameLabel ?? "Nome"} required placeholder={namePlaceholder} error={errors.name?.message} {...register("name")} />
+              <TextInput
+                label={codeLabel ?? "Codigo (opcional)"}
+                required={codeRequired}
+                placeholder={codePlaceholder ?? "Ex.: F01"}
+                error={errors.code?.message}
+                {...register("code")}
+              />
+            </>
+          )}
         </form>
       </Modal>
     </div>

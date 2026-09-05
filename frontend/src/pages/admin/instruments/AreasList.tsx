@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { centroDeCustoComDescricao } from "../../../lib/centroDeCusto";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2 } from "lucide-react";
@@ -178,7 +179,7 @@ export default function AreasList() {
           columns={[
             { header: "Nome", accessor: (a) => <span className="font-medium text-navy-900">{a.name}</span> },
             { header: "Codigo", accessor: (a) => <span className="text-xs text-graphite-500">{a.code ?? "-"}</span> },
-            { header: "Centro de custo padrao", accessor: (a) => a.costCenter?.name ?? <span className="text-graphite-400">Nenhum</span> },
+            { header: "Centro de custo padrao", accessor: (a) => (a.costCenter ? centroDeCustoComDescricao(a.costCenter) : <span className="text-graphite-400">Nenhum</span>) },
             {
               header: "Status",
               accessor: (a) =>
@@ -229,7 +230,7 @@ export default function AreasList() {
             label="Centro de custo padrao"
             placeholder="Nenhum"
             hint="Todo ativo desta area herda este centro de custo. Excecao por ativo so o administrador faz."
-            options={(costCenters ?? []).map((c) => ({ value: c.id, label: c.name }))}
+            options={(costCenters ?? []).map((c) => ({ value: c.id, label: centroDeCustoComDescricao(c) }))}
             {...register("costCenterId")}
           />
         </form>

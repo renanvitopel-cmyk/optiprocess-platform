@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { centroDeCustoComDescricao } from "../../../lib/centroDeCusto";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -114,7 +115,8 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
     queryFn: () => listAreas({ plantId: plantId as string, active: true }),
     enabled: !!plantId && !parentId,
   });
-  const centroDeCustoDaArea = (areasDaPlanta ?? []).find((a) => a.id === areaId)?.costCenter?.name ?? null;
+  const centroDaArea = (areasDaPlanta ?? []).find((a) => a.id === areaId)?.costCenter ?? null;
+  const centroDeCustoDaArea = centroDaArea ? centroDeCustoComDescricao(centroDaArea) : null;
 
   const level = (assetTypes ?? []).find((t) => t.name.toLowerCase() === (selectedType ?? "").toLowerCase())?.level ?? null;
   const isRoot = level === "PLANT";
@@ -291,7 +293,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               </div>
               <div>
                 <dt className="text-xs text-graphite-400">Centro de custo</dt>
-                <dd className="font-medium text-graphite-800">{parent?.costCenter?.name ?? "-"}</dd>
+                <dd className="font-medium text-graphite-800">{centroDeCustoComDescricao(parent?.costCenter)}</dd>
               </div>
             </dl>
           </div>

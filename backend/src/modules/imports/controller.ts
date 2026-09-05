@@ -148,8 +148,10 @@ async function processar(
   for (const p of await prisma.plant.findMany({ where: { clientId, deletedAt: null }, select: { id: true, name: true } })) {
     plantas.set(p.name.toLowerCase(), p.id);
   }
+  // Indexado pelo NUMERO (identidade) e tambem pelo nome, para aceitar planilha antiga.
   const centros = new Map<string, string>();
-  for (const c of await prisma.costCenter.findMany({ where: { clientId, deletedAt: null }, select: { id: true, name: true } })) {
+  for (const c of await prisma.costCenter.findMany({ where: { clientId, deletedAt: null }, select: { id: true, name: true, code: true } })) {
+    if (c.code) centros.set(c.code.toLowerCase(), c.id);
     centros.set(c.name.toLowerCase(), c.id);
   }
   const areas = new Map<string, string>();
@@ -184,14 +186,18 @@ async function processar(
 
   // ── Centros de custo ──────────────────────────────────────────────────────
   for (const { numero: n, valores } of lerAba(wb, "Centros de custo")) {
+    const numeroDoCentro = valores.codigo;
     const nome = valores.nome;
-    if (!nome) { erro("Centros de custo", n, "Nome e' obrigatorio."); continue; }
-    if (centros.has(nome.toLowerCase())) { ignorar("Centros de custo", n, `Centro de custo "${nome}" ja existe.`); continue; }
+    if (!numeroDoCentro) { erro("Centros de custo", n, "Numero e' obrigatorio - e' ele que identifica o centro de custo."); continue; }
+    if (!nome) { erro("Centros de custo", n, "Descricao e' obrigatoria."); continue; }
+    if (centros.has(numeroDoCentro.toLowerCase())) { ignorar("Centros de custo", n, `Centro de custo "${numeroDoCentro}" ja existe.`); continue; }
 
     if (!opcoes.simular) {
-      const criado = await prisma.costCenter.create({ data: { clientId, name: nome, code: valores.codigo || null } });
+      const criado = await prisma.costCenter.create({ data: { clientId, name: nome, code: numeroDoCentro } });
+      centros.set(numeroDoCentro.toLowerCase(), criado.id);
       centros.set(nome.toLowerCase(), criado.id);
     } else {
+      centros.set(numeroDoCentro.toLowerCase(), "simulado");
       centros.set(nome.toLowerCase(), "simulado");
     }
     contar("Centros de custo", "criados");
@@ -210,7 +216,7 @@ async function processar(
     let centroId: string | null = null;
     if (valores.centroDeCusto) {
       centroId = centros.get(valores.centroDeCusto.toLowerCase()) ?? null;
-      if (!centroId) { erro("Areas", n, `Centro de custo "${valores.centroDeCusto}" nao existe - cadastre na aba Centros de custo.`); continue; }
+      if (!centroId) { erro("Areas", n, `Centro de custo "${valores.centroDeCusto}" nao existe - use o numero cadastrado na aba Centros de custo.`); continue; }
     }
 
     if (!opcoes.simular) {

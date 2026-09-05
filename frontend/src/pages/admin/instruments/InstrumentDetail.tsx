@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { centroDeCustoComDescricao } from "../../../lib/centroDeCusto";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Trash2, Plus, AlertTriangle, Camera } from "lucide-react";
@@ -261,7 +262,7 @@ export default function InstrumentDetail() {
             <Info label={instrument.parentId ? "Area (herdada)" : "Area"} value={instrument.area?.name ?? "-"} />
             <Info
               label={instrument.costCenterOverride ? "Centro de custo (excecao)" : "Centro de custo (da area)"}
-              value={instrument.costCenter?.name ?? "-"}
+              value={centroDeCustoComDescricao(instrument.costCenter)}
             />
             <Info label="Periodicidade" value={instrument.calibrationFrequencyMonths ? `${instrument.calibrationFrequencyMonths} meses` : "Nao rastreada"} />
             <Info label="Ultima calibracao" value={formatDate(instrument.lastCalibrationDate)} />

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { centroDeCustoComDescricao } from "../../../lib/centroDeCusto";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Trash2, PlayCircle, CheckCircle2, Plus, X, Square } from "lucide-react";
@@ -566,7 +567,7 @@ O que sobrar volta para o estoque.`,
             />
             <Info label="Programada para" value={workOrder.scheduledDate ? formatDateTime(workOrder.scheduledDate).slice(0, 10) : "-"} />
             <Info label="Codigo de falha" value={workOrder.failureCode ? `${workOrder.failureCode.code} - ${workOrder.failureCode.description}` : "-"} />
-            <Info label="Centro de custo" value={workOrder.costCenter ? (workOrder.costCenter.code ? `${workOrder.costCenter.code} - ${workOrder.costCenter.name}` : workOrder.costCenter.name) : "-"} />
+            <Info label="Centro de custo" value={centroDeCustoComDescricao(workOrder.costCenter)} />
             <Info label="Janela planejada" value={janelaPlanejada} />
             <Info label="Iniciada em" value={formatDateTime(workOrder.startedAt)} />
             <Info label="Concluida em" value={formatDateTime(workOrder.completedAt)} />

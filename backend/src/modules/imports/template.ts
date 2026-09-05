@@ -30,12 +30,14 @@ export const ABAS: DefinicaoDeAba[] = [
   },
   {
     nome: "Centros de custo",
-    descricao: "Para onde o custo da manutencao vai. Cada area aponta para um deles.",
+    descricao:
+      "Para onde o custo da manutencao vai. Cada area aponta para um deles. O centro de custo e' " +
+      "identificado pelo NUMERO - a descricao e' so para leitura humana.",
     colunas: [
-      { chave: "nome", titulo: "Nome*", obrigatoria: true, ajuda: "Ex.: Manutencao Mecanica", largura: 34 },
-      { chave: "codigo", titulo: "Codigo", ajuda: "Opcional. Ex.: CC-100", largura: 14 },
+      { chave: "codigo", titulo: "Numero*", obrigatoria: true, ajuda: "Numero contabil do centro de custo. Ex.: 4101-02", largura: 20 },
+      { chave: "nome", titulo: "Descricao*", obrigatoria: true, ajuda: "Ex.: Manutencao Mecanica", largura: 34 },
     ],
-    exemplo: [{ nome: "Manutencao Mecanica", codigo: "CC-100" }],
+    exemplo: [{ codigo: "4101-02", nome: "Manutencao Mecanica" }],
   },
   {
     nome: "Areas",
@@ -43,10 +45,10 @@ export const ABAS: DefinicaoDeAba[] = [
     colunas: [
       { chave: "nome", titulo: "Nome*", obrigatoria: true, ajuda: "Ex.: Linha 4", largura: 30 },
       { chave: "planta", titulo: "Planta*", obrigatoria: true, ajuda: "Nome exato da planta (aba Plantas)", largura: 30 },
-      { chave: "centroDeCusto", titulo: "Centro de custo", ajuda: "Nome do centro de custo (aba Centros de custo)", largura: 28 },
+      { chave: "centroDeCusto", titulo: "Centro de custo", ajuda: "Numero do centro de custo (aba Centros de custo)", largura: 28 },
       { chave: "codigo", titulo: "Codigo", ajuda: "Opcional", largura: 14 },
     ],
-    exemplo: [{ nome: "Linha 4", planta: "Planta Votorantim", centroDeCusto: "Manutencao Mecanica", codigo: "L4" }],
+    exemplo: [{ nome: "Linha 4", planta: "Planta Votorantim", centroDeCusto: "4101-02", codigo: "L4" }],
   },
   {
     nome: "Ativos",

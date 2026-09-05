@@ -4,6 +4,7 @@ import { listPlants } from "../api/plants";
 import { listAreas } from "../api/areas";
 import { listCostCenters } from "../api/costCenters";
 import { SelectInput } from "./form/Field";
+import { centroDeCustoComDescricao } from "../lib/centroDeCusto";
 
 interface Props<T extends FieldValues> {
   clientId?: string;
@@ -48,7 +49,7 @@ export function LocationPicker<T extends FieldValues>({ clientId, register, watc
     <SelectInput
       label="Centro de custo"
       placeholder="Nenhum"
-      options={(costCenters ?? []).map((c) => ({ value: c.id, label: c.name }))}
+      options={(costCenters ?? []).map((c) => ({ value: c.id, label: centroDeCustoComDescricao(c) }))}
       {...register("costCenterId" as Path<T>)}
     />
   );

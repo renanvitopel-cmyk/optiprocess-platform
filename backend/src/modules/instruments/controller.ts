@@ -103,7 +103,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
         plant: { select: { id: true, name: true } },
         area: { select: { id: true, name: true } },
         system: { select: { id: true, name: true } },
-        costCenter: { select: { id: true, name: true } },
+        costCenter: { select: { id: true, name: true, code: true } },
       },
     }),
     prisma.instrument.count({ where }),
@@ -126,7 +126,7 @@ export const getInstrument = asyncHandler(async (req: Request, res: Response) =>
       plant: { select: { id: true, name: true } },
       area: { select: { id: true, name: true } },
       system: { select: { id: true, name: true } },
-      costCenter: { select: { id: true, name: true } },
+      costCenter: { select: { id: true, name: true, code: true } },
       calibrations: {
         where: { deletedAt: null },
         orderBy: { calibrationDate: "desc" },

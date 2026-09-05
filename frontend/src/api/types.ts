@@ -192,7 +192,7 @@ export interface Instrument {
   systemId?: string | null;
   system?: { id: string; name: string } | null;
   costCenterId?: string | null;
-  costCenter?: { id: string; name: string } | null;
+  costCenter?: { id: string; name: string; code?: string | null } | null;
   /** ADMIN definiu centro de custo diferente do padrao da area - a heranca nao sobrescreve. */
   costCenterOverride?: boolean;
 }
@@ -613,7 +613,7 @@ export interface Area {
   code: string | null;
   /** Centro de custo padrao: todo ativo dentro da area herda este centro de custo. */
   costCenterId?: string | null;
-  costCenter?: { id: string; name: string } | null;
+  costCenter?: { id: string; name: string; code?: string | null } | null;
   active: boolean;
 }
 

@@ -17,7 +17,7 @@ export const listAreas = asyncHandler(async (req: Request, res: Response) => {
       ...(plantId ? { plantId } : {}),
       ...(active !== undefined ? { active: active === "true" } : {}),
     },
-    include: { plant: { select: { id: true, name: true } }, costCenter: { select: { id: true, name: true } } },
+    include: { plant: { select: { id: true, name: true } }, costCenter: { select: { id: true, name: true, code: true } } },
     orderBy: { name: "asc" },
   });
   res.json(areas);

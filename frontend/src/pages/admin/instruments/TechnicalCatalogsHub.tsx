@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Tags, Factory, Workflow, Cog, Wallet, ChevronRight, ListChecks, OctagonPause, LayoutTemplate, HardHat, ClipboardPlus } from "lucide-react";
+import { Tags, Factory, Workflow, Wallet, ChevronRight, ListChecks, OctagonPause, LayoutTemplate, HardHat, ClipboardPlus } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
 import { useCmms } from "../../../lib/cmms";
 
@@ -17,7 +17,6 @@ export default function TechnicalCatalogsHub() {
         { to: `${assetsBase}/tipos`, icon: Tags, title: "Tipos de ativo", description: "Nivel na hierarquia (Planta, Maquina, Subconjunto, Parte...)" },
         { to: `${assetsBase}/plantas`, icon: Factory, title: "Plantas", description: "Unidades/fabricas da empresa" },
         { to: `${assetsBase}/areas`, icon: Workflow, title: "Areas", description: "Areas/processos dentro de cada planta" },
-        { to: `${assetsBase}/sistemas`, icon: Cog, title: "Sistemas", description: "Sistemas/maquinas dentro de cada area" },
         { to: `${assetsBase}/centros-custo`, icon: Wallet, title: "Centros de custo", description: "Classificacao contabil para apurar custo de manutencao" },
       ],
     },

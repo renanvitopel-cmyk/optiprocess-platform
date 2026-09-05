@@ -183,13 +183,15 @@ const instrumentSchema = z.object({
   // Planta/Area/Sistema/Centro de custo: localizacao/classificacao do ativo (mesmo cliente).
   plantId: z.string().uuid().nullish(),
   areaId: z.string().uuid().nullish(),
-  systemId: z.string().uuid().nullish(),
+  // systemId saiu do cadastro: era um nivel da propria arvore repetido num campo solto,
+  // e duas versoes da mesma informacao acabam divergindo. A arvore e' a verdade tecnica.
+  // A coluna continua no banco para nao perder o que ja foi preenchido.
   costCenterId: z.string().uuid().nullish(),
 });
 
-/** Planta/area/sistema/centro de custo escolhidos precisam existir e ser do mesmo cliente
- * do ativo - senao a ficha mostraria localizacao de outra empresa. */
-async function assertLocationFieldsBelongToClient(clientId: string, data: Pick<z.infer<typeof instrumentSchema>, "plantId" | "areaId" | "systemId" | "costCenterId">): Promise<void> {
+/** Planta/area/centro de custo escolhidos precisam existir e ser do mesmo cliente do ativo -
+ * senao a ficha mostraria localizacao de outra empresa. */
+async function assertLocationFieldsBelongToClient(clientId: string, data: Pick<z.infer<typeof instrumentSchema>, "plantId" | "areaId" | "costCenterId">): Promise<void> {
   if (data.plantId) {
     const plant = await prisma.plant.findFirst({ where: { id: data.plantId, deletedAt: null } });
     if (!plant) throw new NotFoundError("Planta");
@@ -199,11 +201,6 @@ async function assertLocationFieldsBelongToClient(clientId: string, data: Pick<z
     const area = await prisma.area.findFirst({ where: { id: data.areaId, deletedAt: null } });
     if (!area) throw new NotFoundError("Area");
     if (area.clientId !== clientId) throw new ValidationError("A area selecionada e' de outra empresa.");
-  }
-  if (data.systemId) {
-    const system = await prisma.assetSystem.findFirst({ where: { id: data.systemId, deletedAt: null } });
-    if (!system) throw new NotFoundError("Sistema");
-    if (system.clientId !== clientId) throw new ValidationError("O sistema selecionado e' de outra empresa.");
   }
   if (data.costCenterId) {
     const costCenter = await prisma.costCenter.findFirst({ where: { id: data.costCenterId, deletedAt: null } });

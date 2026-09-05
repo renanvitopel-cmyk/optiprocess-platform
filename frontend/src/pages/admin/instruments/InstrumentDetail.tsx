@@ -255,10 +255,14 @@ export default function InstrumentDetail() {
             <Info label="Resolucao" value={instrument.resolution ?? "-"} />
             <Info label="Unidade" value={instrument.unit ?? "-"} />
             <Info label="Local de instalacao" value={instrument.installationLocation ?? "-"} />
-            <Info label="Planta" value={instrument.plant?.name ?? "-"} />
-            <Info label="Area" value={instrument.area?.name ?? "-"} />
-            <Info label="Sistema" value={instrument.system?.name ?? "-"} />
-            <Info label="Centro de custo" value={instrument.costCenter?.name ?? "-"} />
+            {/* Herdados do ativo raiz - o rotulo diz isso para ninguem procurar onde editar
+                num ativo filho. "Sistema" saiu: era um nivel da propria arvore repetido aqui. */}
+            <Info label={instrument.parentId ? "Planta (herdada)" : "Planta"} value={instrument.plant?.name ?? "-"} />
+            <Info label={instrument.parentId ? "Area (herdada)" : "Area"} value={instrument.area?.name ?? "-"} />
+            <Info
+              label={instrument.costCenterOverride ? "Centro de custo (excecao)" : "Centro de custo (da area)"}
+              value={instrument.costCenter?.name ?? "-"}
+            />
             <Info label="Periodicidade" value={instrument.calibrationFrequencyMonths ? `${instrument.calibrationFrequencyMonths} meses` : "Nao rastreada"} />
             <Info label="Ultima calibracao" value={formatDate(instrument.lastCalibrationDate)} />
             <Info label="Proxima calibracao" value={formatDate(instrument.nextDueDate)} />

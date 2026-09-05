@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -7,7 +8,7 @@ import { TextInput, SelectInput } from "../../components/form/Field";
 import { InstrumentPicker } from "../../components/InstrumentPicker";
 import { AssetTypeInput } from "../../components/AssetTypeInput";
 import { LocationPicker } from "../../components/LocationPicker";
-import { createInstrument, updateInstrument } from "../../api/instruments";
+import { createInstrument, updateInstrument, getInstrument } from "../../api/instruments";
 import type { Instrument } from "../../api/types";
 import { useToast } from "../../components/Toast";
 import { getApiErrorMessage } from "../../api/client";
@@ -49,6 +50,14 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
   const { user } = useAuth();
   const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
+  });
+
+  // O pai escolhido define o contexto herdado mostrado acima.
+  const parentId = watch("parentId");
+  const { data: pai } = useQuery({
+    queryKey: ["instrument-parent-context", parentId],
+    queryFn: () => getInstrument(parentId as string),
+    enabled: !!parentId,
   });
 
   useEffect(() => {
@@ -162,7 +171,40 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
           error={errors.parentId?.message}
           {...register("parentId")}
         />
-        <LocationPicker clientId={user?.clientId ?? undefined} register={register} watch={watch} setValue={setValue} />
+        {/* Planta, area e centro de custo sao definidos uma vez no ativo raiz e herdados por
+            todo o galho abaixo. Num ativo filho eles nao se editam - antes o formulario
+            pedia esses campos e o backend os descartava em seguida, substituindo pelo
+            contexto do pai: o usuario preenchia e nao entendia por que mudava sozinho. */}
+        {parentId ? (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-graphite-400">Contexto herdado</p>
+            <p className="mt-0.5 text-xs text-graphite-500">Vem do ativo pai - a arvore e' a verdade tecnica.</p>
+            <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-3">
+              <div>
+                <dt className="text-xs text-graphite-400">Planta</dt>
+                <dd className="font-medium text-graphite-800">{pai?.plant?.name ?? "-"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-graphite-400">Area</dt>
+                <dd className="font-medium text-graphite-800">{pai?.area?.name ?? "-"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-graphite-400">Centro de custo</dt>
+                <dd className="font-medium text-graphite-800">{pai?.costCenter?.name ?? "-"}</dd>
+              </div>
+            </dl>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-gray-200 p-4">
+            <p className="text-sm font-medium text-graphite-700">Onde fica</p>
+            <p className="mt-0.5 text-xs text-graphite-500">
+              Como este ativo nao tem pai, e' aqui que planta e area sao definidas - todo ativo abaixo dele herda.
+            </p>
+            <div className="mt-3">
+              <LocationPicker clientId={user?.clientId ?? undefined} register={register} watch={watch} setValue={setValue} />
+            </div>
+          </div>
+        )}
         <div className="grid gap-4 sm:grid-cols-3">
           <TextInput label="Fabricante" required error={errors.manufacturer?.message} {...register("manufacturer")} />
           <TextInput label="Modelo" required error={errors.model?.message} {...register("model")} />

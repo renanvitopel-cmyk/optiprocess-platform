@@ -6,6 +6,13 @@ import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/erro
 import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
 import { writeAuditLog } from "../../utils/audit";
 
+/** A tela sempre mostra a area com a planta e o centro de custo - toda resposta leva os
+ * dois, para o que volta de um salvar ser igual ao que a lista mostra. */
+const areaInclude = {
+  plant: { select: { id: true, name: true } },
+  costCenter: { select: { id: true, name: true, code: true } },
+} as const;
+
 export const listAreas = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const { clientId, plantId, active } = req.query as { clientId?: string; plantId?: string; active?: string };
@@ -17,7 +24,7 @@ export const listAreas = asyncHandler(async (req: Request, res: Response) => {
       ...(plantId ? { plantId } : {}),
       ...(active !== undefined ? { active: active === "true" } : {}),
     },
-    include: { plant: { select: { id: true, name: true } }, costCenter: { select: { id: true, name: true, code: true } } },
+    include: areaInclude,
     orderBy: { name: "asc" },
   });
   res.json(areas);
@@ -62,21 +69,23 @@ export const createArea = asyncHandler(async (req: Request, res: Response) => {
     where: { plantId: data.plantId, name: { equals: data.name, mode: "insensitive" } },
   });
   if (existing) {
-    // Registro inativo OU removido volta a valer com o mesmo nome. O removido
-    // some da lista mas continua no banco (exclusao logica, para nao perder
-    // historico); sem este ramo, cadastrar de novo dizia "ja existe" sobre algo
-    // que a tela nao mostra - e nao havia como sair desse impasse.
+    // Registro inativo OU removido volta a valer com o mesmo nome, JA COM OS DADOS QUE
+    // acabaram de ser informados. Reviver mantendo os valores antigos era pior que o
+    // impasse que isso resolveu: o usuario preenchia o formulario, salvava sem erro, e o
+    // registro voltava como estava antes - o centro de custo escolhido simplesmente
+    // desaparecia, sem nada na tela explicando.
     if (!existing.active || existing.deletedAt) {
       const reactivated = await prisma.area.update({
         where: { id: existing.id },
-        data: { active: true, deletedAt: null },
+        data: { ...data, clientId: undefined, active: true, deletedAt: null },
+        include: areaInclude,
       });
       return res.status(200).json(reactivated);
     }
     throw new ValidationError(`A area "${data.name}" ja existe nesta planta.`);
   }
 
-  const area = await prisma.area.create({ data: { ...data, clientId: data.clientId! } });
+  const area = await prisma.area.create({ data: { ...data, clientId: data.clientId! }, include: areaInclude });
 
   await writeAuditLog({
     userId: req.user?.sub,
@@ -102,7 +111,7 @@ export const updateArea = asyncHandler(async (req: Request, res: Response) => {
   }
   if (data.plantId) await assertPlantBelongsToClient(data.plantId, data.clientId ?? existing.clientId);
 
-  const area = await prisma.area.update({ where: { id: existing.id }, data });
+  const area = await prisma.area.update({ where: { id: existing.id }, data, include: areaInclude });
 
   await writeAuditLog({
     userId: req.user?.sub,

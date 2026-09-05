@@ -41,14 +41,15 @@ export const createPlant = asyncHandler(async (req: Request, res: Response) => {
     where: { clientId: data.clientId, name: { equals: data.name, mode: "insensitive" } },
   });
   if (existing) {
-    // Registro inativo OU removido volta a valer com o mesmo nome. O removido
-    // some da lista mas continua no banco (exclusao logica, para nao perder
-    // historico); sem este ramo, cadastrar de novo dizia "ja existe" sobre algo
-    // que a tela nao mostra - e nao havia como sair desse impasse.
+    // Registro inativo OU removido volta a valer com o mesmo nome, JA COM OS DADOS QUE
+    // acabaram de ser informados. Reviver mantendo os valores antigos era pior que o
+    // impasse que isso resolveu: o usuario preenchia o formulario, salvava sem erro, e o
+    // registro voltava como estava antes - o centro de custo escolhido simplesmente
+    // desaparecia, sem nada na tela explicando.
     if (!existing.active || existing.deletedAt) {
       const reactivated = await prisma.plant.update({
         where: { id: existing.id },
-        data: { active: true, deletedAt: null },
+        data: { ...data, clientId: undefined, active: true, deletedAt: null },
       });
       return res.status(200).json(reactivated);
     }

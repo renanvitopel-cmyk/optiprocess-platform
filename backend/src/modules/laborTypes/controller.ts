@@ -16,6 +16,16 @@ function scopeFilter(req: Request, clientId?: string) {
   return {};
 }
 
+/** A empresa pode ter cadastrado um nome que hoje tambem existe no catalogo padrao da
+ * OptiProcess (foi o que aconteceu com "Tecnico mecanico": o campo era texto livre e
+ * criou uma copia propria). Nesse caso a linha da empresa e' a que vale - ela e' quem
+ * pode editar e desativar - e a padrao some, pra mesma funcao nao aparecer duas vezes
+ * na lista de escolha. */
+function semNomesRepetidos<T extends { name: string; clientId: string | null }>(itens: T[]): T[] {
+  const daEmpresa = new Set(itens.filter((i) => i.clientId).map((i) => i.name.toLowerCase()));
+  return itens.filter((i) => i.clientId || !daEmpresa.has(i.name.toLowerCase()));
+}
+
 export const listLaborTypes = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const { active, clientId } = req.query as { active?: string; clientId?: string };
@@ -26,7 +36,7 @@ export const listLaborTypes = asyncHandler(async (req: Request, res: Response) =
     },
     orderBy: { name: "asc" },
   });
-  res.json(types);
+  res.json(semNomesRepetidos(types));
 });
 
 const laborTypeSchema = z.object({

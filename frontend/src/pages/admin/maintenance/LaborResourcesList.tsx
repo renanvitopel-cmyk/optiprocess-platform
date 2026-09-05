@@ -37,6 +37,10 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
+/** Os mesmos formatos que o servidor aceita (uploadImage) - conferidos aqui pra o erro
+ * aparecer na hora de escolher, e nao depois de preencher o formulario inteiro. */
+const FORMATOS_ACEITOS = ["image/jpeg", "image/png", "image/webp"];
+
 export default function LaborResourcesList() {
   const queryClient = useQueryClient();
   const { notify } = useToast();
@@ -264,12 +268,24 @@ export default function LaborResourcesList() {
                 <Camera className="h-4 w-4" /> {fotoAtual ? "Trocar foto" : "Adicionar foto"}
                 <input
                   type="file"
-                  accept="image/*"
+                  accept={FORMATOS_ACEITOS.join(",")}
                   className="hidden"
                   onChange={(e) => {
                     const arquivo = e.target.files?.[0];
-                    if (arquivo) { setFotoNova(arquivo); setTirarFoto(false); }
                     e.target.value = "";
+                    if (!arquivo) return;
+                    // O servidor so aceita jpeg/png/webp. Sem esta conferencia, a foto de
+                    // um iPhone (HEIC) so falhava la na hora de salvar, sem dizer por que.
+                    if (!FORMATOS_ACEITOS.includes(arquivo.type)) {
+                      notify("error", "Formato nao aceito. Envie a foto em JPG, PNG ou WEBP.");
+                      return;
+                    }
+                    if (arquivo.size > 15 * 1024 * 1024) {
+                      notify("error", "A foto passa de 15 MB. Reduza a imagem antes de enviar.");
+                      return;
+                    }
+                    setFotoNova(arquivo);
+                    setTirarFoto(false);
                   }}
                 />
               </label>

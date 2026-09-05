@@ -50,7 +50,29 @@ export function createApp() {
   const app = express();
 
   app.set("trust proxy", 1);
-  app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+  // Fotos e anexos ficam num armazenamento de objetos (R2/S3), noutro dominio, e a previa
+  // de um arquivo recem escolhido e' uma URL blob:. O CSP padrao do helmet e' img-src
+  // 'self' data:, que bloqueava as duas coisas em silencio - nenhuma foto guardada
+  // aparecia na tela. Libero exatamente o endpoint configurado, e nada alem dele.
+  const origemDoArmazenamento = (() => {
+    try {
+      return env.storage.s3Endpoint ? new URL(env.storage.s3Endpoint).origin : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          "img-src": ["'self'", "data:", "blob:", ...(origemDoArmazenamento ? [origemDoArmazenamento, `*.${new URL(origemDoArmazenamento).hostname}`] : [])],
+        },
+      },
+    }),
+  );
   app.use(
     cors({
       origin: env.isProduction ? env.publicUrl : env.corsOrigin,

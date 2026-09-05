@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search } from "lucide-react";
-import { listLaborResources, createLaborResource, updateLaborResource } from "../../../api/laborResources";
+import { listLaborResources, createLaborResource, updateLaborResource, uploadLaborResourcePhoto } from "../../../api/laborResources";
 import { listClients } from "../../../api/clients";
 import type { LaborResource } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
@@ -10,6 +10,7 @@ import { DataTable } from "../../../components/DataTable";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { EmptyState } from "../../../components/EmptyState";
 import { Modal } from "../../../components/Modal";
+import { iniciaisDe } from "../../../lib/pessoas";
 import { TextInput } from "../../../components/form/Field";
 import { LaborTypeInput } from "../../../components/LaborTypeInput";
 import { useToast } from "../../../components/Toast";
@@ -52,6 +53,18 @@ export default function LaborResourcesList() {
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
   });
+
+  async function enviarFoto(recurso: LaborResource, arquivo: File) {
+    try {
+      await uploadLaborResourcePhoto(recurso.id, arquivo);
+      notify("success", "Foto atualizada.");
+      queryClient.invalidateQueries({ queryKey: ["labor-resources"] });
+      // O quadro do PCM mostra a mesma foto - sem isso ela so apareceria la no proximo F5.
+      queryClient.invalidateQueries({ queryKey: ["maintenance-schedule"] });
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    }
+  }
 
   async function onSubmit(values: FormValues) {
     try {
@@ -122,7 +135,34 @@ export default function LaborResourcesList() {
           onPageChange={setPage}
           emptyTitle="Nenhuma mao de obra cadastrada"
           columns={[
-            { header: "Nome", accessor: (r) => <span className="font-medium text-navy-900">{r.name}</span> },
+            {
+              header: "Nome",
+              accessor: (r) => (
+                <div className="flex items-center gap-2.5">
+                  {/* Clicar na foto troca a imagem - o mesmo gesto que se faz na ficha do
+                      ativo, sem abrir formulario para uma coisa so. */}
+                  <label className="cursor-pointer" title={r.photoUrl ? "Trocar a foto" : "Adicionar foto"}>
+                    {r.photoUrl ? (
+                      <img src={r.photoUrl} alt="" className="h-9 w-9 rounded-full border border-gray-200 object-cover hover:opacity-80" />
+                    ) : (
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-100 text-xs font-semibold text-navy-700 hover:bg-navy-200">
+                        {iniciaisDe(r.name)}
+                      </span>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const arquivo = e.target.files?.[0];
+                        if (arquivo) void enviarFoto(r, arquivo);
+                      }}
+                    />
+                  </label>
+                  <span className="font-medium text-navy-900">{r.name}</span>
+                </div>
+              ),
+            },
             { header: "Tipo", accessor: (r) => r.type },
             { header: "DRT", accessor: (r) => r.registrationNumber ?? "-" },
             { header: "Valor/hora", accessor: (r) => (r.hourlyRate != null ? formatCurrency(r.hourlyRate) : "-") },

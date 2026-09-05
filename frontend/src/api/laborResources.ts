@@ -41,3 +41,15 @@ export async function updateLaborResource(id: string, input: Partial<LaborResour
 export async function deleteLaborResource(id: string): Promise<void> {
   await api.delete(`/labor-resources/${id}`);
 }
+
+/** Envia (ou substitui) a foto da pessoa - aparece em miniatura no quadro do PCM. */
+export async function uploadLaborResourcePhoto(id: string, file: File): Promise<LaborResource> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post<LaborResource>(`/labor-resources/${id}/photo`, form);
+  return data;
+}
+
+export async function deleteLaborResourcePhoto(id: string): Promise<void> {
+  await api.delete(`/labor-resources/${id}/photo`);
+}

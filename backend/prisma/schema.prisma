@@ -1142,6 +1142,10 @@ model LaborResource {
   registrationNumber String?
   // Valor/hora - opcional, so alimenta custo quando preenchido.
   hourlyRate         Float?
+  // Foto da pessoa: aparece em miniatura no quadro de programacao do PCM, onde reconhecer
+  // quem esta na coluna pelo rosto e' mais rapido do que ler uma lista de nomes parecidos.
+  photoKey           String?
+  photoFileName      String?
   active             Boolean   @default(true)
   createdById        String?
   createdAt          DateTime  @default(now())

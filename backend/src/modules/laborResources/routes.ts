@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
 import { requireRole, CMMS_ROLES } from "../../middleware/rbac";
-import { listLaborResources, getLaborResource, createLaborResource, updateLaborResource, deleteLaborResource } from "./controller";
+import { listLaborResources, getLaborResource, createLaborResource, updateLaborResource, deleteLaborResource, uploadLaborResourcePhoto, deleteLaborResourcePhoto } from "./controller";
+import { uploadImage } from "../../middleware/upload";
 
 export const laborResourcesRouter = Router();
 
@@ -14,3 +15,5 @@ laborResourcesRouter.get("/:id", getLaborResource);
 laborResourcesRouter.post("/", requireRole(...CMMS_ROLES), createLaborResource);
 laborResourcesRouter.patch("/:id", requireRole(...CMMS_ROLES), updateLaborResource);
 laborResourcesRouter.delete("/:id", requireRole(...CMMS_ROLES), deleteLaborResource);
+laborResourcesRouter.post("/:id/photo", requireRole(...CMMS_ROLES), uploadImage.single("file"), uploadLaborResourcePhoto);
+laborResourcesRouter.delete("/:id/photo", requireRole(...CMMS_ROLES), deleteLaborResourcePhoto);

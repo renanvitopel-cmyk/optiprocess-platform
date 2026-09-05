@@ -6,6 +6,21 @@ import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagin
 import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
+import { getStorageProvider } from "../../lib/storage";
+
+/** Troca a chave de armazenamento por um link temporario que a tela consegue exibir.
+ * Assinar e' local (nao vai na rede), entao da pra fazer item a item na listagem. */
+async function attachLaborPhotoUrl<T extends { photoKey: string | null; photoFileName: string | null }>(
+  recursos: T[],
+): Promise<(T & { photoUrl: string | null })[]> {
+  const storage = getStorageProvider();
+  return Promise.all(
+    recursos.map(async (r) => ({
+      ...r,
+      photoUrl: r.photoKey ? await storage.getSignedDownloadUrl(r.photoKey, r.photoFileName ?? "foto", 3600) : null,
+    })),
+  );
+}
 
 export const listLaborResources = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
@@ -33,14 +48,15 @@ export const listLaborResources = asyncHandler(async (req: Request, res: Respons
     prisma.laborResource.count({ where }),
   ]);
 
-  res.json(buildPagedResult(items, total, pageParams));
+  res.json(buildPagedResult(await attachLaborPhotoUrl(items), total, pageParams));
 });
 
 export const getLaborResource = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const resource = await prisma.laborResource.findFirst({ where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) } });
   if (!resource) throw new NotFoundError("Recurso de mao de obra");
-  res.json(resource);
+  const [comFoto] = await attachLaborPhotoUrl([resource]);
+  res.json(comFoto);
 });
 
 const laborResourceSchema = z.object({
@@ -98,7 +114,8 @@ export const updateLaborResource = asyncHandler(async (req: Request, res: Respon
     description: `Mao de obra "${resource.name}" atualizada`,
   });
 
-  res.json(resource);
+  const [comFoto] = await attachLaborPhotoUrl([resource]);
+  res.json(comFoto);
 });
 
 export const deleteLaborResource = asyncHandler(async (req: Request, res: Response) => {
@@ -116,5 +133,47 @@ export const deleteLaborResource = asyncHandler(async (req: Request, res: Respon
     description: `Mao de obra "${existing.name}" removida`,
   });
 
+  res.status(204).send();
+});
+
+/**
+ * Foto da pessoa da equipe. Uma so por recurso: trocar apaga a anterior do armazenamento,
+ * porque acumular arquivo orfao de um campo que guarda um so nao ajuda ninguem.
+ */
+export const uploadLaborResourcePhoto = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const existing = await prisma.laborResource.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+  });
+  if (!existing) throw new NotFoundError("Mao de obra");
+
+  const file = req.file;
+  if (!file) throw new ValidationError("Selecione uma imagem.");
+  if (!file.mimetype.startsWith("image/")) throw new ValidationError("A foto precisa ser uma imagem.");
+
+  const storage = getStorageProvider();
+  const key = `labor-resources/${existing.id}/foto-${Date.now()}-${file.originalname}`;
+  await storage.upload(key, file.buffer, file.mimetype);
+
+  const anterior = existing.photoKey;
+  const resource = await prisma.laborResource.update({
+    where: { id: existing.id },
+    data: { photoKey: key, photoFileName: file.originalname },
+  });
+  if (anterior) await storage.delete(anterior).catch(() => undefined);
+
+  const [comFoto] = await attachLaborPhotoUrl([resource]);
+  res.status(201).json(comFoto);
+});
+
+export const deleteLaborResourcePhoto = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const existing = await prisma.laborResource.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+  });
+  if (!existing) throw new NotFoundError("Mao de obra");
+
+  if (existing.photoKey) await getStorageProvider().delete(existing.photoKey).catch(() => undefined);
+  await prisma.laborResource.update({ where: { id: existing.id }, data: { photoKey: null, photoFileName: null } });
   res.status(204).send();
 });

@@ -882,6 +882,9 @@ export interface LaborResource {
   hourlyRate: number | null;
   active: boolean;
   createdAt: string;
+  /** Foto da pessoa - link temporario gerado pelo backend. */
+  photoUrl?: string | null;
+  photoFileName?: string | null;
 }
 
 export type LaborHourType = "NORMAL" | "OVERTIME" | "NIGHT";
@@ -1146,7 +1149,8 @@ export interface ScheduleCard {
 
 export interface MaintenanceScheduleData {
   clientId: string | null;
-  resources: { id: string; name: string; type: string }[];
+  /** photoUrl: link temporario da foto da pessoa, para a miniatura no quadro. */
+  resources: { id: string; name: string; type: string; photoUrl?: string | null }[];
   scheduled: ScheduleCard[];
   unscheduled: ScheduleCard[];
 }

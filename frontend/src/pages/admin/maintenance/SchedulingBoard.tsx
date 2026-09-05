@@ -12,6 +12,7 @@ import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { clientDisplayName } from "../../../lib/format";
 import { useCmms } from "../../../lib/cmms";
+import { iniciaisDe } from "../../../lib/pessoas";
 
 const TYPE_STYLE: Record<string, { border: string; label: string }> = {
   PREVENTIVE: { border: "border-l-navy-500", label: "Preventiva" },
@@ -254,8 +255,8 @@ export default function SchedulingBoard() {
                   ))}
 
                   {[
-                    ...data.resources.map((r) => ({ id: r.id as string | null, name: r.name, type: r.type })),
-                    { id: null as string | null, name: "Sem responsavel", type: "definir depois" },
+                    ...data.resources.map((r) => ({ id: r.id as string | null, name: r.name, type: r.type, photoUrl: r.photoUrl ?? null })),
+                    { id: null as string | null, name: "Sem responsavel", type: "definir depois", photoUrl: null },
                   ]
                     .filter((r) => !resourceId || (resourceId === "unassigned" ? r.id === null : r.id === resourceId))
                     .map(
@@ -293,7 +294,7 @@ function Row({
   onDrop,
   onOpenCard,
 }: {
-  resource: { id: string | null; name: string; type: string };
+  resource: { id: string | null; name: string; type: string; photoUrl: string | null };
   days: Date[];
   cardsFor: (day: Date, resourceId: string | null) => ScheduleCard[];
   hoverKey: string | null;
@@ -304,9 +305,21 @@ function Row({
 }) {
   return (
     <>
-      <div className="flex flex-col justify-center border-t border-gray-100 px-2 py-3">
-        <p className="truncate text-sm font-medium text-navy-900">{resource.name}</p>
-        <p className="truncate text-xs text-graphite-400">{resource.type}</p>
+      <div className="flex items-center gap-2 border-t border-gray-100 px-2 py-3">
+        {/* Rosto antes do nome: no quadro cheio, reconhecer quem esta na linha pela foto e'
+            mais rapido do que ler nomes parecidos. Sem foto, as iniciais mantem a coluna
+            alinhada - um espaco vazio faria as linhas dancarem. */}
+        {resource.photoUrl ? (
+          <img src={resource.photoUrl} alt="" className="h-9 w-9 shrink-0 rounded-full border border-gray-200 object-cover" />
+        ) : (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy-100 text-xs font-semibold text-navy-700">
+            {iniciaisDe(resource.name)}
+          </span>
+        )}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-navy-900">{resource.name}</p>
+          <p className="truncate text-xs text-graphite-400">{resource.type}</p>
+        </div>
       </div>
       {days.map((day) => {
         const cards = cardsFor(day, resource.id);

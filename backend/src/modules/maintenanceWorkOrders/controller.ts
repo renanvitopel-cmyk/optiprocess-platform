@@ -1492,7 +1492,7 @@ export const getMaintenanceSchedule = asyncHandler(async (req: Request, res: Res
   const [resources, scheduled, unscheduled] = await Promise.all([
     prisma.laborResource.findMany({
       where: { clientId: resolvedClientId, deletedAt: null, active: true },
-      select: { id: true, name: true, type: true },
+      select: { id: true, name: true, type: true, photoKey: true, photoFileName: true },
       orderBy: { name: "asc" },
     }),
     // Programadas na janela pedida (com ou sem responsavel definido).
@@ -1510,7 +1510,17 @@ export const getMaintenanceSchedule = asyncHandler(async (req: Request, res: Res
     }),
   ]);
 
-  res.json({ clientId: resolvedClientId, resources, scheduled, unscheduled });
+  // A foto da pessoa vira link temporario aqui, para o quadro mostrar a miniatura ao lado
+  // do nome sem cada coluna ter que buscar a peca por conta propria.
+  const storage = getStorageProvider();
+  const equipeComFoto = await Promise.all(
+    resources.map(async ({ photoKey, photoFileName, ...r }) => ({
+      ...r,
+      photoUrl: photoKey ? await storage.getSignedDownloadUrl(photoKey, photoFileName ?? "foto", 3600) : null,
+    })),
+  );
+
+  res.json({ clientId: resolvedClientId, resources: equipeComFoto, scheduled, unscheduled });
 });
 
 const scheduleSchema = z.object({

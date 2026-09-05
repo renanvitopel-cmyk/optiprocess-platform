@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
 import { requireRole, CMMS_ROLES } from "../../middleware/rbac";
-import { listSpareParts, getSparePart, createSparePart, updateSparePart, deleteSparePart, addSparePartMovement } from "./controller";
+import { listSpareParts, getSparePart, createSparePart, updateSparePart, deleteSparePart, addSparePartMovement, getSparePartAlerts, getSparePartHistory } from "./controller";
 
 export const sparePartsRouter = Router();
 
@@ -10,8 +10,11 @@ export const sparePartsRouter = Router();
 // que tiver CMMS_MAINTENANCE contratado. So a exclusao fica restrita a equipe (ADMIN).
 sparePartsRouter.use(requireAuth, requireRole(...CMMS_ROLES));
 
+// Rota fixa antes da com :id, senao "alertas" seria lido como id de peca.
+sparePartsRouter.get("/alertas", getSparePartAlerts);
 sparePartsRouter.get("/", listSpareParts);
 sparePartsRouter.get("/:id", getSparePart);
+sparePartsRouter.get("/:id/historico", getSparePartHistory);
 sparePartsRouter.post("/", requireRole(...CMMS_ROLES), createSparePart);
 sparePartsRouter.patch("/:id", requireRole(...CMMS_ROLES), updateSparePart);
 sparePartsRouter.delete("/:id", requireRole("ADMIN"), deleteSparePart);

@@ -25,6 +25,7 @@ import type {
   FailureSeverity,
   CorrectiveType,
   MaintenanceBacklog,
+  WorkOrderMaterialLog,
   BacklogGroupBy,
 } from "./types";
 
@@ -190,9 +191,34 @@ export async function releaseWorkOrderReservation(workOrderId: string, reservati
   return data;
 }
 
-export async function consumeWorkOrderReservation(workOrderId: string, reservationId: string): Promise<SparePartMovement> {
-  const { data } = await api.post<SparePartMovement>(`/maintenance-work-orders/${workOrderId}/reservations/${reservationId}/consume`);
+/** Consome a reserva. `quantity` menor que a reservada baixa so o usado e devolve o resto
+ * ao estoque; omitida, consome tudo. */
+export async function consumeWorkOrderReservation(
+  workOrderId: string,
+  reservationId: string,
+  quantity?: number,
+): Promise<{ movement: SparePartMovement; consumida: number; devolvida: number }> {
+  const { data } = await api.post(`/maintenance-work-orders/${workOrderId}/reservations/${reservationId}/consume`, { quantity });
   return data;
+}
+
+/** Material previsto da OS: o que ela precisa, com obrigatoriedade e substituto. */
+export async function addWorkOrderPlannedMaterial(
+  workOrderId: string,
+  input: {
+    sparePartId: string;
+    quantityNeeded: number;
+    required?: boolean;
+    alternativeSparePartId?: string | null;
+    suggestedSupplier?: string | null;
+  },
+): Promise<WorkOrderMaterialLog> {
+  const { data } = await api.post<WorkOrderMaterialLog>(`/maintenance-work-orders/${workOrderId}/materiais-previstos`, input);
+  return data;
+}
+
+export async function removeWorkOrderPlannedMaterial(workOrderId: string, materialId: string): Promise<void> {
+  await api.delete(`/maintenance-work-orders/${workOrderId}/materiais-previstos/${materialId}`);
 }
 
 export async function addWorkOrderStoppage(

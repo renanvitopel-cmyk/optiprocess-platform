@@ -11,6 +11,15 @@ import { nextClientMaintenanceOrderNumber } from "../../utils/sequence";
 import { applySparePartMovement, reserveSparePart, releaseSparePartReservation, consumeSparePartReservation } from "../../lib/inventory";
 import { getStorageProvider } from "../../lib/storage";
 
+const pecaResumo = {
+  select: { id: true, name: true, code: true, unit: true, stockQty: true, reservedQty: true, minStock: true, unitCost: true },
+} as const;
+
+const materialLogInclude = {
+  sparePart: pecaResumo,
+  alternativeSparePart: pecaResumo,
+} as const;
+
 const detailInclude = {
   client: { select: { id: true, companyName: true, tradeName: true } },
   instrument: { select: { id: true, type: true, model: true, serialNumber: true, tag: true } },
@@ -40,6 +49,8 @@ const detailInclude = {
     orderBy: { createdAt: "asc" as const },
   },
   stoppages: { include: { reason: { select: { id: true, name: true } } }, orderBy: { startedAt: "asc" as const } },
+  // Material previsto da OS (o que ela precisa), com substituto e fornecedor sugerido.
+  materialLogs: { include: materialLogInclude, orderBy: { createdAt: "asc" as const } },
   // Investigacoes abertas a partir da falha registrada nesta OS.
   rootCauseAnalyses: { where: { deletedAt: null }, select: { id: true, status: true }, orderBy: { createdAt: "desc" as const } },
 };
@@ -93,8 +104,68 @@ export const getMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Re
     include: detailInclude,
   });
   if (!workOrder) throw new NotFoundError("Ordem de manutencao");
-  res.json(workOrder);
+  res.json({ ...workOrder, materialSummary: resumirMaterial(workOrder) });
 });
+
+/**
+ * Resumo de material da OS: previsto, reservado, consumido, saldo e o que falta, com custo
+ * previsto x realizado.
+ *
+ * Cada numero sai de uma fonte diferente e antes so existiam espalhados pela tela: o
+ * previsto no plano, o reservado nas reservas, o consumido nos movimentos. Quem precisava
+ * saber "posso executar esta OS amanha?" tinha que somar de cabeca.
+ */
+function resumirMaterial(workOrder: {
+  materialLogs: { sparePartId: string; quantityNeeded: number; required: boolean; sparePart: { name: string; unit: string; stockQty: number; reservedQty: number; minStock: number; unitCost: number | null } }[];
+  partReservations: { sparePartId: string; quantity: number }[];
+  partsUsed: { sparePartId: string; quantity: number; unitCost: number | null }[];
+}) {
+  const reservadoPorPeca = new Map<string, number>();
+  for (const r of workOrder.partReservations) {
+    reservadoPorPeca.set(r.sparePartId, (reservadoPorPeca.get(r.sparePartId) ?? 0) + r.quantity);
+  }
+  const consumidoPorPeca = new Map<string, number>();
+  for (const m of workOrder.partsUsed) {
+    consumidoPorPeca.set(m.sparePartId, (consumidoPorPeca.get(m.sparePartId) ?? 0) + m.quantity);
+  }
+
+  const itens = workOrder.materialLogs.map((log) => {
+    const reservado = reservadoPorPeca.get(log.sparePartId) ?? 0;
+    const consumido = consumidoPorPeca.get(log.sparePartId) ?? 0;
+    // Disponivel para ESTA OS: o saldo livre do almoxarifado mais o que ja esta reservado
+    // para ela - o proprio reservado nao pode contar como falta.
+    const livreNoAlmoxarifado = log.sparePart.stockQty - log.sparePart.reservedQty;
+    const cobertura = reservado + consumido;
+    const falta = Math.max(0, log.quantityNeeded - cobertura - Math.max(0, livreNoAlmoxarifado));
+    return {
+      sparePartId: log.sparePartId,
+      nome: log.sparePart.name,
+      unidade: log.sparePart.unit,
+      obrigatorio: log.required,
+      previsto: log.quantityNeeded,
+      reservado,
+      consumido,
+      saldoDisponivel: livreNoAlmoxarifado,
+      estoqueMinimo: log.sparePart.minStock,
+      abaixoDoMinimo: log.sparePart.stockQty <= log.sparePart.minStock,
+      falta,
+      custoPrevisto: log.sparePart.unitCost != null ? log.sparePart.unitCost * log.quantityNeeded : null,
+    };
+  });
+
+  const custoRealizado = workOrder.partsUsed.reduce((soma, m) => soma + (m.unitCost ?? 0) * m.quantity, 0);
+  const previstoConhecido = itens.every((i) => i.custoPrevisto != null);
+
+  return {
+    itens,
+    // Sem custo unitario em alguma peca o previsto ficaria menor que a realidade - melhor
+    // dizer que nao da para comparar do que mostrar um numero pela metade.
+    custoPrevisto: previstoConhecido ? itens.reduce((soma, i) => soma + (i.custoPrevisto ?? 0), 0) : null,
+    custoRealizado,
+    faltaObrigatorio: itens.some((i) => i.obrigatorio && i.falta > 0),
+    itensEmFalta: itens.filter((i) => i.falta > 0).length,
+  };
+}
 
 // Operacao do servico: o que fazer e quanto tempo se espera gastar nela.
 const checklistItemInput = z.object({
@@ -726,6 +797,71 @@ export const releaseWorkOrderReservation = asyncHandler(async (req: Request, res
   res.json(released);
 });
 
+/**
+ * Material previsto da OS: o que a ordem precisa, com obrigatoriedade, substituto e
+ * fornecedor sugerido.
+ *
+ * Ate aqui essa lista so existia nas OS geradas por plano (registro do que a geracao
+ * tentou reservar). Numa OS aberta a mao nao havia como dizer o que seria necessario -
+ * o planejador so descobria a falta na hora da execucao.
+ */
+const materialPrevistoSchema = z.object({
+  sparePartId: z.string().uuid(),
+  quantityNeeded: z.coerce.number().int().positive("Informe a quantidade prevista."),
+  required: z.boolean().optional(),
+  alternativeSparePartId: z.string().uuid().nullish(),
+  suggestedSupplier: z.string().nullish(),
+});
+
+export const addWorkOrderPlannedMaterial = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const data = materialPrevistoSchema.parse(req.body);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true, clientId: true },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
+  for (const id of [data.sparePartId, data.alternativeSparePartId].filter(Boolean) as string[]) {
+    const peca = await prisma.sparePart.findFirst({ where: { id, deletedAt: null }, select: { clientId: true } });
+    if (!peca) throw new NotFoundError("Peca do almoxarifado");
+    if (peca.clientId !== workOrder.clientId) throw new ValidationError("Essa peca e' de outra empresa.");
+  }
+  if (data.alternativeSparePartId === data.sparePartId) {
+    throw new ValidationError("O substituto precisa ser uma peca diferente da principal.");
+  }
+
+  const item = await prisma.workOrderMaterialLog.create({
+    data: {
+      workOrderId: workOrder.id,
+      sparePartId: data.sparePartId,
+      quantityNeeded: data.quantityNeeded,
+      required: data.required ?? true,
+      alternativeSparePartId: data.alternativeSparePartId ?? null,
+      suggestedSupplier: data.suggestedSupplier ?? null,
+      // Ainda nao reservado: reservar e' um passo proprio, feito pelo planejador.
+      reserved: false,
+      createdById: req.user?.sub,
+    },
+    include: materialLogInclude,
+  });
+  res.status(201).json(item);
+});
+
+export const removeWorkOrderPlannedMaterial = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const workOrder = await prisma.maintenanceWorkOrder.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!workOrder) throw new NotFoundError("Ordem de manutencao");
+
+  const item = await prisma.workOrderMaterialLog.findFirst({ where: { id: req.params.materialId, workOrderId: workOrder.id } });
+  if (!item) throw new NotFoundError("Material previsto");
+  await prisma.workOrderMaterialLog.delete({ where: { id: item.id } });
+  res.status(204).send();
+});
+
 export const consumeWorkOrderReservation = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const workOrder = await prisma.maintenanceWorkOrder.findFirst({
@@ -737,8 +873,10 @@ export const consumeWorkOrderReservation = asyncHandler(async (req: Request, res
   const reservation = await prisma.sparePartReservation.findFirst({ where: { id: req.params.reservationId, workOrderId: workOrder.id } });
   if (!reservation) throw new NotFoundError("Reserva");
 
-  const movement = await consumeSparePartReservation(reservation.id, req.user?.sub);
-  res.status(201).json(movement);
+  // Quantidade utilizada: se nao informada, consome a reserva inteira (caso comum).
+  const { quantity } = z.object({ quantity: z.coerce.number().int().positive().optional() }).parse(req.body ?? {});
+  const resultado = await consumeSparePartReservation(reservation.id, { quantity, createdById: req.user?.sub });
+  res.status(201).json(resultado);
 });
 
 // ---------------------------------------------------------------------------

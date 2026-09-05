@@ -22,6 +22,8 @@ import {
   addWorkOrderReservation,
   releaseWorkOrderReservation,
   consumeWorkOrderReservation,
+  addWorkOrderPlannedMaterial,
+  removeWorkOrderPlannedMaterial,
   addWorkOrderStoppage,
   updateWorkOrderStoppage,
   removeWorkOrderStoppage,
@@ -70,6 +72,8 @@ maintenanceWorkOrdersRouter.delete("/:id/labor/:entryId", requireRole(...CMMS_RO
 maintenanceWorkOrdersRouter.post("/:id/third-party-services", requireRole(...CMMS_ROLES), addWorkOrderThirdPartyService);
 maintenanceWorkOrdersRouter.delete("/:id/third-party-services/:serviceId", requireRole(...CMMS_ROLES), removeWorkOrderThirdPartyService);
 
+maintenanceWorkOrdersRouter.post("/:id/materiais-previstos", requireRole(...CMMS_ROLES), addWorkOrderPlannedMaterial);
+maintenanceWorkOrdersRouter.delete("/:id/materiais-previstos/:materialId", requireRole(...CMMS_ROLES), removeWorkOrderPlannedMaterial);
 maintenanceWorkOrdersRouter.post("/:id/reservations", requireRole(...CMMS_ROLES), addWorkOrderReservation);
 maintenanceWorkOrdersRouter.post("/:id/reservations/:reservationId/release", requireRole(...CMMS_ROLES), releaseWorkOrderReservation);
 maintenanceWorkOrdersRouter.post("/:id/reservations/:reservationId/consume", requireRole(...CMMS_ROLES), consumeWorkOrderReservation);

@@ -1,6 +1,6 @@
 import { api } from "./client";
 import type { PagedResult } from "./client";
-import type { SparePart, SparePartMovement } from "./types";
+import type { SparePart, SparePartMovement, SparePartAlerts, SparePartHistory } from "./types";
 
 export interface ListSparePartsParams {
   page?: number;
@@ -49,5 +49,17 @@ export async function addSparePartMovement(
   input: { type: "IN" | "OUT" | "ADJUSTMENT"; quantity: number; reason?: string; unitCost?: number | null },
 ): Promise<SparePartMovement> {
   const { data } = await api.post<SparePartMovement>(`/spare-parts/${id}/movements`, input);
+  return data;
+}
+
+/** Alertas do almoxarifado: abaixo do minimo, reservado para OS futura e OS sem material. */
+export async function getSparePartAlerts(params: { clientId?: string } = {}): Promise<SparePartAlerts> {
+  const { data } = await api.get<SparePartAlerts>("/spare-parts/alertas", { params });
+  return data;
+}
+
+/** Historico completo da peca: entrada, saida, ajuste, reserva, consumo e devolucao. */
+export async function getSparePartHistory(id: string): Promise<SparePartHistory> {
+  const { data } = await api.get<SparePartHistory>(`/spare-parts/${id}/historico`);
   return data;
 }

@@ -1104,6 +1104,9 @@ export interface MaintenanceWorkOrder {
   thirdPartyServices?: WorkOrderThirdPartyService[];
   partReservations?: SparePartReservation[];
   stoppages?: WorkOrderStoppage[];
+  /** Material previsto da OS e o resumo previsto x reservado x consumido x falta. */
+  materialLogs?: WorkOrderMaterialLog[];
+  materialSummary?: WorkOrderMaterialSummary;
   /** RCAs abertas a partir da falha registrada nesta OS. */
   rootCauseAnalyses?: { id: string; status: string }[];
   // Rastreabilidade: de onde esta OS veio (SS que a originou, ou OS + item de checklist
@@ -1434,4 +1437,92 @@ export interface MaintenanceBacklog {
     /** Fracao da fila que entra na conta de horas; null quando nao ha OS aberta. */
     coberturaPct: number | null;
   };
+}
+
+// ── Material da OS e alertas do almoxarifado ─────────────────────────────────
+
+/** Resumo da peca usado nas telas de material (saldo, reserva e minimo juntos). */
+export interface SparePartResumo {
+  id: string;
+  name: string;
+  code: string | null;
+  unit: string;
+  stockQty: number;
+  reservedQty: number;
+  minStock: number;
+  unitCost: number | null;
+}
+
+/** Material previsto de uma OS - o que ela precisa para ser executada. */
+export interface WorkOrderMaterialLog {
+  id: string;
+  workOrderId: string;
+  sparePartId: string;
+  sparePart: SparePartResumo;
+  quantityNeeded: number;
+  reserved: boolean;
+  reason: string | null;
+  required: boolean;
+  alternativeSparePartId: string | null;
+  alternativeSparePart?: SparePartResumo | null;
+  suggestedSupplier: string | null;
+  createdAt: string;
+}
+
+export interface WorkOrderMaterialSummaryItem {
+  sparePartId: string;
+  nome: string;
+  unidade: string;
+  obrigatorio: boolean;
+  previsto: number;
+  reservado: number;
+  consumido: number;
+  saldoDisponivel: number;
+  estoqueMinimo: number;
+  abaixoDoMinimo: boolean;
+  falta: number;
+  custoPrevisto: number | null;
+}
+
+export interface WorkOrderMaterialSummary {
+  itens: WorkOrderMaterialSummaryItem[];
+  /** null quando alguma peca esta sem custo unitario - nao da para comparar pela metade. */
+  custoPrevisto: number | null;
+  custoRealizado: number;
+  faltaObrigatorio: boolean;
+  itensEmFalta: number;
+}
+
+export interface SparePartAlerts {
+  abaixoDoMinimo: (SparePartResumo & { disponivel: number; faltaParaOMinimo: number })[];
+  reservadoParaOsFutura: {
+    reservationId: string;
+    quantity: number;
+    sparePart: { id: string; name: string; unit: string; stockQty: number; reservedQty: number };
+    workOrder: { id: string; number: string; title: string | null; status: MaintenanceOrderStatus; scheduledDate: string | null };
+  }[];
+  osComMaterialFaltando: {
+    id: string;
+    number: string;
+    title: string | null;
+    status: MaintenanceOrderStatus;
+    scheduledDate: string | null;
+    faltando: { nome: string; unidade: string; previsto: number; falta: number }[];
+  }[];
+  totais: { abaixoDoMinimo: number; reservasFuturas: number; osComFalta: number; osAtrasadasComFalta: number };
+}
+
+export type EventoDeEstoque = "ENTRADA" | "SAIDA" | "AJUSTE" | "RESERVA" | "CONSUMO" | "DEVOLUCAO";
+
+export interface SparePartHistory {
+  sparePart: { id: string; name: string; unit: string };
+  eventos: {
+    tipo: EventoDeEstoque;
+    quantidade: number;
+    quando: string;
+    usuario: string | null;
+    workOrder: { id: string; number: string } | null;
+    custoUnitario: number | null;
+    observacao: string | null;
+  }[];
 }

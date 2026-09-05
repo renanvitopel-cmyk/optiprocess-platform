@@ -1217,6 +1217,9 @@ model SparePartReservation {
   workOrderId String
   workOrder   MaintenanceWorkOrder        @relation(fields: [workOrderId], references: [id])
   quantity    Int
+  // Quanto foi de fato consumido ao executar. Pode ser menos que o reservado - o resto
+  // volta para o estoque no mesmo ato, em vez de ficar preso a uma OS ja encerrada.
+  consumedQuantity Int?
   status      SparePartReservationStatus  @default(RESERVED)
   createdById String?
   createdAt   DateTime                    @default(now())
@@ -1900,6 +1903,13 @@ model WorkOrderMaterialLog {
   reserved       Boolean
   // Motivo quando nao reservou: saldo insuficiente, peca inativa, etc.
   reason      String?
+  // Item obrigatorio impede (ou marca) a execucao quando falta; opcional so avisa.
+  required    Boolean  @default(true)
+  // Substituto aceito quando o principal nao tem saldo.
+  alternativeSparePartId String?
+  alternativeSparePart   SparePart? @relation("MaterialLogAlternative", fields: [alternativeSparePartId], references: [id])
+  suggestedSupplier      String?
+  createdById String?
   createdAt   DateTime @default(now())
 
   @@index([workOrderId])
@@ -1980,6 +1990,7 @@ model SparePart {
   @@index([active])
   @@map("spare_parts")
   lubricante Lubricant?
+  materialLogsComoAlternativa WorkOrderMaterialLog[] @relation("MaterialLogAlternative")
 }
 
 model SparePartMovement {

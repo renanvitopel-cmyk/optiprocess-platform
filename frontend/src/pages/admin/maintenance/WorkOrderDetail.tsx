@@ -348,11 +348,31 @@ export default function WorkOrderDetail() {
     }
   }
 
-  async function handleConsumeReservation(reservationId: string) {
+  /** Consumir a reserva pergunta QUANTO foi usado. Baixar a reserva inteira quando se usou
+   * menos tira do saldo pecas que continuam na prateleira - e o proximo a precisar delas
+   * recebe "sem saldo" com a peca na mao. O que sobra volta ao estoque no mesmo ato. */
+  async function handleConsumeReservation(reservationId: string, reservado: number, peca: string) {
+    const resposta = window.prompt(
+      `Quanto de "${peca}" foi realmente utilizado? (reservado: ${reservado})
+O que sobrar volta para o estoque.`,
+      String(reservado),
+    );
+    if (resposta === null) return;
+    const usado = Number(resposta);
+    if (!Number.isFinite(usado) || usado <= 0 || usado > reservado) {
+      notify("error", `Informe um numero entre 1 e ${reservado}.`);
+      return;
+    }
+
     setBusy(true);
     try {
-      await consumeWorkOrderReservation(id, reservationId);
-      notify("success", "Reserva consumida - baixa registrada no estoque.");
+      const r = await consumeWorkOrderReservation(id, reservationId, usado);
+      notify(
+        "success",
+        r.devolvida > 0
+          ? `Baixa de ${r.consumida} registrada - ${r.devolvida} devolvido ao estoque.`
+          : "Reserva consumida - baixa registrada no estoque.",
+      );
       invalidate();
       queryClient.invalidateQueries({ queryKey: ["spare-parts-picker"] });
     } catch (error) {
@@ -1011,6 +1031,85 @@ export default function WorkOrderDetail() {
 
       {tab === "materiais" && (
         <div className="space-y-6">
+        {/* Previsto x reservado x consumido x falta, numa tabela so. Antes cada numero
+            vivia num canto (previsto no plano, reservado nas reservas, consumido nos
+            movimentos) e quem precisava saber "da para executar amanha?" somava de cabeca. */}
+        {workOrder.materialSummary && workOrder.materialSummary.itens.length > 0 && (
+          <div className="card p-5">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-semibold text-navy-900">Material previsto</h2>
+              {workOrder.materialSummary.faltaObrigatorio ? (
+                <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-safety-red">
+                  Falta material obrigatorio - a OS nao tem como ser executada
+                </span>
+              ) : workOrder.materialSummary.itensEmFalta > 0 ? (
+                <span className="rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1 text-xs font-medium text-safety-yellow-dark">
+                  {workOrder.materialSummary.itensEmFalta} item(ns) opcional(is) em falta
+                </span>
+              ) : (
+                <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-safety-green-dark">
+                  Material coberto
+                </span>
+              )}
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase tracking-wide text-graphite-500">
+                  <tr>
+                    <th className="px-3 py-2">Peca</th>
+                    <th className="px-3 py-2 text-right">Necessario</th>
+                    <th className="px-3 py-2 text-right">Reservado</th>
+                    <th className="px-3 py-2 text-right">Consumido</th>
+                    <th className="px-3 py-2 text-right">Saldo livre</th>
+                    <th className="px-3 py-2 text-right">Falta</th>
+                    <th className="px-3 py-2 text-right">Custo previsto</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {workOrder.materialSummary.itens.map((m) => (
+                    <tr key={m.sparePartId} className={m.falta > 0 && m.obrigatorio ? "bg-red-50/40" : undefined}>
+                      <td className="px-3 py-2">
+                        <p className="font-medium text-navy-900">{m.nome}</p>
+                        <p className="text-xs text-graphite-400">
+                          {m.obrigatorio ? "Obrigatorio" : "Opcional"}
+                          {m.abaixoDoMinimo && <span className="ml-1 text-safety-red">- abaixo do estoque minimo</span>}
+                        </p>
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium text-navy-900">{m.previsto} {m.unidade}</td>
+                      <td className="px-3 py-2 text-right text-graphite-700">{m.reservado}</td>
+                      <td className="px-3 py-2 text-right text-graphite-700">{m.consumido}</td>
+                      <td className="px-3 py-2 text-right text-graphite-700">{m.saldoDisponivel}</td>
+                      <td className="px-3 py-2 text-right">
+                        {m.falta > 0 ? (
+                          <span className={m.obrigatorio ? "font-semibold text-safety-red" : "font-medium text-safety-yellow-dark"}>{m.falta}</span>
+                        ) : (
+                          <span className="text-graphite-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right text-graphite-700">
+                        {m.custoPrevisto != null ? formatCurrency(m.custoPrevisto) : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <p className="mt-3 text-sm text-graphite-600">
+              Custo previsto:{" "}
+              <span className="font-semibold text-navy-900">
+                {workOrder.materialSummary.custoPrevisto != null ? formatCurrency(workOrder.materialSummary.custoPrevisto) : "sem base"}
+              </span>
+              {" x realizado: "}
+              <span className="font-semibold text-navy-900">{formatCurrency(workOrder.materialSummary.custoRealizado)}</span>
+              {workOrder.materialSummary.custoPrevisto == null && (
+                <span className="text-xs text-graphite-500"> (alguma peca esta sem custo unitario cadastrado)</span>
+              )}
+            </p>
+          </div>
+        )}
+
         <div className="card space-y-3 p-5">
           <h2 className="font-semibold text-navy-900">Pecas consumidas (almoxarifado)</h2>
           {canManage && !isCompleted && (
@@ -1090,7 +1189,7 @@ export default function WorkOrderDetail() {
                   <span>{r.sparePart?.name ?? "Peca"} - {r.quantity} {r.sparePart?.unit ?? "un."}</span>
                   {canManage && !isCompleted && (
                     <div className="flex gap-2">
-                      <button onClick={() => handleConsumeReservation(r.id)} className="text-xs font-medium text-navy-700 hover:underline">Consumir</button>
+                      <button onClick={() => handleConsumeReservation(r.id, r.quantity, r.sparePart?.name ?? "peca")} className="text-xs font-medium text-navy-700 hover:underline">Consumir</button>
                       <button onClick={() => handleReleaseReservation(r.id)} className="text-graphite-400 hover:text-safety-red" aria-label="Liberar reserva">
                         <X className="h-4 w-4" />
                       </button>

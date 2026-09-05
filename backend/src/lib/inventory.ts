@@ -108,23 +108,51 @@ export async function releaseSparePartReservation(reservationId: string) {
   return updated;
 }
 
-/** Consome a reserva: vira uma baixa de verdade no estoque (SparePartMovement OUT) e
- * libera o saldo reservado. */
-export async function consumeSparePartReservation(reservationId: string, createdById?: string) {
+/**
+ * Consome a reserva: baixa do estoque o que foi REALMENTE usado e devolve o que sobrou.
+ *
+ * Antes o consumo era tudo-ou-nada: reservou 4 rolamentos, usou 2, saiam 4 do estoque. Os
+ * outros 2 estavam fisicamente na prateleira e sumiam do saldo - o proximo a precisar
+ * deles recebia "sem saldo" com a peca na mao. Agora a quantidade usada e' informada, sai
+ * so ela, e o restante da reserva volta a ficar disponivel no mesmo ato.
+ */
+export async function consumeSparePartReservation(
+  reservationId: string,
+  opcoes: { quantity?: number; createdById?: string } = {},
+) {
   const reservation = await prisma.sparePartReservation.findFirst({ where: { id: reservationId, status: "RESERVED" } });
   if (!reservation) throw new NotFoundError("Reserva");
+
+  const consumida = opcoes.quantity ?? reservation.quantity;
+  if (consumida <= 0) throw new ValidationError("Informe a quantidade utilizada.");
+  if (consumida > reservation.quantity) {
+    throw new ValidationError(
+      `A quantidade utilizada (${consumida}) e' maior que a reservada (${reservation.quantity}). Reserve mais antes de consumir.`,
+    );
+  }
+  const devolvida = reservation.quantity - consumida;
 
   const movement = await applySparePartMovement({
     sparePartId: reservation.sparePartId,
     type: "OUT",
-    quantity: reservation.quantity,
+    quantity: consumida,
     maintenanceWorkOrderId: reservation.workOrderId,
-    reason: "Consumo de reserva",
-    createdById,
+    reason: devolvida > 0 ? `Consumo de reserva (${devolvida} devolvido ao estoque)` : "Consumo de reserva",
+    createdById: opcoes.createdById,
   });
+
   await prisma.$transaction([
-    prisma.sparePartReservation.update({ where: { id: reservation.id }, data: { status: "CONSUMED", resolvedAt: new Date() } }),
-    prisma.sparePart.update({ where: { id: reservation.sparePartId }, data: { reservedQty: { decrement: reservation.quantity } } }),
+    prisma.sparePartReservation.update({
+      where: { id: reservation.id },
+      data: { status: "CONSUMED", consumedQuantity: consumida, resolvedAt: new Date() },
+    }),
+    // Libera a reserva INTEIRA: a parte consumida ja saiu do estoque no movimento acima, e
+    // a parte devolvida volta a ficar disponivel para outra OS.
+    prisma.sparePart.update({
+      where: { id: reservation.sparePartId },
+      data: { reservedQty: { decrement: reservation.quantity } },
+    }),
   ]);
-  return movement;
+
+  return { movement, consumida, devolvida };
 }

@@ -86,7 +86,7 @@ export const deleteLaborType = asyncHandler(async (req: Request, res: Response) 
     throw new ForbiddenError("Este tipo faz parte do catalogo padrao e nao pode ser removido.");
   }
 
-  const inUse = await prisma.laborResource.count({ where: { type: { equals: existing.name, mode: "insensitive" } } });
+  const inUse = await prisma.laborResource.count({ where: { type: { equals: existing.name, mode: "insensitive" }, deletedAt: null } });
   if (inUse > 0) throw new ValidationError("Este tipo ja esta em uso por algum recurso de mao de obra. Desative-o em vez de remover.");
 
   await prisma.laborType.delete({ where: { id: existing.id } });

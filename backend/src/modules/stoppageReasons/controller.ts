@@ -86,7 +86,7 @@ export const deleteStoppageReason = asyncHandler(async (req: Request, res: Respo
     throw new ForbiddenError("Este motivo faz parte do catalogo padrao e nao pode ser removido.");
   }
 
-  const inUse = await prisma.workOrderStoppage.count({ where: { reasonId: existing.id } });
+  const inUse = await prisma.workOrderStoppage.count({ where: { reasonId: existing.id, workOrder: { deletedAt: null } } });
   if (inUse > 0) throw new ValidationError("Este motivo ja esta em uso em alguma parada. Desative-o em vez de remover.");
 
   await prisma.stoppageReason.delete({ where: { id: existing.id } });

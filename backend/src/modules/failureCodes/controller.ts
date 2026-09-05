@@ -83,7 +83,7 @@ export const deleteFailureCode = asyncHandler(async (req: Request, res: Response
     throw new ForbiddenError("Este codigo faz parte do catalogo padrao e nao pode ser removido.");
   }
 
-  const inUse = await prisma.maintenanceWorkOrder.count({ where: { failureCodeId: existing.id } });
+  const inUse = await prisma.maintenanceWorkOrder.count({ where: { failureCodeId: existing.id, deletedAt: null } });
   if (inUse > 0) throw new ValidationError("Este codigo ja foi usado em ordens de manutencao. Desative-o em vez de remover.");
 
   await prisma.failureCode.delete({ where: { id: existing.id } });

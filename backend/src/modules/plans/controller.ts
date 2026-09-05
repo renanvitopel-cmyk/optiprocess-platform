@@ -69,7 +69,7 @@ export const deletePlan = asyncHandler(async (req: Request, res: Response) => {
   const existing = await prisma.plan.findUnique({ where: { id: req.params.id } });
   if (!existing) throw new NotFoundError("Plano");
 
-  const inUse = await prisma.client.count({ where: { planId: existing.id } });
+  const inUse = await prisma.client.count({ where: { planId: existing.id, deletedAt: null } });
   if (inUse > 0) throw new ValidationError("Este plano esta atribuido a clientes. Desative-o em vez de remover, ou mude o plano desses clientes primeiro.");
 
   await prisma.plan.delete({ where: { id: existing.id } });

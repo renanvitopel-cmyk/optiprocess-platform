@@ -86,7 +86,7 @@ export const deleteServiceRequestCategory = asyncHandler(async (req: Request, re
     throw new ForbiddenError("Esta categoria faz parte do catalogo padrao e nao pode ser removida.");
   }
 
-  const inUse = await prisma.serviceRequest.count({ where: { categoryId: existing.id } });
+  const inUse = await prisma.serviceRequest.count({ where: { categoryId: existing.id, deletedAt: null } });
   if (inUse > 0) throw new ValidationError("Esta categoria ja esta em uso por alguma solicitacao. Desative-a em vez de remover.");
 
   await prisma.serviceRequestCategory.delete({ where: { id: existing.id } });

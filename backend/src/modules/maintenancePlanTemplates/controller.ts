@@ -138,7 +138,7 @@ export const deleteMaintenancePlanTemplate = asyncHandler(async (req: Request, r
     throw new ForbiddenError("Este modelo faz parte do catalogo padrao e nao pode ser removido.");
   }
 
-  const inUse = await prisma.maintenancePlan.count({ where: { templateId: existing.id } });
+  const inUse = await prisma.maintenancePlan.count({ where: { templateId: existing.id, deletedAt: null } });
   if (inUse > 0) throw new ValidationError("Este modelo ja foi aplicado a planos existentes. Desative-o em vez de remover.");
 
   await prisma.maintenancePlanTemplate.delete({ where: { id: existing.id } });

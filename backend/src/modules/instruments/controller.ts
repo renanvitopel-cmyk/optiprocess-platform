@@ -387,8 +387,11 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
   // Planta/area/centro de custo nao sao digitados no filho: vem do pai (e o centro de
   // custo, do padrao da area). Excecao de centro de custo so o ADMIN faz.
   const context = await resolveInheritedContext(data.parentId, data);
-  const isAdmin = req.user?.role === "ADMIN";
-  const costCenterOverride = isAdmin && !!data.costCenterId && data.costCenterId !== context.costCenterId;
+  // No cadastro o centro de custo vem SEMPRE da area (propria, ou herdada do pai). Abrir
+  // excecao e' um ato deliberado sobre um ativo que ja existe, feito na edicao: antes,
+  // qualquer costCenterId que viesse no corpo virava excecao em silencio - inclusive num
+  // ativo filho, cujo formulario nem mostra esse campo.
+  const costCenterOverride = false;
 
   // Calibravel e' o que a OptiProcess presta servico sobre - e' o que separa a lista dela
   // da arvore do CMMS do cliente. Por isso a marca e' explicita: ou o usuario marcou, ou
@@ -411,7 +414,7 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
       clientId,
       plantId: context.plantId,
       areaId: context.areaId,
-      costCenterId: costCenterOverride ? data.costCenterId : context.costCenterId,
+      costCenterId: context.costCenterId,
       costCenterOverride,
       nextDueDate,
       createdById: req.user?.sub,

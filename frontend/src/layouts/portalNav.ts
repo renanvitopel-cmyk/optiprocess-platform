@@ -21,6 +21,11 @@ import {
   TrendingUp,
   History,
   ReceiptText,
+  HardHat,
+  Droplet,
+  LayoutGrid,
+  Briefcase,
+  Settings,
 } from "lucide-react";
 import type { ServiceCategory } from "../api/types";
 
@@ -37,6 +42,9 @@ export interface PortalNavItem {
 export interface PortalNavSection {
   /** Titulo do grupo; vazio no primeiro bloco, que nao precisa de rotulo. */
   title?: string;
+  /** Icone do grupo - o cabecalho tem o mesmo peso visual dos itens, entao precisa de um
+   * icone tambem: sem ele a linha do titulo ficava desalinhada das de baixo. */
+  icon?: LucideIcon;
   items: PortalNavItem[];
   /** Comeca recolhida. Serve para o que nao se usa todo dia nao competir com o que se usa. */
   defaultCollapsed?: boolean;
@@ -69,6 +77,7 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
     // estoque, o acompanhamento de condicao) porque sao rotinas de pessoas diferentes -
     // e porque um unico bloco de nove itens ja nao era um menu, era uma lista.
     title: "Operacional",
+    icon: HardHat,
     items: [
       { to: "/portal/manutencao", label: "Painel do CMMS", icon: Wrench, requires: ["CMMS_MAINTENANCE"], exact: true },
       { to: "/portal/manutencao/solicitacoes", label: "Solicitacoes", icon: ClipboardPlus, requires: ["CMMS_MAINTENANCE"] },
@@ -83,6 +92,7 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
     // ponto -> rota -> aplicacao -> previsao de consumo), com rotina e responsavel proprios,
     // e nao um item solto dentro de manutencao.
     title: "Lubrificacao",
+    icon: Droplet,
     defaultCollapsed: true,
     items: [
       { to: "/portal/lubrificacao", label: "Painel", icon: Droplets, requires: ["CMMS_MAINTENANCE"], exact: true },
@@ -95,6 +105,7 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
   },
   {
     title: "Gestao",
+    icon: LayoutGrid,
     defaultCollapsed: true,
     items: [
       { to: "/portal/instrumentos", label: "Meus ativos", icon: Gauge, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
@@ -104,6 +115,7 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
   },
   {
     title: "Servicos OptiProcess",
+    icon: Briefcase,
     defaultCollapsed: true,
     items: [
       // "Ordem de manutencao" (CMMS, executada pela propria equipe do cliente) e "ordens de
@@ -116,6 +128,7 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
   },
   {
     title: "Configuracao",
+    icon: Settings,
     items: [
       { to: "/portal/instrumentos/cadastros", label: "Cadastros", icon: SlidersHorizontal, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
       { to: "/portal/contrato", label: "Meu contrato", icon: ReceiptText },

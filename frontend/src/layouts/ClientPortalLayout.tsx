@@ -79,18 +79,21 @@ export function ClientPortalLayout() {
                 type="button"
                 onClick={() => alternarSecao(section.title!)}
                 aria-expanded={aberta}
-                /* Cabecalho de secao, nao campo de formulario: mesma altura e o mesmo
-                   respiro dos itens abaixo, e o anel de foco so aparece para quem navega
-                   por teclado - o outline amarelo padrao no clique parecia um input quebrado. */
-                className="mb-0.5 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-navy-300 outline-none transition-colors hover:bg-navy-800/50 hover:text-white focus-visible:ring-1 focus-visible:ring-navy-500"
+                /* O cabecalho tem o mesmo formato de um item de menu - icone a esquerda,
+                   mesma altura, mesmo espacamento - para a coluna de icones ficar alinhada
+                   de cima a baixo. O que o distingue e' o peso do texto e a seta a direita;
+                   o anel de foco so aparece para quem navega por teclado, porque o outline
+                   amarelo padrao no clique fazia o titulo parecer um campo quebrado. */
+                className="mb-0.5 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-semibold tracking-wide text-navy-200 outline-none transition-colors hover:bg-navy-800/60 hover:text-white focus-visible:ring-1 focus-visible:ring-navy-500"
               >
-                <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-navy-500 transition-transform ${aberta ? "" : "-rotate-90"}`} />
+                {section.icon && <section.icon className="h-4.5 w-4.5 shrink-0 text-navy-400" />}
                 <span className="min-w-0 truncate">{section.title}</span>
                 {!aberta && (
-                  <span className="ml-auto shrink-0 rounded-full bg-navy-800 px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-navy-300">
+                  <span className="shrink-0 rounded-full bg-navy-800 px-1.5 py-0.5 text-[10px] font-medium tracking-normal text-navy-300">
                     {section.items.length}
                   </span>
                 )}
+                <ChevronDown className={`ml-auto h-4 w-4 shrink-0 text-navy-500 transition-transform ${aberta ? "" : "-rotate-90"}`} />
               </button>
             ))}
           <div className={`flex flex-col gap-0.5 ${aberta ? "" : "hidden"}`}>

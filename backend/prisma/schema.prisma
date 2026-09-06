@@ -633,6 +633,10 @@ model Instrument {
   clientId                   String
   client                     Client            @relation(fields: [clientId], references: [id])
   type                       String
+  // Nivel na arvore (Planta > Area > Maquina > Subconjunto > Parte). Antes vinha do
+  // catalogo "Tipo de ativo", casando pelo nome - dois campos dizendo a mesma coisa, e o
+  // que mandava nas regras era o menos obvio dos dois. Agora e' do proprio ativo.
+  level                      AssetHierarchyLevel?
   tag                        String?
   // Nome do ativo em linguagem de gente ("Compressor de ar - Linha 4"). Junto com o TAG e'
   // o que identifica o equipamento nas telas; o resto e' ficha tecnica complementar.

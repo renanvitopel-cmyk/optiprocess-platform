@@ -6,8 +6,11 @@ import { z } from "zod";
 import { Modal } from "../../components/Modal";
 import { TextInput, SelectInput } from "../../components/form/Field";
 import { InstrumentPicker } from "../../components/InstrumentPicker";
+import { AssetLevelInput } from "../../components/AssetLevelInput";
 import { AssetTypeInput } from "../../components/AssetTypeInput";
 import { LocationPicker } from "../../components/LocationPicker";
+import { listAreas } from "../../api/areas";
+import { centroDeCustoComDescricao } from "../../lib/centroDeCusto";
 import { createInstrument, updateInstrument, getInstrument } from "../../api/instruments";
 import type { Instrument } from "../../api/types";
 import { useToast } from "../../components/Toast";
@@ -15,7 +18,8 @@ import { getApiErrorMessage } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
 
 const schema = z.object({
-  type: z.string().min(2, "Informe o tipo de equipamento."),
+  level: z.enum(["PLANT", "AREA", "MACHINE", "SUBASSEMBLY", "PART"]).optional().or(z.literal("")),
+  type: z.string().optional(),
   tag: z.string().min(1, "Informe o TAG do ativo."),
   description: z.string().min(2, "Informe a descricao do ativo."),
   manufacturer: z.string().optional(),
@@ -28,7 +32,6 @@ const schema = z.object({
   parentId: z.string().uuid().optional().or(z.literal("")),
   plantId: z.string().uuid().optional().or(z.literal("")),
   areaId: z.string().uuid().optional().or(z.literal("")),
-  costCenterId: z.string().uuid().optional().or(z.literal("")),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -54,6 +57,20 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
 
   // O pai escolhido define o contexto herdado mostrado acima.
   const parentId = watch("parentId");
+  // O tipo so aparece depois do nivel escolhido - e' ele que diz qual lista faz sentido.
+  const nivel = watch("level") || undefined;
+  const plantId = watch("plantId");
+  const areaId = watch("areaId");
+
+  // O centro de custo nao se escolhe no ativo: ele e' o padrao da area. Antes o formulario
+  // perguntava e o backend descartava logo em seguida - a pessoa preenchia e depois nao
+  // encontrava o que tinha escolhido.
+  const { data: areasDaPlanta } = useQuery({
+    queryKey: ["areas-centro-custo", plantId],
+    queryFn: () => listAreas({ plantId: plantId as string, active: true }),
+    enabled: !!plantId && !parentId,
+  });
+  const centroDaArea = (areasDaPlanta ?? []).find((a) => a.id === areaId)?.costCenter ?? null;
   const { data: pai } = useQuery({
     queryKey: ["instrument-parent-context", parentId],
     queryFn: () => getInstrument(parentId as string),
@@ -65,7 +82,8 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
       reset(
         instrument
           ? {
-              type: instrument.type,
+              level: instrument.level ?? "",
+              type: instrument.type ?? "",
               tag: instrument.tag ?? "",
               description: instrument.description ?? "",
               manufacturer: instrument.manufacturer ?? "",
@@ -78,7 +96,6 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
               parentId: instrument.parentId ?? "",
               plantId: instrument.plantId ?? "",
               areaId: instrument.areaId ?? "",
-              costCenterId: instrument.costCenterId ?? "",
             }
           : { criticality: "MEDIUM", operationalStatus: "IN_OPERATION", parentId: initialParentId ?? "", tag: initialTagPrefix ?? "" },
       );
@@ -94,9 +111,10 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
         model: values.model || null,
         serialNumber: values.serialNumber || null,
         parentId: values.parentId || null,
+        level: values.level || null,
+        type: values.type || undefined,
         plantId: values.plantId || null,
         areaId: values.areaId || null,
-        costCenterId: values.costCenterId || null,
         calibrationFrequencyMonths: values.calibrationFrequencyMonths || null,
       };
       const saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
@@ -139,7 +157,15 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
-          <AssetTypeInput required currentValue={instrument?.type} error={errors.type?.message} {...register("type")} />
+          <AssetLevelInput
+            error={errors.level?.message}
+            {...register("level", {
+              // Trocar o nivel muda a lista do campo seguinte: manter "Bomba" num ativo que
+              // virou "Parte" deixaria a ficha dizendo uma coisa que a lista nao oferece.
+              onChange: () => setValue("type", ""),
+            })}
+          />
+          {nivel && <AssetTypeInput nivel={nivel} currentValue={instrument?.type} {...register("type")} />}
           <SelectInput
             label="Criticidade"
             hint="Quanto uma parada deste ativo pesa pra sua operacao."
@@ -201,14 +227,23 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
               Como este ativo nao tem pai, e' aqui que planta e area sao definidas - todo ativo abaixo dele herda.
             </p>
             <div className="mt-3">
-              <LocationPicker clientId={user?.clientId ?? undefined} register={register} watch={watch} setValue={setValue} />
+              <LocationPicker clientId={user?.clientId ?? undefined} register={register} watch={watch} setValue={setValue} hideCostCenter />
             </div>
+            {areaId && (
+              <p className="mt-3 text-xs text-graphite-500">
+                Centro de custo:{" "}
+                <span className="font-medium text-graphite-800">
+                  {centroDaArea ? centroDeCustoComDescricao(centroDaArea) : "a area escolhida ainda nao tem um padrao"}
+                </span>{" "}
+                - vem da area, nao se digita aqui.
+              </p>
+            )}
           </div>
         )}
         <div className="grid gap-4 sm:grid-cols-3">
-          <TextInput label="Fabricante" required error={errors.manufacturer?.message} {...register("manufacturer")} />
-          <TextInput label="Modelo" required error={errors.model?.message} {...register("model")} />
-          <TextInput label="Numero de serie" required error={errors.serialNumber?.message} {...register("serialNumber")} />
+          <TextInput label="Fabricante" {...register("manufacturer")} />
+          <TextInput label="Modelo" {...register("model")} />
+          <TextInput label="Numero de serie" {...register("serialNumber")} />
         </div>
         <TextInput label="Local de instalacao" {...register("installationLocation")} />
         <TextInput

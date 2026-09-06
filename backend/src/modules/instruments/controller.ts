@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { InstrumentStatus, MaintenancePriority, OperationalStatus } from "@prisma/client";
+import { AssetHierarchyLevel, InstrumentStatus, MaintenancePriority, OperationalStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -17,14 +17,11 @@ function withDerivedStatus<T extends { status: InstrumentStatus; nextDueDate: Da
   return { ...instrument, derivedStatus: derived };
 }
 
-/** Resolve o nivel hierarquico (Planta/Area/Maquina/Subconjunto/Parte) do "type" (texto
- * livre) de cada ativo, casando por nome (case-insensitive) contra o catalogo AssetType -
- * so pra arvore de ativos escolher o icone certo, sem precisar virar chave estrangeira. */
-async function attachAssetTypeLevel<T extends { type: string }>(instruments: T[]): Promise<(T & { assetTypeLevel: string | null })[]> {
-  if (instruments.length === 0) return [];
-  const types = await prisma.assetType.findMany({ where: { level: { not: null } }, select: { name: true, level: true } });
-  const byName = new Map(types.map((t) => [t.name.toLowerCase(), t.level]));
-  return instruments.map((i) => ({ ...i, assetTypeLevel: byName.get(i.type.toLowerCase()) ?? null }));
+/** A arvore de ativos usa o nivel so pra escolher o icone de cada item. O nivel mora no
+ * proprio ativo desde que "Tipo de ativo" saiu do cadastro; este apelido existe pra nao
+ * quebrar as telas que ja liam "assetTypeLevel". */
+function attachAssetTypeLevel<T extends { level: string | null }>(instruments: T[]): (T & { assetTypeLevel: string | null })[] {
+  return instruments.map((i) => ({ ...i, assetTypeLevel: i.level }));
 }
 
 /** Troca a chave de armazenamento por um link temporario que a tela consegue exibir.
@@ -109,7 +106,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
     prisma.instrument.count({ where }),
   ]);
 
-  const withLevel = await attachPhotoUrl(await attachAssetTypeLevel(items.map(withDerivedStatus)));
+  const withLevel = await attachPhotoUrl(attachAssetTypeLevel(items.map(withDerivedStatus)));
   res.json(buildPagedResult(withLevel, total, pageParams));
 });
 
@@ -144,7 +141,7 @@ export const getInstrument = asyncHandler(async (req: Request, res: Response) =>
     },
   });
   if (!instrument) throw new NotFoundError("Instrumento");
-  const [withLevel] = await attachPhotoUrl(await attachAssetTypeLevel([withDerivedStatus(instrument)]));
+  const [withLevel] = await attachPhotoUrl(attachAssetTypeLevel([withDerivedStatus(instrument)]));
   res.json(withLevel);
 });
 
@@ -152,9 +149,14 @@ const instrumentSchema = z.object({
   // Opcional aqui porque o portal do cliente nunca envia clientId (o backend forca a
   // propria empresa do usuario); obrigatorio apenas para a equipe interna, checado abaixo.
   clientId: z.string().uuid().optional(),
-  // Opcional: o cadastro inicial pede so TAG, descricao, onde o ativo fica e a foto. O tipo
-  // (e o resto da ficha) e' completado depois, na propria ficha do ativo.
+  // "Tipo de ativo" saiu do cadastro: era um campo de texto que duplicava o nivel da
+  // arvore. Continua aceito na API pra nao quebrar integracao antiga, mas quem manda e' o
+  // nivel - e o "type" gravado passa a ser o rotulo dele.
   type: z.string().min(2).optional(),
+  // Onde o ativo fica na arvore: Planta > Area > Maquina > Subconjunto > Parte.
+  // Opcional porque o cadastro rapido nao pergunta - fica sem nivel, e nenhuma regra
+  // dispara em cima de um ativo incompleto.
+  level: z.nativeEnum(AssetHierarchyLevel).nullish(),
   // TAG e o codigo que identifica o ativo (cadastrado pelo cliente ou pela OptiProcess) -
   // e' o que agrupa, na ficha do ativo, todas as calibracoes e ordens de servico dele.
   tag: z.string().min(1, "Informe o TAG do ativo."),
@@ -219,19 +221,15 @@ async function assertLocationFieldsBelongToClient(clientId: string, data: Pick<z
 // para nao repetir (nem divergir) a mesma informacao em cada nivel.
 // ---------------------------------------------------------------------------
 
-/** Nivel do tipo escolhido (PLANT/AREA/MACHINE/SUBASSEMBLY/PART), resolvido pelo nome
- * contra o catalogo AssetType. null = tipo fora do catalogo, sem nivel definido. */
-async function resolveAssetLevel(type: string): Promise<string | null> {
-  const assetType = await prisma.assetType.findFirst({
-    where: { name: { equals: type, mode: "insensitive" } },
-    select: { level: true },
-  });
-  return assetType?.level ?? null;
-}
-
-/** So equipamento de verdade (maquina, motor, instrumento) tem ficha de fabricante que
- * faz sentido exigir. Planta, area, linha, sistema e componente nao tem numero de serie. */
-const LEVELS_COM_FICHA_TECNICA = new Set(["MACHINE"]);
+/** Rotulo de cada nivel - e' o que fica gravado em "type", que continua sendo o texto
+ * curto que as telas e o log de auditoria mostram ao lado do TAG. */
+const ROTULO_DO_NIVEL: Record<AssetHierarchyLevel, string> = {
+  PLANT: "Planta",
+  AREA: "Area",
+  MACHINE: "Maquina",
+  SUBASSEMBLY: "Subconjunto",
+  PART: "Parte",
+};
 
 /** Tipo de um ativo cadastrado pelo caminho rapido, que ainda nao foi classificado. */
 export const TIPO_A_DEFINIR = "A definir";
@@ -299,31 +297,25 @@ async function propagateContextToDescendants(instrumentId: string, depth = 0): P
   }
 }
 
-/** Regras de preenchimento que dependem do nivel do ativo (requisitos 5 e 6). */
-async function assertLevelRules(
-  data: { type?: string; description?: string | null; parentId?: string | null; manufacturer?: string | null; model?: string | null; serialNumber?: string | null },
+/**
+ * Regras que dependem do nivel do ativo na arvore.
+ *
+ * Fabricante, modelo e numero de serie NAO entram aqui: uma linha de producao, um tanque
+ * ou um sistema hidraulico nao tem numero de serie, e exigir isso so fazia digitar "-"
+ * para escapar do campo.
+ */
+function assertLevelRules(
+  data: { level?: AssetHierarchyLevel | null; description?: string | null; parentId?: string | null },
   { isCreate }: { isCreate: boolean },
-): Promise<void> {
-  // Sem tipo escolhido nao ha nivel, e portanto nenhuma regra de nivel a cobrar.
-  const level = data.type ? await resolveAssetLevel(data.type) : null;
-
+): void {
   if (isCreate && !data.description?.trim()) {
     throw new ValidationError("Informe a descricao do ativo.");
   }
 
   // Ativo raiz e' a planta; qualquer outro nivel precisa dizer de quem faz parte.
-  if (isCreate && level && level !== "PLANT" && !data.parentId) {
+  // Sem nivel escolhido nao ha regra a cobrar - o cadastro rapido continua passando.
+  if (isCreate && data.level && data.level !== "PLANT" && !data.parentId) {
     throw new ValidationError("Informe o ativo pai - so a planta fica na raiz da arvore.");
-  }
-
-  if (level && LEVELS_COM_FICHA_TECNICA.has(level)) {
-    const faltando: string[] = [];
-    if (!data.manufacturer?.trim()) faltando.push("fabricante");
-    if (!data.model?.trim()) faltando.push("modelo");
-    if (!data.serialNumber?.trim()) faltando.push("numero de serie");
-    if (faltando.length > 0) {
-      throw new ValidationError(`Para este tipo de ativo, informe tambem: ${faltando.join(", ")}.`);
-    }
   }
 }
 
@@ -379,7 +371,7 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
   await assertTagAvailable(clientId, data.tag);
   if (data.parentId) await assertValidParent(clientId, data.parentId);
   await assertLocationFieldsBelongToClient(clientId, data);
-  await assertLevelRules(data, { isCreate: true });
+  assertLevelRules(data, { isCreate: true });
   const nextDueDate = data.lastCalibrationDate && data.calibrationFrequencyMonths
     ? computeNextDueDate(data.lastCalibrationDate, data.calibrationFrequencyMonths)
     : null;
@@ -406,10 +398,10 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
   const instrument = await prisma.instrument.create({
     data: {
       ...data,
-      // Cadastro rapido nao escolhe tipo; fica marcado como pendente ate alguem completar
-      // a ficha - e' honesto na tela e nao casa com nenhum nivel da arvore, entao nenhuma
-      // regra de nivel dispara em cima de um ativo incompleto.
-      type: data.type ?? TIPO_A_DEFINIR,
+      // O texto do tipo acompanha o nivel escolhido. Cadastro rapido nao escolhe nivel:
+      // fica "A definir", honesto na tela, e nenhuma regra de nivel dispara em cima de um
+      // ativo incompleto.
+      type: data.type ?? (data.level ? ROTULO_DO_NIVEL[data.level] : TIPO_A_DEFINIR),
       calibratable,
       clientId,
       plantId: context.plantId,
@@ -477,6 +469,9 @@ export const updateInstrument = asyncHandler(async (req: Request, res: Response)
     where: { id: req.params.id },
     data: {
       ...data,
+      // Trocar o nivel troca junto o texto do tipo, senao a ficha mostraria "Maquina"
+      // num ativo que virou "Subconjunto".
+      ...(data.level && !data.type ? { type: ROTULO_DO_NIVEL[data.level] } : {}),
       plantId: context.plantId,
       areaId: context.areaId,
       costCenterId,

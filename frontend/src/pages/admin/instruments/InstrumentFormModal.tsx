@@ -8,10 +8,10 @@ import { Modal } from "../../../components/Modal";
 import { TextInput, SelectInput, CheckboxInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
 import { AssetTypeInput } from "../../../components/AssetTypeInput";
+import { AssetLevelInput } from "../../../components/AssetLevelInput";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { LocationPicker } from "../../../components/LocationPicker";
 import { createInstrument, updateInstrument, getInstrument, uploadInstrumentPhoto, deleteInstrumentPhoto } from "../../../api/instruments";
-import { listAssetTypes } from "../../../api/assetTypes";
 import { listAreas } from "../../../api/areas";
 import type { Instrument } from "../../../api/types";
 import { useQuery } from "@tanstack/react-query";
@@ -31,6 +31,7 @@ const schema = z.object({
   installationLocation: z.string().optional(),
   calibratable: z.boolean().optional(),
   costCenterId: z.string().uuid().optional().or(z.literal("")),
+  level: z.enum(["PLANT", "AREA", "MACHINE", "SUBASSEMBLY", "PART"]).optional().or(z.literal("")),
   // Ficha do fabricante - opcional, fica recolhida.
   manufacturer: z.string().optional(),
   model: z.string().optional(),
@@ -89,16 +90,8 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
   const { user } = useAuth();
   const clientId = watch("clientId");
   const parentId = watch("parentId");
-  const selectedType = watch("type");
   const tracksCalibration = !!watch("calibrationFrequencyMonths");
 
-  // Nivel do tipo escolhido decide o que e' obrigatorio (requisito 5) e se o ativo pode
-  // ficar na raiz da arvore (requisito 6).
-  const { data: assetTypes } = useQuery({
-    queryKey: ["asset-types-picker"],
-    queryFn: () => listAssetTypes({ active: true }),
-    staleTime: 60_000,
-  });
   // Cadastro novo e' o caminho rapido: so o que identifica o ativo e onde ele fica. A ficha
   // completa (tipo, criticidade, fabricante, calibracao) aparece ao editar - assim ninguem
   // precisa saber tudo sobre o equipamento para conseguir cadastra-lo.
@@ -118,9 +111,9 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
   const centroDaArea = (areasDaPlanta ?? []).find((a) => a.id === areaId)?.costCenter ?? null;
   const centroDeCustoDaArea = centroDaArea ? centroDeCustoComDescricao(centroDaArea) : null;
 
-  const level = (assetTypes ?? []).find((t) => t.name.toLowerCase() === (selectedType ?? "").toLowerCase())?.level ?? null;
+  // O nivel e' escolhido direto, nao mais deduzido do nome do tipo.
+  const level = watch("level") || null;
   const isRoot = level === "PLANT";
-  const exigeFichaTecnica = level === "MACHINE";
 
   // Contexto herdado do pai - so leitura, o filho nao redefine planta/area/centro de custo.
   const { data: parent } = useQuery({
@@ -146,6 +139,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               installationLocation: instrument.installationLocation ?? "",
               calibratable: instrument.calibratable,
               costCenterId: instrument.costCenterId ?? "",
+              level: instrument.level ?? "",
               manufacturer: instrument.manufacturer ?? "",
               model: instrument.model ?? "",
               serialNumber: instrument.serialNumber ?? "",
@@ -182,6 +176,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
         plantId: values.plantId || null,
         areaId: values.areaId || null,
         costCenterId: values.costCenterId || null,
+        level: values.level || null,
         calibrationFrequencyMonths: values.calibrationFrequencyMonths || null,
       };
       let saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
@@ -302,7 +297,11 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
         {!modoRapido && (
         <>
         <div className="grid gap-4 sm:grid-cols-3">
-          <AssetTypeInput currentValue={instrument?.type} error={errors.type?.message} {...register("type")} />
+          <AssetLevelInput
+            error={errors.level?.message}
+            {...register("level", { onChange: () => setValue("type", "") })}
+          />
+          {level && <AssetTypeInput nivel={level} currentValue={instrument?.type} error={errors.type?.message} {...register("type")} />}
           <SelectInput
             label="Criticidade"
             hint="Quanto uma parada pesa pra empresa."
@@ -326,21 +325,11 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
             {...register("operationalStatus")}
           />
         </div>
-        <Section
-          title="Ficha do fabricante"
-          hint={exigeFichaTecnica ? "obrigatoria para este tipo" : "opcional"}
-          defaultOpen={exigeFichaTecnica}
-        >
-          {exigeFichaTecnica && (
-            <p className="text-xs text-graphite-500">
-              Equipamento/maquina tem ficha de fabricante rastreavel - por isso os tres campos abaixo sao exigidos
-              neste tipo de ativo. Em area, linha, sistema ou componente eles ficam opcionais.
-            </p>
-          )}
+        <Section title="Ficha do fabricante" hint="opcional">
           <div className="grid gap-4 sm:grid-cols-3">
-            <TextInput label="Fabricante" required={exigeFichaTecnica} {...register("manufacturer")} />
-            <TextInput label="Modelo" required={exigeFichaTecnica} {...register("model")} />
-            <TextInput label="Numero de serie" required={exigeFichaTecnica} {...register("serialNumber")} />
+            <TextInput label="Fabricante" {...register("manufacturer")} />
+            <TextInput label="Modelo" {...register("model")} />
+            <TextInput label="Numero de serie" {...register("serialNumber")} />
           </div>
           <TextInput label="Ponto de instalacao" placeholder="Ex.: Casa de maquinas, painel 3" {...register("installationLocation")} />
         </Section>

@@ -5,34 +5,31 @@ import { SelectInput } from "./form/Field";
 import { ASSET_LEVEL_LABELS } from "../lib/assetHierarchy";
 import type { AssetHierarchyLevel } from "../api/types";
 
-/** O que cada nivel exige - dito no proprio seletor, na hora da escolha. */
-const DICA_DO_NIVEL: Record<AssetHierarchyLevel, string> = {
-  PLANT: " - fica na raiz, sem ativo pai",
-  AREA: " - exige ativo pai",
-  MACHINE: " - exige ativo pai, fabricante, modelo e numero de serie",
-  SUBASSEMBLY: " - exige ativo pai",
-  PART: " - exige ativo pai",
-};
-
 interface Props {
   label?: string;
   error?: string;
   required?: boolean;
   name: string;
+  /** Nivel ja escolhido - a lista mostra so os tipos que fazem sentido nele. */
+  nivel: AssetHierarchyLevel;
   /** Valor atual do ativo sendo editado - se nao estiver mais no catalogo ativo (tipo
-   * desativado, digitado antes desta lista existir...), entra como opcao extra pra nao
+   * desativado, ou cadastrado antes desta lista existir), entra como opcao extra pra nao
    * trocar o tipo do ativo silenciosamente so por abrir o formulario de edicao. */
   currentValue?: string | null;
   onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   onBlur?: (e: React.FocusEvent<HTMLSelectElement>) => void;
 }
 
-/** Lista fechada do catalogo "Tipo de ativo" (Planta/Maquina/Subconjunto/Parte...) - so
- * escolhe entre o que ja esta cadastrado. Cadastrar um tipo novo agora e' deliberado, na
- * tela "Tipos de ativo" (onde da pra escolher o nivel certo), nao mais digitando aqui -
- * evita que qualquer coisa (ex.: um cargo de mao de obra) vire "tipo de ativo" por engano. */
+/**
+ * Que equipamento e' este, dentro do nivel ja escolhido: uma Maquina pode ser Bomba,
+ * Compressor, Motor eletrico...; um Subconjunto pode ser Redutor ou Valvula.
+ *
+ * Este campo so aparece depois do nivel. Antes ele era a primeira e unica escolha, numa
+ * lista corrida de dezenas de nomes onde "Planta" e "Bomba" apareciam lado a lado e nada
+ * dizia que era essa escolha que definia o nivel do ativo.
+ */
 export const AssetTypeInput = forwardRef<HTMLSelectElement, Props>(function AssetTypeInput(
-  { label = "Tipo de ativo", currentValue, ...rest },
+  { label, nivel, currentValue, ...rest },
   ref,
 ) {
   const { data: types } = useQuery({
@@ -41,41 +38,24 @@ export const AssetTypeInput = forwardRef<HTMLSelectElement, Props>(function Asse
     staleTime: 60_000,
   });
 
-  // Agrupado por NIVEL, porque e' o nivel que decide as regras do cadastro: so Planta fica
-  // na raiz, e Maquina exige fabricante/modelo/numero de serie. Numa lista corrida de
-  // "Bomba, Motor, Planta, Valvula" nao havia como perceber isso antes de escolher.
-  const ordem: (AssetHierarchyLevel | "SEM_NIVEL")[] = ["PLANT", "AREA", "MACHINE", "SUBASSEMBLY", "PART", "SEM_NIVEL"];
-  const porNivel = new Map<string, { value: string; label: string }[]>();
-  for (const t of types ?? []) {
-    const chave = t.level ?? "SEM_NIVEL";
-    const lista = porNivel.get(chave) ?? [];
-    lista.push({ value: t.name, label: t.name });
-    porNivel.set(chave, lista);
-  }
+  const options = (types ?? [])
+    .filter((t) => t.level === nivel)
+    .map((t) => ({ value: t.name, label: t.name }));
 
-  const grupos = ordem
-    .filter((nivel) => (porNivel.get(nivel)?.length ?? 0) > 0)
-    .map((nivel) => ({
-      titulo:
-        nivel === "SEM_NIVEL"
-          ? "Sem nivel definido - nenhuma regra e' aplicada"
-          : `${ASSET_LEVEL_LABELS[nivel as AssetHierarchyLevel]}${DICA_DO_NIVEL[nivel as AssetHierarchyLevel]}`,
-      options: (porNivel.get(nivel) ?? []).sort((a, b) => a.label.localeCompare(b.label)),
-    }));
-
-  const options = grupos.flatMap((g) => g.options);
-  if (currentValue && !options.some((o) => o.value.toLowerCase() === currentValue.toLowerCase())) {
-    grupos.unshift({ titulo: "Fora do catalogo", options: [{ value: currentValue, label: currentValue }] });
+  // O rotulo do nivel ("Maquina", "Parte") e' o que fica gravado quando ninguem escolhe um
+  // tipo especifico - nao e' um tipo do catalogo, entao nao vale como opcao extra aqui.
+  const rotuloDoNivel = ASSET_LEVEL_LABELS[nivel];
+  if (currentValue && currentValue !== rotuloDoNivel && !options.some((o) => o.value === currentValue)) {
+    options.unshift({ value: currentValue, label: `${currentValue} (fora da lista deste nivel)` });
   }
 
   return (
     <SelectInput
       ref={ref}
-      label={label}
-      placeholder="Selecione..."
-      hint="O nivel do tipo define as regras do cadastro. Cadastre tipos novos em Ativos > Tipos de ativo."
+      label={label ?? `Tipo de ${rotuloDoNivel.toLowerCase()}`}
+      placeholder="Nao especificar"
+      hint="Opcional. Novos tipos em Cadastros > Tipos de ativo."
       options={options}
-      grupos={grupos}
       {...rest}
     />
   );

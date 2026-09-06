@@ -151,7 +151,10 @@ export interface Instrument {
   id: string;
   clientId: string;
   client?: ClientRef;
+  /** Rotulo curto mostrado ao lado do TAG - acompanha o nivel escolhido. */
   type: string;
+  /** Onde o ativo fica na arvore. Vazio = ainda nao classificado (cadastro rapido). */
+  level: AssetHierarchyLevel | null;
   tag: string | null;
   /** Nome do ativo em linguagem de gente - junto do TAG e' o que identifica nas telas. */
   description: string | null;

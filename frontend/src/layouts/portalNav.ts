@@ -109,6 +109,11 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
     icon: LayoutGrid,
     defaultCollapsed: true,
     items: [
+      // Antes dos ativos de proposito: planta, area, centro de custo, tipo de ativo e as
+      // funcoes da equipe precisam existir para o primeiro ativo ser cadastrado inteiro.
+      // Ficava em "Configuracao", no rodape, como se fosse ajuste raro - e quem chegava
+      // para cadastrar o parque so descobria os catalogos depois de tropecar neles.
+      { to: "/portal/instrumentos/cadastros", label: "Cadastros tecnicos", icon: SlidersHorizontal, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
       { to: "/portal/instrumentos", label: "Meus ativos", icon: Gauge, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
       { to: "/portal/almoxarifado", label: "Almoxarifado", icon: Boxes, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/pareto", label: "Falhas e RCA", icon: BarChart3, requires: ["CMMS_MAINTENANCE"] },
@@ -131,7 +136,6 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
     title: "Configuracao",
     icon: Settings,
     items: [
-      { to: "/portal/instrumentos/cadastros", label: "Cadastros", icon: SlidersHorizontal, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/importar", label: "Importar dados", icon: FileSpreadsheet, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/contrato", label: "Meu contrato", icon: ReceiptText },
       { to: "/portal/perfil", label: "Meu perfil", icon: User },

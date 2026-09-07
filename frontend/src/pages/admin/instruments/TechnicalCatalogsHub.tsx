@@ -43,9 +43,9 @@ export default function TechnicalCatalogsHub() {
   return (
     <div>
       <PageHeader
-        title="Cadastros"
+        title="Cadastros tecnicos"
         description="Configure uma vez e use sempre - estrutura de ativos, padroes de manutencao e equipe"
-        breadcrumbs={[{ label: "RLP Maintenance CMMS", to: base }, { label: "Cadastros" }]}
+        breadcrumbs={[{ label: "RLP Maintenance CMMS", to: base }, { label: "Cadastros tecnicos" }]}
       />
 
       <div className="space-y-8">

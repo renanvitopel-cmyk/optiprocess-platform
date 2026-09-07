@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
+import { clientScopeFilter, assertServiceAccess, resolveClientScope } from "../../middleware/rbac";
 import { nextDocumentNumber } from "../../utils/sequence";
 import { getStorageProvider } from "../../lib/storage";
 
@@ -28,8 +28,7 @@ export const listTechnicalReports = asyncHandler(async (req: Request, res: Respo
 
   const where = {
     deletedAt: null,
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(category ? { category } : {}),
     ...(isClientUser ? { visibleToClient: true, status: "ISSUED" as const } : {}),
     ...(search ? { number: { contains: search, mode: "insensitive" as const } } : {}),

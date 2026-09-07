@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId, STAFF_ROLES } from "../../middleware/rbac";
+import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId, STAFF_ROLES, resolveClientScope } from "../../middleware/rbac";
 import { nextClientServiceRequestNumber, nextClientMaintenanceOrderNumber } from "../../utils/sequence";
 import { getStorageProvider } from "../../lib/storage";
 
@@ -46,9 +46,8 @@ export const listServiceRequests = asyncHandler(async (req: Request, res: Respon
 
   const where = {
     deletedAt: null,
-    ...clientScopeFilter(req),
+    ...resolveClientScope(req, clientId),
     ...escopoDoSolicitante(req),
-    ...(clientId ? { clientId } : {}),
     ...(status ? { status } : {}),
     ...(instrumentId ? { instrumentId } : {}),
     ...(areaId ? { areaId } : {}),

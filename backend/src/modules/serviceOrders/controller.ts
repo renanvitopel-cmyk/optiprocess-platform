@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { NotFoundError, ForbiddenError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter, contractedServicesFilter } from "../../middleware/rbac";
+import { clientScopeFilter, contractedServicesFilter, resolveClientScope } from "../../middleware/rbac";
 import { nextDocumentNumber } from "../../utils/sequence";
 
 const detailInclude = {
@@ -34,8 +34,7 @@ export const listServiceOrders = asyncHandler(async (req: Request, res: Response
 
   const where = {
     deletedAt: null,
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(instrumentId ? { instrumentId } : {}),
     ...(status ? { status } : {}),
     ...(technicianId ? { technicianId } : {}),

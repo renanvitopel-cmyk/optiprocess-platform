@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId } from "../../middleware/rbac";
+import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId, resolveClientScope } from "../../middleware/rbac";
 import { deriveDueStatus } from "../../utils/status";
 import { computeNextDue, computeGenerationDate, frequencyToDays, forecastMeterDue, type TimeScheduleConfig } from "../../lib/planSchedule";
 import { nextClientMaintenanceOrderNumber, nextClientMaintenancePlanCode } from "../../utils/sequence";
@@ -58,8 +58,7 @@ export const listMaintenancePlans = asyncHandler(async (req: Request, res: Respo
 
   const where = {
     deletedAt: null,
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(instrumentId ? { instrumentId } : {}),
     ...(active !== undefined ? { active: active === "true" } : {}),
   };

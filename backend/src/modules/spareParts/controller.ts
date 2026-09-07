@@ -5,7 +5,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
+import { clientScopeFilter, assertServiceAccess, resolveClientScope } from "../../middleware/rbac";
 import { applySparePartMovement } from "../../lib/inventory";
 
 export const listSpareParts = asyncHandler(async (req: Request, res: Response) => {
@@ -15,8 +15,7 @@ export const listSpareParts = asyncHandler(async (req: Request, res: Response) =
 
   const where = {
     deletedAt: null,
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(active !== undefined ? { active: active === "true" } : {}),
     ...(search
       ? {
@@ -169,7 +168,7 @@ export const addSparePartMovement = asyncHandler(async (req: Request, res: Respo
 export const getSparePartAlerts = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const { clientId } = req.query as { clientId?: string };
-  const escopo = { deletedAt: null, ...clientScopeFilter(req), ...(clientId ? { clientId } : {}) };
+  const escopo = { deletedAt: null, ...resolveClientScope(req, clientId) };
   const agora = new Date();
 
   const pecas = await prisma.sparePart.findMany({
@@ -206,8 +205,7 @@ export const getSparePartAlerts = asyncHandler(async (req: Request, res: Respons
     where: {
       deletedAt: null,
       status: { notIn: ["COMPLETED", "CANCELED"] },
-      ...clientScopeFilter(req),
-      ...(clientId ? { clientId } : {}),
+      ...resolveClientScope(req, clientId),
       materialLogs: { some: { required: true } },
     },
     select: {

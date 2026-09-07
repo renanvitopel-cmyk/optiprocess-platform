@@ -66,6 +66,27 @@ export function clientScopeFilter(req: Request): { clientId?: string } {
   return {};
 }
 
+/**
+ * Escopo de cliente para uma LISTAGEM, ja considerando o clientId pedido na query.
+ *
+ * Cada listagem fazia `{ ...clientScopeFilter(req), ...(clientId ? { clientId } : {}) }`.
+ * Em JavaScript o segundo espalhamento sobrescreve o primeiro: bastava um usuario de
+ * cliente passar ?clientId= de outra empresa na URL para a listagem devolver os dados
+ * dela - o filtro forcado era apagado pelo valor que veio de fora. Aqui o escopo forcado
+ * vem por ultimo e sempre vence; pedir outra empresa e' recusado, em vez de silenciosamente
+ * atendido.
+ */
+export function resolveClientScope(req: Request, clientId?: string): { clientId?: string } {
+  const forcado = clientScopeFilter(req);
+  if (forcado.clientId) {
+    if (clientId && clientId !== forcado.clientId) {
+      throw new ForbiddenError("Voce so pode consultar dados da sua propria empresa.");
+    }
+    return forcado;
+  }
+  return clientId ? { clientId } : {};
+}
+
 export const CLIENT_PORTAL_ROLES: Role[] = ["ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT"];
 
 /**

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/errors";
-import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
+import { assertServiceAccess, resolveClientScope } from "../../middleware/rbac";
 import { writeAuditLog } from "../../utils/audit";
 
 /** A tela sempre mostra a area com a planta e o centro de custo - toda resposta leva os
@@ -19,8 +19,7 @@ export const listAreas = asyncHandler(async (req: Request, res: Response) => {
   const areas = await prisma.area.findMany({
     where: {
       deletedAt: null,
-      ...clientScopeFilter(req),
-      ...(clientId ? { clientId } : {}),
+      ...resolveClientScope(req, clientId),
       ...(plantId ? { plantId } : {}),
       ...(active !== undefined ? { active: active === "true" } : {}),
     },

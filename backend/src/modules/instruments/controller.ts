@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
+import { clientScopeFilter, assertServiceAccess, resolveClientScope } from "../../middleware/rbac";
 import { deriveDueStatus, computeNextDueDate } from "../../utils/status";
 import { getStorageProvider } from "../../lib/storage";
 import { assertInstrumentLimitNotExceeded } from "../../lib/planLimits";
@@ -65,8 +65,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
 
   const where = {
     deletedAt: null,
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(status ? { status } : {}),
     ...(parentId ? { parentId } : {}),
     ...(criticality ? { criticality } : {}),

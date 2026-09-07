@@ -5,7 +5,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
+import { clientScopeFilter, assertServiceAccess, resolveClientScope } from "../../middleware/rbac";
 import { getStorageProvider } from "../../lib/storage";
 
 /** Troca a chave de armazenamento por um link temporario que a tela consegue exibir.
@@ -29,8 +29,7 @@ export const listLaborResources = asyncHandler(async (req: Request, res: Respons
 
   const where = {
     deletedAt: null,
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(active !== undefined ? { active: active === "true" } : {}),
     ...(search
       ? {

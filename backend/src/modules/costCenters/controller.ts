@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/errors";
-import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
+import { assertServiceAccess, resolveClientScope } from "../../middleware/rbac";
 import { writeAuditLog } from "../../utils/audit";
 
 export const listCostCenters = asyncHandler(async (req: Request, res: Response) => {
@@ -12,8 +12,7 @@ export const listCostCenters = asyncHandler(async (req: Request, res: Response) 
   const costCenters = await prisma.costCenter.findMany({
     where: {
       deletedAt: null,
-      ...clientScopeFilter(req),
-      ...(clientId ? { clientId } : {}),
+      ...resolveClientScope(req, clientId),
       ...(active !== undefined ? { active: active === "true" } : {}),
     },
     orderBy: { name: "asc" },

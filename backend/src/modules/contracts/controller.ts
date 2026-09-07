@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { ForbiddenError, NotFoundError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter, contractedServicesFilter } from "../../middleware/rbac";
+import { clientScopeFilter, contractedServicesFilter, resolveClientScope } from "../../middleware/rbac";
 import { deriveDueStatus } from "../../utils/status";
 
 /** Contratos nao tem uma categoria propria: liberado no portal para quem contratou
@@ -30,8 +30,7 @@ export const listContracts = asyncHandler(async (req: Request, res: Response) =>
 
   const where = {
     deletedAt: null,
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(status ? { status } : {}),
   };
 

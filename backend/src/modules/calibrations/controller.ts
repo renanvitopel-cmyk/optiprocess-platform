@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter, assertServiceAccess } from "../../middleware/rbac";
+import { clientScopeFilter, assertServiceAccess, resolveClientScope } from "../../middleware/rbac";
 import { nextDocumentNumber } from "../../utils/sequence";
 import { computeNextDueDate } from "../../utils/status";
 import { generateCertificateQrCode } from "../../lib/qrcode";
@@ -58,8 +58,7 @@ export const listCalibrations = asyncHandler(async (req: Request, res: Response)
 
   const where = {
     deletedAt: null,
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(instrumentId ? { instrumentId } : {}),
     ...(result ? { result } : {}),
     ...(Object.keys(dateRange).length > 0 ? { calibrationDate: dateRange } : {}),

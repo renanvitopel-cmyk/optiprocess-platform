@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId } from "../../middleware/rbac";
+import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId, resolveClientScope } from "../../middleware/rbac";
 import { getStorageProvider } from "../../lib/storage";
 
 const detailInclude = {
@@ -23,8 +23,7 @@ export const listRootCauseAnalyses = asyncHandler(async (req: Request, res: Resp
 
   const where = {
     deletedAt: null,
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(status ? { status } : {}),
     ...(instrumentId ? { instrumentId } : {}),
   };

@@ -4,7 +4,7 @@ import { LubricantBase, LubricantType, LubricationCondition, LubricationMethod, 
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { NotFoundError, ValidationError } from "../../utils/errors";
-import { assertOwnClient, assertServiceAccess, clientScopeFilter, resolveClientId } from "../../middleware/rbac";
+import { assertOwnClient, assertServiceAccess, clientScopeFilter, resolveClientId, resolveClientScope } from "../../middleware/rbac";
 import { buildPagedResult, parsePageParams, toSkipTake } from "../../utils/pagination";
 import { writeAuditLog } from "../../utils/audit";
 import { applySparePartMovement } from "../../lib/inventory";
@@ -41,8 +41,7 @@ export const listLubricants = asyncHandler(async (req: Request, res: Response) =
   const lubricants = await prisma.lubricant.findMany({
     where: {
       deletedAt: null,
-      ...clientScopeFilter(req),
-      ...(clientId ? { clientId } : {}),
+      ...resolveClientScope(req, clientId),
       ...(active !== undefined ? { active: active === "true" } : {}),
     },
     include: lubricantInclude,
@@ -145,8 +144,7 @@ export const listLubricationPoints = asyncHandler(async (req: Request, res: Resp
   const where = {
     deletedAt: null,
     active: true,
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(instrumentId ? { instrumentId } : {}),
     ...(lubricantId ? { lubricantId } : {}),
     ...(routeId ? { routeItems: { some: { routeId } } } : {}),
@@ -346,8 +344,7 @@ export const listLubricationRecords = asyncHandler(async (req: Request, res: Res
   };
 
   const where = {
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(pointId ? { pointId } : {}),
     ...(lubricantId ? { lubricantId } : {}),
     ...(dateFrom || dateTo
@@ -404,8 +401,7 @@ export const listLubricationRoutes = asyncHandler(async (req: Request, res: Resp
   const routes = await prisma.lubricationRoute.findMany({
     where: {
       deletedAt: null,
-      ...clientScopeFilter(req),
-      ...(clientId ? { clientId } : {}),
+      ...resolveClientScope(req, clientId),
       ...(active !== undefined ? { active: active === "true" } : {}),
     },
     include: routeInclude,
@@ -522,7 +518,7 @@ export const getLubricationForecast = asyncHandler(async (req: Request, res: Res
   if (ate < de) throw new ValidationError("A data final da previsao nao pode ser antes da inicial.");
 
   const pontos = await prisma.lubricationPoint.findMany({
-    where: { deletedAt: null, active: true, ...clientScopeFilter(req), ...(clientId ? { clientId } : {}) },
+    where: { deletedAt: null, active: true, ...resolveClientScope(req, clientId) },
     include: {
       lubricant: { include: lubricantInclude },
       instrument: { select: { id: true, tag: true, area: { select: { id: true, name: true } } } },
@@ -622,15 +618,15 @@ export const getLubricationDashboard = asyncHandler(async (req: Request, res: Re
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const { clientId } = req.query as { clientId?: string };
   const hoje = new Date();
-  const escopo = { deletedAt: null, active: true, ...clientScopeFilter(req), ...(clientId ? { clientId } : {}) };
+  const escopo = { deletedAt: null, active: true, ...resolveClientScope(req, clientId) };
 
   const [total, vencidos, proximos, rotas, ultimos30] = await Promise.all([
     prisma.lubricationPoint.count({ where: escopo }),
     prisma.lubricationPoint.count({ where: { ...escopo, nextDueAt: { lt: hoje } } }),
     prisma.lubricationPoint.count({ where: { ...escopo, nextDueAt: { gte: hoje, lte: somaDias(hoje, 7) } } }),
-    prisma.lubricationRoute.count({ where: { deletedAt: null, active: true, ...clientScopeFilter(req), ...(clientId ? { clientId } : {}) } }),
+    prisma.lubricationRoute.count({ where: { deletedAt: null, active: true, ...resolveClientScope(req, clientId) } }),
     prisma.lubricationRecord.count({
-      where: { ...clientScopeFilter(req), ...(clientId ? { clientId } : {}), executedAt: { gte: somaDias(hoje, -30) } },
+      where: { ...resolveClientScope(req, clientId), executedAt: { gte: somaDias(hoje, -30) } },
     }),
   ]);
 

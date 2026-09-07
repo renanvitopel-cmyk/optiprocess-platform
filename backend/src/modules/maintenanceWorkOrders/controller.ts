@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
-import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId } from "../../middleware/rbac";
+import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId, resolveClientScope } from "../../middleware/rbac";
 import { nextClientMaintenanceOrderNumber } from "../../utils/sequence";
 import { applySparePartMovement, reserveSparePart, releaseSparePartReservation, consumeSparePartReservation } from "../../lib/inventory";
 import { getStorageProvider } from "../../lib/storage";
@@ -70,8 +70,7 @@ export const listMaintenanceWorkOrders = asyncHandler(async (req: Request, res: 
 
   const where = {
     deletedAt: null,
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(instrumentId ? { instrumentId } : {}),
     ...(planId ? { planId } : {}),
     ...(status ? { status } : {}),
@@ -1055,8 +1054,7 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
 
   const where = {
     deletedAt: null,
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(instrumentId ? { instrumentId } : {}),
     createdAt: { gte: periodStart, lte: periodEnd },
   };
@@ -1127,7 +1125,7 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
   const availability = paradas.length ? Math.max(0, 1 - downtimeMinutes / periodMinutes) : null;
 
   const plans = await prisma.maintenancePlan.findMany({
-    where: { deletedAt: null, active: true, ...clientScopeFilter(req), ...(clientId ? { clientId } : {}), ...(instrumentId ? { instrumentId } : {}) },
+    where: { deletedAt: null, active: true, ...resolveClientScope(req, clientId), ...(instrumentId ? { instrumentId } : {}) },
     select: { nextDueDate: true },
   });
   const now = new Date();
@@ -1141,7 +1139,7 @@ export const getMaintenanceDashboard = asyncHandler(async (req: Request, res: Re
   // criado antes do periodo escolhido sumiria do numero.
   // ---------------------------------------------------------------------------
 
-  const clientScopedWhere = { deletedAt: null, ...clientScopeFilter(req), ...(clientId ? { clientId } : {}), ...(instrumentId ? { instrumentId } : {}) };
+  const clientScopedWhere = { deletedAt: null, ...resolveClientScope(req, clientId), ...(instrumentId ? { instrumentId } : {}) };
 
   const openOrders = await prisma.maintenanceWorkOrder.findMany({
     where: { ...clientScopedWhere, status: { notIn: ["COMPLETED", "CANCELED"] } },
@@ -1230,8 +1228,7 @@ export const listFailureRecords = asyncHandler(async (req: Request, res: Respons
   const where = {
     deletedAt: null,
     type: "CORRECTIVE" as const,
-    ...clientScopeFilter(req),
-    ...(clientId ? { clientId } : {}),
+    ...resolveClientScope(req, clientId),
     ...(instrumentId ? { instrumentId } : {}),
     ...(severity ? { failureSeverity: severity } : {}),
     // "Registro preenchido" = o tecnico disse ao menos quando a falha comecou ou o quanto
@@ -1304,8 +1301,7 @@ export const getMaintenanceBacklog = asyncHandler(async (req: Request, res: Resp
     where: {
       deletedAt: null,
       status: { notIn: ["COMPLETED", "CANCELED"] },
-      ...clientScopeFilter(req),
-      ...(clientId ? { clientId } : {}),
+      ...resolveClientScope(req, clientId),
       ...(plantId ? { instrument: { plantId } } : {}),
       ...(areaId ? { instrument: { areaId } } : {}),
     },
@@ -1394,8 +1390,7 @@ export const getFailureAnalysis = asyncHandler(async (req: Request, res: Respons
     where: {
       deletedAt: null,
       type: "CORRECTIVE",
-      ...clientScopeFilter(req),
-      ...(clientId ? { clientId } : {}),
+      ...resolveClientScope(req, clientId),
       createdAt: { gte: periodStart, lte: periodEnd },
     },
     select: {
@@ -1481,7 +1476,7 @@ export const getMaintenanceSchedule = asyncHandler(async (req: Request, res: Res
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const { clientId, from, to } = req.query as { clientId?: string; from?: string; to?: string };
 
-  const scope = { ...clientScopeFilter(req), ...(clientId ? { clientId } : {}) };
+  const scope = { ...resolveClientScope(req, clientId) };
   // Sem empresa definida nao ha quadro: a mao de obra (as linhas) e' sempre por empresa.
   const resolvedClientId = (scope as { clientId?: string }).clientId;
   if (!resolvedClientId) {

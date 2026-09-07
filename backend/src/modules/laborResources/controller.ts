@@ -43,7 +43,12 @@ export const listLaborResources = asyncHandler(async (req: Request, res: Respons
   };
 
   const [items, total] = await Promise.all([
-    prisma.laborResource.findMany({ where, orderBy: { name: "asc" }, ...toSkipTake(pageParams) }),
+    prisma.laborResource.findMany({
+      where,
+      orderBy: { name: "asc" },
+      ...toSkipTake(pageParams),
+      include: { user: { select: { id: true, name: true, email: true, role: true } } },
+    }),
     prisma.laborResource.count({ where }),
   ]);
 
@@ -64,6 +69,8 @@ const laborResourceSchema = z.object({
   name: z.string().min(2, "Informe o nome."),
   registrationNumber: z.string().nullish(),
   hourlyRate: z.coerce.number().nonnegative().nullish(),
+  // O acesso desta pessoa no sistema. E' o que permite ela mesma assumir uma OS.
+  userId: z.string().uuid().nullish(),
 });
 
 /** O tipo tem que vir do catalogo "Tipos de mao de obra" (o padrao da OptiProcess mais o
@@ -86,6 +93,22 @@ async function assertTipoNoCatalogo(clientId: string, type: string): Promise<voi
   }
 }
 
+
+/** O acesso ligado tem que ser da propria empresa e ainda nao pertencer a outra pessoa da
+ * equipe - senao duas linhas da mao de obra apontariam para o mesmo login, e "assumir uma
+ * OS" ficaria ambiguo. */
+async function assertAcessoDisponivel(clientId: string, userId: string, exceto?: string): Promise<void> {
+  const usuario = await prisma.user.findFirst({ where: { id: userId, deletedAt: null }, select: { clientId: true, name: true } });
+  if (!usuario) throw new NotFoundError("Acesso");
+  if (usuario.clientId !== clientId) throw new ValidationError("Este acesso e' de outra empresa.");
+
+  const jaLigado = await prisma.laborResource.findFirst({
+    where: { userId, deletedAt: null, ...(exceto ? { id: { not: exceto } } : {}) },
+    select: { name: true },
+  });
+  if (jaLigado) throw new ValidationError(`Este acesso ja esta ligado a ${jaLigado.name}.`);
+}
+
 export const createLaborResource = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = laborResourceSchema.parse(req.body);
@@ -98,6 +121,7 @@ export const createLaborResource = asyncHandler(async (req: Request, res: Respon
   }
 
   await assertTipoNoCatalogo(data.clientId!, data.type);
+  if (data.userId) await assertAcessoDisponivel(data.clientId!, data.userId);
 
   const resource = await prisma.laborResource.create({ data: { ...data, clientId: data.clientId!, createdById: req.user?.sub } });
 
@@ -124,6 +148,8 @@ export const updateLaborResource = asyncHandler(async (req: Request, res: Respon
     if (existing.clientId !== req.user.clientId) throw new ForbiddenError();
     delete data.clientId;
   }
+
+  if (data.userId) await assertAcessoDisponivel(existing.clientId, data.userId, existing.id);
 
   // So cobro o catalogo quando o tipo esta realmente mudando: recurso antigo com tipo
   // fora do catalogo continua editavel (nome, valor/hora, foto) sem virar refem disso.

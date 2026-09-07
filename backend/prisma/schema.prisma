@@ -455,6 +455,9 @@ model User {
   notifications                 Notification[]
 
   @@index([clientId])
+  // Cadastro na mao de obra da empresa, quando esta pessoa executa OS.
+  laborResource              LaborResource? @relation("LaborResourceUser")
+
   @@map("users")
 }
 
@@ -1187,6 +1190,11 @@ model LaborResource {
   // Tecnico mecanico, Tecnico eletrico, Engenheiro... (catalogo LaborType)
   type               String
   name               String
+  // O acesso desta pessoa no sistema, quando ela tem um. E' o que permite o proprio
+  // mantenedor assumir uma OS: sem a ligacao, o sistema nao sabe que aquele login e'
+  // aquela pessoa da equipe.
+  userId             String?   @unique
+  user               User?     @relation("LaborResourceUser", fields: [userId], references: [id], onDelete: SetNull)
   // DRT/CREA/CFT etc - registro profissional, quando aplicavel.
   registrationNumber String?
   // Valor/hora - opcional, so alimenta custo quando preenchido.

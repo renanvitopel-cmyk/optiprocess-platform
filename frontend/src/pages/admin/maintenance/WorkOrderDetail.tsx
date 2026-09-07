@@ -3,7 +3,7 @@ import { CONDICOES_DE_EXECUCAO } from "../../../lib/maintenanceLabels";
 import { centroDeCustoComDescricao } from "../../../lib/centroDeCusto";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2, PlayCircle, CheckCircle2, Plus, X, Square, ShoppingCart } from "lucide-react";
+import { Pencil, Trash2, PlayCircle, CheckCircle2, Plus, X, Square, ShoppingCart, UserCheck } from "lucide-react";
 import {
   getMaintenanceWorkOrder,
   deleteMaintenanceWorkOrder,
@@ -25,6 +25,8 @@ import {
   removeWorkOrderStoppage,
   addWorkOrderAssignee,
   removeWorkOrderAssignee,
+  assumirOrdem,
+  definirResponsavel,
 } from "../../../api/maintenanceWorkOrders";
 import { listSpareParts } from "../../../api/spareParts";
 import { listAssetParts } from "../../../api/instruments";
@@ -130,6 +132,43 @@ export default function WorkOrderDetail() {
       notify("error", getApiErrorMessage(error));
     } finally {
       setDeleting(false);
+    }
+  }
+
+  const [ocupadoResp, setOcupadoResp] = useState(false);
+  const encerrada = workOrder?.status === "COMPLETED" || workOrder?.status === "CANCELED";
+
+  // A lista de quem pode executar so faz sentido para quem atribui.
+  const { data: equipe } = useQuery({
+    queryKey: ["labor-resources-picker", workOrder?.clientId],
+    queryFn: () => listLaborResources({ clientId: workOrder?.clientId, active: true, pageSize: 200 }),
+    enabled: canManage && !!workOrder && !encerrada,
+  });
+
+  async function assumir() {
+    setOcupadoResp(true);
+    try {
+      await assumirOrdem(id);
+      notify("success", "OS assumida.");
+      invalidate();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setOcupadoResp(false);
+    }
+  }
+
+  async function atribuir(resourceId: string | null) {
+    setOcupadoResp(true);
+    try {
+      await definirResponsavel(id, resourceId);
+      notify("success", resourceId ? "Responsavel definido." : "Responsavel removido.");
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ["maintenance-schedule"] });
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setOcupadoResp(false);
     }
   }
 
@@ -575,10 +614,41 @@ O que sobrar volta para o estoque.`,
           )}
           <dl className="grid gap-4 sm:grid-cols-2">
             {!isClient && <Info label="Tecnico" value={workOrder.technician?.name ?? "-"} />}
-            <Info
-              label="Quem vai executar"
-              value={workOrder.assignedResource ? `${workOrder.assignedResource.name} (${workOrder.assignedResource.type})` : "A definir"}
-            />
+            <div>
+              <p className="text-xs uppercase tracking-wide text-graphite-400">Quem vai executar</p>
+              <p className="mt-0.5 font-medium text-navy-900">
+                {workOrder.assignedResource
+                  ? `${workOrder.assignedResource.name} (${workOrder.assignedResource.type})`
+                  : "A definir"}
+              </p>
+
+              {/* Dois caminhos ate a OS ter dono, porque a manutencao usa os dois: quem
+                  planeja distribui a carga da semana, e o mantenedor pega da fila quando
+                  esta livre. Assumir NAO inicia a OS - iniciar e' o botao proprio, e
+                  misturar os dois estragaria o MTTR. */}
+              {!encerrada && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {!workOrder.assignedResource && (
+                    <button className="btn-outline text-sm" onClick={() => void assumir()} disabled={ocupadoResp}>
+                      <UserCheck className="h-4 w-4" /> Assumir esta OS
+                    </button>
+                  )}
+                  {canManage && (
+                    <select
+                      className="input h-9 py-0 text-sm sm:w-64"
+                      value={workOrder.assignedResourceId ?? ""}
+                      disabled={ocupadoResp}
+                      onChange={(e) => void atribuir(e.target.value || null)}
+                    >
+                      <option value="">Sem responsavel</option>
+                      {(equipe?.items ?? []).map((r) => (
+                        <option key={r.id} value={r.id}>{r.name} - {r.type}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+            </div>
             <Info label="Programada para" value={workOrder.scheduledDate ? formatDateTime(workOrder.scheduledDate).slice(0, 10) : "-"} />
             <Info label="Codigo de falha" value={workOrder.failureCode ? `${workOrder.failureCode.code} - ${workOrder.failureCode.description}` : "-"} />
             <Info label="Centro de custo" value={centroDeCustoComDescricao(workOrder.costCenter)} />

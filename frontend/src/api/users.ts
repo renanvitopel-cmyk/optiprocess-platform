@@ -3,6 +3,8 @@ import type { PagedResult } from "./client";
 import type { Role, RoleDefinitionDto, UserAccount } from "./types";
 
 export interface ListUsersParams {
+  /** Empresa - a equipe do cliente ja e' restrita a propria, e nao precisa informar. */
+  clientId?: string;
   page?: number;
   pageSize?: number;
   role?: Role;

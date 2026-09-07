@@ -48,6 +48,18 @@ export async function listMaintenanceWorkOrders(params: ListWorkOrdersParams = {
   return data;
 }
 
+/** O proprio mantenedor assume a OS (precisa ter acesso ligado ao cadastro de mao de obra). */
+export async function assumirOrdem(id: string): Promise<MaintenanceWorkOrder> {
+  const { data } = await api.post<MaintenanceWorkOrder>(`/maintenance-work-orders/${id}/assumir`);
+  return data;
+}
+
+/** Quem planeja define (ou tira) o responsavel pela OS. */
+export async function definirResponsavel(id: string, assignedResourceId: string | null): Promise<MaintenanceWorkOrder> {
+  const { data } = await api.patch<MaintenanceWorkOrder>(`/maintenance-work-orders/${id}/responsavel`, { assignedResourceId });
+  return data;
+}
+
 export async function getMaintenanceWorkOrder(id: string): Promise<MaintenanceWorkOrder> {
   const { data } = await api.get<MaintenanceWorkOrder>(`/maintenance-work-orders/${id}`);
   return data;

@@ -94,8 +94,12 @@ export const listUserAuditTrail = asyncHandler(async (req: Request, res: Respons
   // Quais usuarios entram no recorte: os da propria empresa, para quem e' do cliente.
   const daEmpresa = await prisma.user.findMany({
     where: {
-      ...(ehDaEmpresa(req) ? { clientId: req.user?.clientId ?? "" } : {}),
-      ...(req.query.clientId ? { clientId: String(req.query.clientId) } : {}),
+      // Equipe do cliente ve so a propria empresa; a OptiProcess pode recortar por uma.
+      ...(ehDaEmpresa(req)
+        ? { clientId: req.user?.clientId ?? "" }
+        : req.query.clientId
+          ? { clientId: String(req.query.clientId) }
+          : {}),
     },
     select: { id: true, name: true, email: true, role: true },
   });
@@ -123,12 +127,19 @@ export const listUserAuditTrail = asyncHandler(async (req: Request, res: Respons
 
 export const listUsers = asyncHandler(async (req: Request, res: Response) => {
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
-  const { role, active, search } = req.query as { role?: Role; active?: string; search?: string };
+  const { role, active, search, clientId } = req.query as {
+    role?: Role;
+    active?: string;
+    search?: string;
+    clientId?: string;
+  };
 
   const where = {
     deletedAt: null,
-    // O gestor enxerga a propria equipe; a OptiProcess enxerga todos.
-    ...(ehDaEmpresa(req) ? { clientId: req.user?.clientId ?? "" } : {}),
+    // A equipe do cliente enxerga a propria empresa; a OptiProcess enxerga todos, e pode
+    // filtrar por uma empresa quando a tela precisa (ex.: ligar pessoa da mao de obra ao
+    // acesso dela).
+    ...(ehDaEmpresa(req) ? { clientId: req.user?.clientId ?? "" } : clientId ? { clientId } : {}),
     ...(role ? { role } : {}),
     ...(active !== undefined ? { active: active === "true" } : {}),
     ...(search

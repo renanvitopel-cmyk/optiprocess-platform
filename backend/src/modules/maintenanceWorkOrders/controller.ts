@@ -430,6 +430,101 @@ export const deleteMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
   res.status(204).send();
 });
 
+/**
+ * O proprio mantenedor assume a OS.
+ *
+ * Sao dois caminhos ate a OS chegar em alguem, e a manutencao usa os dois: o planejador
+ * atribui (quando ele distribui a carga da semana) ou o mantenedor pega a OS da fila
+ * (quando ele esta livre e escolhe o que fazer). Ate aqui so o primeiro existia, e a OS
+ * ficava parada esperando alguem lembrar de distribuir.
+ *
+ * Assumir NAO inicia a OS: sao coisas diferentes, e misturar as duas acabaria com o MTTR
+ * (que conta do inicio a conclusao) medindo o tempo desde que alguem clicou por engano.
+ */
+export const claimMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const existing = await prisma.maintenanceWorkOrder.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  if (!existing) throw new NotFoundError("Ordem de manutencao");
+  assertOwnClient(req, existing.clientId);
+  if (["COMPLETED", "CANCELED"].includes(existing.status)) {
+    throw new ValidationError("Esta OS ja foi encerrada.");
+  }
+
+  // Quem assume e' a PESSOA da mao de obra, nao o login: e' ela que aparece na programacao
+  // e que carrega o valor/hora. A ligacao entre as duas e' o campo userId.
+  const eu = await prisma.laborResource.findFirst({
+    where: { userId: req.user?.sub, deletedAt: null, active: true },
+    select: { id: true, name: true },
+  });
+  if (!eu) {
+    throw new ValidationError(
+      "Seu acesso ainda nao esta ligado a um cadastro de mao de obra. Peca ao planejador para fazer essa ligacao em Mao de obra - sem ela o sistema nao sabe quem esta assumindo.",
+    );
+  }
+
+  if (existing.assignedResourceId && existing.assignedResourceId !== eu.id) {
+    const dono = await prisma.laborResource.findFirst({ where: { id: existing.assignedResourceId }, select: { name: true } });
+    throw new ValidationError(
+      `Esta OS ja esta com ${dono?.name ?? "outra pessoa"}. Se for para trocar, quem planeja faz a reatribuicao.`,
+    );
+  }
+
+  const workOrder = await prisma.maintenanceWorkOrder.update({
+    where: { id: existing.id },
+    data: { assignedResourceId: eu.id },
+    include: detailInclude,
+  });
+
+  await writeAuditLog({
+    userId: req.user?.sub,
+    action: "UPDATE",
+    entityType: "MaintenanceWorkOrder",
+    entityId: workOrder.id,
+    description: `OS ${workOrder.number} assumida por ${eu.name}`,
+  });
+
+  res.json(workOrder);
+});
+
+/** Quem planeja distribui a OS - o outro caminho, usado quando a carga da semana e' dividida. */
+export const assignMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const { assignedResourceId } = z
+    .object({ assignedResourceId: z.string().uuid().nullable() })
+    .parse(req.body);
+
+  const existing = await prisma.maintenanceWorkOrder.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  if (!existing) throw new NotFoundError("Ordem de manutencao");
+  assertOwnClient(req, existing.clientId);
+
+  if (assignedResourceId) {
+    const recurso = await prisma.laborResource.findFirst({
+      where: { id: assignedResourceId, deletedAt: null, clientId: existing.clientId },
+      select: { id: true, name: true, active: true },
+    });
+    if (!recurso) throw new ValidationError("Esta pessoa nao esta na mao de obra da sua empresa.");
+    if (!recurso.active) throw new ValidationError(`${recurso.name} esta inativo na mao de obra.`);
+  }
+
+  const workOrder = await prisma.maintenanceWorkOrder.update({
+    where: { id: existing.id },
+    data: { assignedResourceId },
+    include: detailInclude,
+  });
+
+  await writeAuditLog({
+    userId: req.user?.sub,
+    action: "UPDATE",
+    entityType: "MaintenanceWorkOrder",
+    entityId: workOrder.id,
+    description: assignedResourceId
+      ? `OS ${workOrder.number} atribuida a ${workOrder.assignedResource?.name ?? "-"}`
+      : `OS ${workOrder.number} ficou sem responsavel`,
+  });
+
+  res.json(workOrder);
+});
+
 export const startMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const existing = await prisma.maintenanceWorkOrder.findFirst({ where: { id: req.params.id, deletedAt: null } });

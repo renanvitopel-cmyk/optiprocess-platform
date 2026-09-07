@@ -904,6 +904,9 @@ export interface LaborType {
 }
 
 export interface LaborResource {
+  /** Acesso desta pessoa no sistema - e' o que permite ela assumir uma OS sozinha. */
+  userId?: string | null;
+  user?: { id: string; name: string; email: string; role: Role } | null;
   id: string;
   clientId: string;
   client?: ClientRef;

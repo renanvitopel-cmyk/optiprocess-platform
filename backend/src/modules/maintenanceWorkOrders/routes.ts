@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
-import { requireRole, CMMS_ROLES } from "../../middleware/rbac";
+import { requireRole, CMMS_ROLES, CMMS_PLANNING_ROLES } from "../../middleware/rbac";
 import { uploadAny } from "../../middleware/upload";
 import {
   listMaintenanceWorkOrders,
@@ -9,6 +9,8 @@ import {
   updateMaintenanceWorkOrder,
   deleteMaintenanceWorkOrder,
   startMaintenanceWorkOrder,
+  claimMaintenanceWorkOrder,
+  assignMaintenanceWorkOrder,
   completeMaintenanceWorkOrder,
   updateChecklistItem,
   addWorkOrderPart,
@@ -53,6 +55,9 @@ maintenanceWorkOrdersRouter.get("/:id", getMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.post("/", requireRole(...CMMS_ROLES), createMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.patch("/:id", requireRole(...CMMS_ROLES), updateMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.delete("/:id", requireRole(...CMMS_ROLES), deleteMaintenanceWorkOrder);
+// Dois caminhos ate a OS ter dono: o mantenedor assume, ou quem planeja atribui.
+maintenanceWorkOrdersRouter.post("/:id/assumir", requireRole(...CMMS_ROLES), claimMaintenanceWorkOrder);
+maintenanceWorkOrdersRouter.patch("/:id/responsavel", requireRole(...CMMS_PLANNING_ROLES), assignMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.post("/:id/start", requireRole(...CMMS_ROLES), startMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.post("/:id/complete", requireRole(...CMMS_ROLES), completeMaintenanceWorkOrder);
 

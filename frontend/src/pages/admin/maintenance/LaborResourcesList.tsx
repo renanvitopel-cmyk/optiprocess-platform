@@ -19,8 +19,9 @@ import { EmptyState } from "../../../components/EmptyState";
 import { Modal } from "../../../components/Modal";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { iniciaisDe } from "../../../lib/pessoas";
-import { TextInput } from "../../../components/form/Field";
+import { TextInput, SelectInput } from "../../../components/form/Field";
 import { LaborTypeInput } from "../../../components/LaborTypeInput";
+import { listUsers } from "../../../api/users";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { clientDisplayName, formatCurrency } from "../../../lib/format";
@@ -35,6 +36,7 @@ const schema = z.object({
   name: z.string().min(2, "Informe o nome."),
   registrationNumber: z.string().optional(),
   hourlyRate: z.coerce.number().nonnegative().optional().or(z.literal("")),
+  userId: z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -65,6 +67,13 @@ export default function LaborResourcesList() {
     enabled: isClient || !!clientId,
   });
 
+  // Os acessos da propria empresa, para ligar a pessoa ao login dela.
+  const { data: acessos } = useQuery({
+    queryKey: ["acessos-da-empresa", clientId],
+    queryFn: () => listUsers({ clientId: clientId || undefined, pageSize: 200 }),
+    enabled: formOpen && (isClient || !!clientId),
+  });
+
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
   });
@@ -88,6 +97,7 @@ export default function LaborResourcesList() {
       name: recurso?.name ?? "",
       registrationNumber: recurso?.registrationNumber ?? "",
       hourlyRate: recurso?.hourlyRate != null ? recurso.hourlyRate : "",
+      userId: recurso?.userId ?? "",
     });
     setEditing(recurso);
     setFotoNova(null);
@@ -103,7 +113,11 @@ export default function LaborResourcesList() {
 
   async function onSubmit(values: FormValues) {
     try {
-      const payload = { ...values, hourlyRate: values.hourlyRate === "" ? null : values.hourlyRate };
+      const payload = {
+        ...values,
+        hourlyRate: values.hourlyRate === "" ? null : values.hourlyRate,
+        userId: values.userId || null,
+      };
       const recurso = editing
         ? await updateLaborResource(editing.id, payload)
         : await createLaborResource({ ...payload, clientId: clientId || undefined });
@@ -209,6 +223,15 @@ export default function LaborResourcesList() {
             },
             { header: "Tipo", accessor: (r) => r.type },
             { header: "DRT", accessor: (r) => r.registrationNumber ?? "-" },
+            {
+              header: "Acesso",
+              accessor: (r) =>
+                r.user ? (
+                  <span className="text-xs text-graphite-600">{r.user.email}</span>
+                ) : (
+                  <span className="text-xs text-graphite-400">nao entra no sistema</span>
+                ),
+            },
             { header: "Valor/hora", accessor: (r) => (r.hourlyRate != null ? formatCurrency(r.hourlyRate) : "-") },
             {
               header: "Status",
@@ -297,6 +320,18 @@ export default function LaborResourcesList() {
             <TextInput label="DRT (opcional)" hint="Registro profissional (CREA, CFT, DRT...), quando aplicavel." {...register("registrationNumber")} />
             <TextInput label="Valor/hora (opcional)" type="number" step="any" {...register("hourlyRate")} />
           </div>
+          {/* Sem esta ligacao o proprio mantenedor nao consegue assumir uma OS: o sistema
+              nao sabe que aquele login e' esta pessoa da equipe. */}
+          <SelectInput
+            label="Acesso no sistema (opcional)"
+            placeholder="Sem acesso - so aparece na programacao"
+            hint="Ligue quando esta pessoa entra no sistema. E' o que permite ela assumir OS sozinha."
+            options={(acessos?.items ?? [])
+              .filter((u) => u.active)
+              .map((u) => ({ value: u.id, label: `${u.name} - ${u.email}` }))}
+            {...register("userId")}
+          />
+
           <p className="text-xs text-graphite-500">
             A funcao vem do catalogo em{" "}
             <Link to={`${base}/tipos-mao-de-obra`} className="text-navy-700 underline">Tipos de mao de obra</Link>.

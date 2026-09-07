@@ -1,5 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
-import { Users, Gauge, BadgeCheck, CircleSlash } from "lucide-react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Users, Gauge, BadgeCheck, CircleSlash, Plus, KeyRound, UserX } from "lucide-react";
+import { createUser, updateUser, resetUserPassword } from "../../api/users";
+import { Modal } from "../../components/Modal";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { TextInput, SelectInput } from "../../components/form/Field";
+import { useToast } from "../../components/Toast";
+import { getApiErrorMessage } from "../../api/client";
+import { useAuth } from "../../auth/AuthContext";
 import { getOwnClient } from "../../api/clients";
 import { PageHeader } from "../../components/PageHeader";
 import { FullPageSpinner } from "../../components/Spinner";
@@ -49,6 +57,68 @@ function Uso({ rotulo, atual, limite, icone: Icone }: { rotulo: string; atual: n
  * Antes o cliente so descobria o limite quando um cadastro era recusado. */
 export default function PortalContract() {
   const { data: empresa, isLoading } = useQuery({ queryKey: ["own-client"], queryFn: getOwnClient });
+  const queryClient = useQueryClient();
+  const { notify } = useToast();
+  const { user: eu } = useAuth();
+
+  const [novoAberto, setNovoAberto] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "REQUESTER" as "CLIENT" | "REQUESTER" });
+  const [desativando, setDesativando] = useState<{ id: string; name: string } | null>(null);
+  const [senhaGerada, setSenhaGerada] = useState<{ email: string; senha: string } | null>(null);
+
+  function recarregar() {
+    queryClient.invalidateQueries({ queryKey: ["own-client"] });
+  }
+
+  /** Senha inicial forte, gerada aqui: e' melhor do que a pessoa escolher "123456" as
+   * pressas, e ela troca no primeiro acesso. */
+  function senhaForte(): string {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789@#$%&*";
+    const bytes = new Uint32Array(14);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+  }
+
+  function abrirNovo() {
+    setForm({ name: "", email: "", password: senhaForte(), role: "REQUESTER" });
+    setNovoAberto(true);
+  }
+
+  async function criarAcesso() {
+    setSalvando(true);
+    try {
+      await createUser({ name: form.name, email: form.email, password: form.password, role: form.role });
+      setSenhaGerada({ email: form.email, senha: form.password });
+      setNovoAberto(false);
+      notify("success", "Acesso liberado.");
+      recarregar();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function alternarAtivo(id: string, ativo: boolean) {
+    try {
+      await updateUser(id, { active: ativo });
+      notify("success", ativo ? "Acesso reativado." : "Acesso desativado.");
+      recarregar();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    }
+  }
+
+  async function redefinirSenha(id: string, email: string) {
+    try {
+      const temporaryPassword = await resetUserPassword(id);
+      setSenhaGerada({ email, senha: temporaryPassword });
+      notify("success", "Senha redefinida.");
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    }
+  }
 
   if (isLoading) return <FullPageSpinner />;
   if (!empresa) return <EmptyState title="Empresa nao encontrada" description="Nao foi possivel carregar os dados do seu contrato." />;
@@ -121,11 +191,17 @@ export default function PortalContract() {
       )}
 
       <div>
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-semibold text-navy-900">Usuarios da sua empresa</h2>
-          <p className="text-xs text-graphite-500">
-            Para liberar um acesso novo ou remover alguem, fale com a OptiProcess.
-          </p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-semibold text-navy-900">Acessos da sua empresa</h2>
+            <p className="text-xs text-graphite-500">
+              Gestor usa o CMMS inteiro e ocupa vaga do plano. Solicitante so abre e acompanha as proprias
+              solicitacoes - e nao ocupa vaga, em nenhum plano.
+            </p>
+          </div>
+          <button className="btn-primary shrink-0" onClick={abrirNovo}>
+            <Plus className="h-4 w-4" /> Novo acesso
+          </button>
         </div>
 
         {usuarios.length === 0 ? (
@@ -135,10 +211,40 @@ export default function PortalContract() {
             {usuarios.map((u) => (
               <div key={u.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <div className="min-w-0">
-                  <p className="font-medium text-navy-900">{u.name}</p>
-                  <p className="text-xs text-graphite-500">{u.email}</p>
+                  <p className="font-medium text-navy-900">
+                    {u.name}
+                    {u.id === eu?.id && <span className="ml-2 text-xs font-normal text-graphite-400">(voce)</span>}
+                  </p>
+                  <p className="text-xs text-graphite-500">
+                    {u.email} - {u.role === "REQUESTER" ? "Solicitante" : "Gestor"}
+                  </p>
                 </div>
-                <div className="shrink-0 text-right">
+                <div className="flex shrink-0 items-center gap-4">
+                  {/* O proprio acesso nao se mexe daqui: desativar a si mesmo trancaria a
+                      empresa para fora do portal, sem ninguem la dentro para desfazer. */}
+                  {u.id !== eu?.id && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="text-graphite-400 hover:text-navy-700"
+                        title="Gerar nova senha"
+                        aria-label="Gerar nova senha"
+                        onClick={() => void redefinirSenha(u.id, u.email)}
+                      >
+                        <KeyRound className="h-4 w-4" />
+                      </button>
+                      <button
+                        className="text-graphite-400 hover:text-safety-red"
+                        title={u.active ? "Desativar acesso" : "Reativar acesso"}
+                        aria-label={u.active ? "Desativar acesso" : "Reativar acesso"}
+                        onClick={() =>
+                          u.active ? setDesativando({ id: u.id, name: u.name }) : void alternarAtivo(u.id, true)
+                        }
+                      >
+                        <UserX className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                <div className="text-right">
                   {u.active ? (
                     <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-safety-green-dark">
                       Ativo
@@ -154,11 +260,97 @@ export default function PortalContract() {
                     {u.lastLoginAt ? `Ultimo acesso: ${formatDate(u.lastLoginAt)}` : "Nunca acessou"}
                   </p>
                 </div>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      <Modal
+        open={novoAberto}
+        onClose={() => setNovoAberto(false)}
+        title="Novo acesso"
+        size="sm"
+        footer={
+          <>
+            <button type="button" className="btn-outline" onClick={() => setNovoAberto(false)}>Cancelar</button>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={salvando || form.name.trim().length < 2 || !form.email.includes("@")}
+              onClick={() => void criarAcesso()}
+            >
+              {salvando ? "Liberando..." : "Liberar acesso"}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <TextInput label="Nome" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <TextInput
+            label="E-mail"
+            required
+            type="email"
+            hint="E' com ele que a pessoa entra no portal."
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
+          <SelectInput
+            label="Perfil"
+            hint="Solicitante nao ocupa vaga do plano."
+            options={[
+              { value: "REQUESTER", label: "Solicitante - so abre e acompanha solicitacoes" },
+              { value: "CLIENT", label: "Gestor - usa o CMMS inteiro (ocupa vaga)" },
+            ]}
+            value={form.role}
+            onChange={(e) => setForm({ ...form, role: e.target.value as "CLIENT" | "REQUESTER" })}
+          />
+          <div>
+            <TextInput
+              label="Senha inicial"
+              required
+              hint="Gerada automaticamente. Passe para a pessoa - ela troca no primeiro acesso, em Meu perfil."
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+            <button type="button" className="btn-ghost mt-1 text-xs" onClick={() => setForm({ ...form, password: senhaForte() })}>
+              Gerar outra
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* A senha aparece UMA vez e nao fica guardada em lugar nenhum legivel: depois daqui,
+          so redefinindo. */}
+      <Modal
+        open={!!senhaGerada}
+        onClose={() => setSenhaGerada(null)}
+        title="Anote a senha agora"
+        size="sm"
+        footer={<button type="button" className="btn-primary" onClick={() => setSenhaGerada(null)}>Ja anotei</button>}
+      >
+        <p className="text-sm text-graphite-700">
+          Passe estes dados para <span className="font-medium text-navy-900">{senhaGerada?.email}</span>. Esta senha nao
+          sera mostrada de novo - se perder, gere outra pelo icone da chave.
+        </p>
+        <p className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 font-mono text-lg text-navy-900">
+          {senhaGerada?.senha}
+        </p>
+      </Modal>
+
+      <ConfirmDialog
+        open={!!desativando}
+        title="Desativar este acesso"
+        description={`${desativando?.name ?? ""} deixa de entrar no portal. O historico do que ela fez continua guardado, e o acesso pode ser reativado depois.`}
+        confirmLabel="Desativar"
+        danger
+        onConfirm={() => {
+          if (desativando) void alternarAtivo(desativando.id, false);
+          setDesativando(null);
+        }}
+        onCancel={() => setDesativando(null)}
+      />
     </div>
   );
 }

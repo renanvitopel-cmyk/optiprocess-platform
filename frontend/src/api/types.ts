@@ -15,6 +15,8 @@ export interface PortalUserRef {
   id: string;
   name: string;
   email: string;
+  /** Gestor (usa o CMMS, ocupa vaga) ou Solicitante (so solicitacoes, nao ocupa). */
+  role?: Role;
   active: boolean;
   lastLoginAt: string | null;
 }

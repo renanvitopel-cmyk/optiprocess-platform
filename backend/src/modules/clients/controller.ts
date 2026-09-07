@@ -58,7 +58,8 @@ export const getOwnClient = asyncHandler(async (req: Request, res: Response) => 
       plan: true,
       users: {
         where: { deletedAt: null },
-        select: { id: true, name: true, email: true, active: true, lastLoginAt: true, createdAt: true },
+        // O perfil vem junto: a tela distingue Gestor (ocupa vaga) de Solicitante (nao ocupa).
+        select: { id: true, name: true, email: true, role: true, active: true, lastLoginAt: true, createdAt: true },
         orderBy: { createdAt: "asc" },
       },
     },

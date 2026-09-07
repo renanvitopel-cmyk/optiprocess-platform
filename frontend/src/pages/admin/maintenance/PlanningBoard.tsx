@@ -160,26 +160,30 @@ export default function PlanningBoard() {
       ) : isLoading ? (
         <FullPageSpinner />
       ) : (
-        <div className="space-y-5">
+        // Quatro colunas lado a lado: a fila inteira cabe numa olhada, e a altura de cada
+        // coluna ja diz onde o trabalho esta empilhado. Em tela estreita elas empilham,
+        // porque quatro colunas de 200px nao seriam colunas, seriam tiras.
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {FAIXAS.map((faixa) => {
             const lista = porFaixa.get(faixa.id) ?? [];
             const Icone = faixa.icone;
             return (
-              <section key={faixa.id} className={`rounded-xl border p-4 ${faixa.tom}`}>
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <h2 className="flex items-center gap-2 font-semibold text-navy-900">
-                    <Icone className="h-4 w-4 text-navy-600" /> {faixa.titulo}
-                    <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-graphite-600">
-                      {lista.length}
-                    </span>
-                  </h2>
-                  <p className="text-xs text-graphite-500">{faixa.explicacao}</p>
-                </div>
+              <section key={faixa.id} className={`flex flex-col rounded-xl border p-3 ${faixa.tom}`}>
+                <h2 className="flex items-center gap-2 font-semibold text-navy-900">
+                  <Icone className="h-4 w-4 shrink-0 text-navy-600" />
+                  <span className="min-w-0 truncate">{faixa.titulo}</span>
+                  <span className="ml-auto shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-graphite-600">
+                    {lista.length}
+                  </span>
+                </h2>
+                <p className="mt-1 text-xs text-graphite-500">{faixa.explicacao}</p>
 
                 {lista.length === 0 ? (
-                  <p className="mt-3 text-sm text-graphite-400">Nenhuma ordem nesta faixa.</p>
+                  <p className="mt-3 text-sm text-graphite-400">Nenhuma ordem aqui.</p>
                 ) : (
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  // A coluna rola sozinha: uma fila de 80 ordens nao pode empurrar as
+                  // outras tres para fora da tela.
+                  <div className="mt-3 flex max-h-[calc(100vh-20rem)] flex-col gap-3 overflow-y-auto pr-0.5">
                     {lista.map((os) => (
                       <Cartao key={os.id} os={os} base={base} />
                     ))}

@@ -48,6 +48,12 @@ export async function listMaintenanceWorkOrders(params: ListWorkOrdersParams = {
   return data;
 }
 
+/** Libera a OS para execucao. Quem libera assume, se ela ainda nao tiver dono. */
+export async function liberarOrdem(id: string): Promise<MaintenanceWorkOrder> {
+  const { data } = await api.post<MaintenanceWorkOrder>(`/maintenance-work-orders/${id}/liberar`);
+  return data;
+}
+
 /** O proprio mantenedor assume a OS (precisa ter acesso ligado ao cadastro de mao de obra). */
 export async function assumirOrdem(id: string): Promise<MaintenanceWorkOrder> {
   const { data } = await api.post<MaintenanceWorkOrder>(`/maintenance-work-orders/${id}/assumir`);

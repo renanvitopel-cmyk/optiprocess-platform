@@ -9,6 +9,7 @@ import {
   updateMaintenanceWorkOrder,
   deleteMaintenanceWorkOrder,
   startMaintenanceWorkOrder,
+  releaseMaintenanceWorkOrder,
   claimMaintenanceWorkOrder,
   assignMaintenanceWorkOrder,
   completeMaintenanceWorkOrder,
@@ -54,10 +55,13 @@ maintenanceWorkOrdersRouter.get("/", listMaintenanceWorkOrders);
 maintenanceWorkOrdersRouter.get("/:id", getMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.post("/", requireRole(...CMMS_ROLES), createMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.patch("/:id", requireRole(...CMMS_ROLES), updateMaintenanceWorkOrder);
-maintenanceWorkOrdersRouter.delete("/:id", requireRole(...CMMS_ROLES), deleteMaintenanceWorkOrder);
+// Remover apaga o historico do ativo: a equipe do cliente CANCELA a OS em vez disso.
+// A rota fica so para a OptiProcess limpar dado de teste.
+maintenanceWorkOrdersRouter.delete("/:id", requireRole("ADMIN"), deleteMaintenanceWorkOrder);
 // Dois caminhos ate a OS ter dono: o mantenedor assume, ou quem planeja atribui.
 maintenanceWorkOrdersRouter.post("/:id/assumir", requireRole(...CMMS_ROLES), claimMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.patch("/:id/responsavel", requireRole(...CMMS_PLANNING_ROLES), assignMaintenanceWorkOrder);
+maintenanceWorkOrdersRouter.post("/:id/liberar", requireRole(...CMMS_ROLES), releaseMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.post("/:id/start", requireRole(...CMMS_ROLES), startMaintenanceWorkOrder);
 maintenanceWorkOrdersRouter.post("/:id/complete", requireRole(...CMMS_ROLES), completeMaintenanceWorkOrder);
 

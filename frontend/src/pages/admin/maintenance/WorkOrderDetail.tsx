@@ -3,10 +3,9 @@ import { CONDICOES_DE_EXECUCAO } from "../../../lib/maintenanceLabels";
 import { centroDeCustoComDescricao } from "../../../lib/centroDeCusto";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2, PlayCircle, CheckCircle2, Plus, X, Square, ShoppingCart, UserCheck } from "lucide-react";
+import { Pencil, PlayCircle, CheckCircle2, Plus, X, Square, ShoppingCart, UserCheck } from "lucide-react";
 import {
   getMaintenanceWorkOrder,
-  deleteMaintenanceWorkOrder,
   updateMaintenanceWorkOrder,
   startMaintenanceWorkOrder,
   completeMaintenanceWorkOrder,
@@ -27,6 +26,7 @@ import {
   removeWorkOrderAssignee,
   assumirOrdem,
   definirResponsavel,
+  liberarOrdem,
 } from "../../../api/maintenanceWorkOrders";
 import { listSpareParts } from "../../../api/spareParts";
 import { listAssetParts } from "../../../api/instruments";
@@ -36,7 +36,6 @@ import type { ChecklistItemResult, MaintenanceOrderStatus, LaborHourType, Mainte
 import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
-import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { Tabs } from "../../../components/Tabs";
 import { WorkOrderAttachments } from "./WorkOrderAttachments";
 import { useCmms } from "../../../lib/cmms";
@@ -62,8 +61,6 @@ export default function WorkOrderDetail() {
   const { canManage, isClient, base } = useCmms();
 
   const [tab, setTab] = useState("geral");
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [closureNotes, setClosureNotes] = useState("");
   const [partSparePartId, setPartSparePartId] = useState("");
@@ -122,19 +119,6 @@ export default function WorkOrderDetail() {
     queryClient.invalidateQueries({ queryKey: ["maintenance-work-order", id] });
   }
 
-  async function handleDelete() {
-    setDeleting(true);
-    try {
-      await deleteMaintenanceWorkOrder(id);
-      notify("success", "OS removida.");
-      navigate(`${base}/ordens`);
-    } catch (error) {
-      notify("error", getApiErrorMessage(error));
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   const [ocupadoResp, setOcupadoResp] = useState(false);
   const encerrada = workOrder?.status === "COMPLETED" || workOrder?.status === "CANCELED";
 
@@ -169,6 +153,26 @@ export default function WorkOrderDetail() {
       notify("error", getApiErrorMessage(error));
     } finally {
       setOcupadoResp(false);
+    }
+  }
+
+  const liberada = ["RELEASED", "IN_PROGRESS"].includes(workOrder?.status ?? "");
+
+  async function handleRelease() {
+    setBusy(true);
+    try {
+      const atualizada = await liberarOrdem(id);
+      notify(
+        "success",
+        atualizada.assignedResource
+          ? `OS liberada - responsavel: ${atualizada.assignedResource.name}.`
+          : "OS liberada. Defina o responsavel abaixo.",
+      );
+      invalidate();
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -527,7 +531,16 @@ O que sobrar volta para o estoque.`,
         actions={
           canManage && (
             <>
-              {!workOrder.startedAt && (
+              {/* Liberar e iniciar sao coisas diferentes: liberar e' dizer "pode fazer"
+                  (maquina disponivel, material chegou, parada autorizada); iniciar e' a
+                  ferramenta na mao, e e' dele que sai o MTTR. Quem libera assume a OS, se
+                  ela ainda nao tiver dono - e o planejador troca depois se precisar. */}
+              {!workOrder.startedAt && !liberada && (
+                <button className="btn-primary" onClick={() => void handleRelease()} disabled={busy}>
+                  <CheckCircle2 className="h-4 w-4" /> Liberar
+                </button>
+              )}
+              {!workOrder.startedAt && liberada && (
                 <button className="btn-primary" onClick={handleStart} disabled={busy}>
                   <PlayCircle className="h-4 w-4" /> Iniciar
                 </button>
@@ -542,9 +555,9 @@ O que sobrar volta para o estoque.`,
                   <Pencil className="h-4 w-4" /> Editar
                 </button>
               )}
-              <button className="btn-danger" onClick={() => setConfirmDelete(true)}>
-                <Trash2 className="h-4 w-4" /> Remover
-              </button>
+              {/* Nao existe "Remover": apagar a OS levaria junto as horas lancadas, o
+                  material consumido e a falha registrada. O que se faz com uma OS que nao
+                  sera executada e' CANCELAR, no seletor de situacao - o registro fica. */}
             </>
           )
         }
@@ -1353,16 +1366,6 @@ O que sobrar volta para o estoque.`,
 
       {tab === "anexos" && <WorkOrderAttachments workOrderId={id} canEdit={!!canManage} />}
 
-      <ConfirmDialog
-        open={confirmDelete}
-        title="Remover ordem de manutencao"
-        description="Tem certeza que deseja remover esta OS?"
-        confirmLabel="Remover"
-        danger
-        loading={deleting}
-        onConfirm={handleDelete}
-        onCancel={() => setConfirmDelete(false)}
-      />
     </div>
   );
 }

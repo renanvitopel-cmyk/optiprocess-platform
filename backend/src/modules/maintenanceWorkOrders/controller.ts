@@ -411,6 +411,14 @@ export const updateMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
   res.json(workOrder);
 });
 
+/**
+ * Remover uma OS apaga o historico do ativo - as horas lancadas, o material consumido, a
+ * falha registrada. Quem quer parar uma OS que nao sera feita CANCELA: o registro fica,
+ * com o motivo, e os indicadores continuam contando a mesma realidade.
+ *
+ * A rota continua existindo so para a OptiProcess limpar dado de teste; a equipe do
+ * cliente nao alcanca (e o botao saiu da tela).
+ */
 export const deleteMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const existing = await prisma.maintenanceWorkOrder.findFirst({ where: { id: req.params.id, deletedAt: null } });
@@ -520,6 +528,52 @@ export const assignMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
     description: assignedResourceId
       ? `OS ${workOrder.number} atribuida a ${workOrder.assignedResource?.name ?? "-"}`
       : `OS ${workOrder.number} ficou sem responsavel`,
+  });
+
+  res.json(workOrder);
+});
+
+/**
+ * Libera a OS para execucao - e quem libera fica com ela.
+ *
+ * Liberar e iniciar sao coisas diferentes: liberar e' dizer "pode fazer" (a maquina esta
+ * disponivel, o material chegou, a parada foi autorizada); iniciar e' a ferramenta na mao,
+ * e e' dele que sai o MTTR. Antes so existia iniciar, entao a OS pulava da fila direto
+ * para "em execucao" e ninguem sabia dizer quem tinha autorizado.
+ *
+ * Quem libera assume, se a OS ainda nao tem dono - na pratica quem libera e' quem vai
+ * fazer, ou quem esta entregando para alguem. Trocar depois continua sendo do planejador.
+ */
+export const releaseMaintenanceWorkOrder = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const existing = await prisma.maintenanceWorkOrder.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  if (!existing) throw new NotFoundError("Ordem de manutencao");
+  assertOwnClient(req, existing.clientId);
+  if (["COMPLETED", "CANCELED"].includes(existing.status)) throw new ValidationError("Esta OS ja foi encerrada.");
+  if (existing.startedAt) throw new ValidationError("Esta OS ja foi iniciada.");
+
+  // Quem clicou, se estiver ligado a um cadastro de mao de obra. Sem ligacao nao e' erro:
+  // a OS e' liberada do mesmo jeito, so continua sem dono definido.
+  const eu = await prisma.laborResource.findFirst({
+    where: { userId: req.user?.sub, deletedAt: null, active: true },
+    select: { id: true, name: true },
+  });
+
+  const workOrder = await prisma.maintenanceWorkOrder.update({
+    where: { id: existing.id },
+    data: {
+      status: "RELEASED",
+      ...(existing.assignedResourceId || !eu ? {} : { assignedResourceId: eu.id }),
+    },
+    include: detailInclude,
+  });
+
+  await writeAuditLog({
+    userId: req.user?.sub,
+    action: "UPDATE",
+    entityType: "MaintenanceWorkOrder",
+    entityId: workOrder.id,
+    description: `OS ${workOrder.number} liberada${!existing.assignedResourceId && eu ? ` e assumida por ${eu.name}` : ""}`,
   });
 
   res.json(workOrder);

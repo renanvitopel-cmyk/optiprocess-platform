@@ -68,6 +68,7 @@ const MaintenancePlanTemplatesList = lazyPagina(() => import("./pages/admin/main
 const WorkOrdersList = lazyPagina(() => import("./pages/admin/maintenance/WorkOrdersList"));
 const KanbanBoard = lazyPagina(() => import("./pages/admin/maintenance/KanbanBoard"));
 const SchedulingBoard = lazyPagina(() => import("./pages/admin/maintenance/SchedulingBoard"));
+const PlanningBoard = lazyPagina(() => import("./pages/admin/maintenance/PlanningBoard"));
 const PredictivePanel = lazyPagina(() => import("./pages/admin/maintenance/PredictivePanel"));
 const RcaList = lazyPagina(() => import("./pages/admin/maintenance/RcaList"));
 const RcaForm = lazyPagina(() => import("./pages/admin/maintenance/RcaForm"));
@@ -172,6 +173,7 @@ export default function App() {
                   <Route path="manutencao/ordens" element={<WorkOrdersList />} />
                   <Route path="manutencao/kanban" element={<KanbanBoard />} />
                   <Route path="manutencao/programacao" element={<SchedulingBoard />} />
+                  <Route path="manutencao/planejamento" element={<PlanningBoard />} />
                   <Route path="manutencao/preditiva" element={<PredictivePanel />} />
                   <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
                   <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
@@ -266,6 +268,7 @@ export default function App() {
                   <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
                   <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
                   <Route path="manutencao/programacao" element={<SchedulingBoard />} />
+                  <Route path="manutencao/planejamento" element={<PlanningBoard />} />
                   <Route path="manutencao/preditiva" element={<PredictivePanel />} />
                   <Route path="manutencao/falhas" element={<FailureCodesList />} />
                   <Route path="manutencao/pareto" element={<FailureAnalysis />} />

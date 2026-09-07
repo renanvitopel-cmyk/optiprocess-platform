@@ -160,6 +160,8 @@ export interface Instrument {
   description: string | null;
   /** Sujeito a calibracao - so estes aparecem na lista de Ativos da OptiProcess. */
   calibratable: boolean;
+  /** Profundidade na arvore (0 = raiz) - so vem na listagem, para o recuo de cada linha. */
+  treeDepth?: number;
   /** Tem ponto de lubrificacao - irmao de calibratable. */
   lubricatable?: boolean;
   /** O que falta depois de marcar o ativo (so vem na ficha, nao na listagem). */

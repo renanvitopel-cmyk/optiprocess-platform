@@ -38,6 +38,62 @@ async function attachPhotoUrl<T extends { photoKey: string | null; photoFileName
   );
 }
 
+/**
+ * Coloca os ativos na ordem da arvore: cada pai seguido dos proprios filhos, e irmaos em
+ * ordem de TAG.
+ *
+ * A listagem vinha ordenada por vencimento de calibracao - herdado de quando a tela era so
+ * de instrumentos de medicao. Num parque de manutencao isso embaralha a estrutura: o
+ * subconjunto aparecia antes da linha a que pertence, e o recuo de filho, sozinho, so
+ * deixava a bagunca mais visivel.
+ *
+ * A ordem e' calculada aqui e nao no banco porque a arvore precisa sobreviver aos filtros
+ * da tela: um ativo cujo pai foi filtrado fora entra como raiz, em vez de sumir da lista.
+ */
+function ordenarPelaArvore<T extends { id: string; parentId: string | null; tag: string | null }>(
+  itens: T[],
+): { ordenados: T[]; profundidadePorId: Map<string, number> } {
+  const presentes = new Set(itens.map((i) => i.id));
+  const filhosPorPai = new Map<string | null, T[]>();
+
+  for (const item of itens) {
+    // Pai fora do resultado (filtrado, ou de outro galho) = este ativo e' raiz aqui.
+    const chave = item.parentId && presentes.has(item.parentId) ? item.parentId : null;
+    const lista = filhosPorPai.get(chave) ?? [];
+    lista.push(item);
+    filhosPorPai.set(chave, lista);
+  }
+
+  for (const lista of filhosPorPai.values()) {
+    lista.sort((a, b) => (a.tag ?? "").localeCompare(b.tag ?? "", "pt-BR", { numeric: true }));
+  }
+
+  const ordenados: T[] = [];
+  const profundidadePorId = new Map<string, number>();
+  const visitados = new Set<string>();
+  const descer = (paiId: string | null, profundidade: number) => {
+    // Ciclo ja e' barrado na escrita; o limite aqui e' so para nunca travar a listagem.
+    if (profundidade > 20) return;
+    for (const item of filhosPorPai.get(paiId) ?? []) {
+      if (visitados.has(item.id)) continue;
+      visitados.add(item.id);
+      profundidadePorId.set(item.id, profundidade);
+      ordenados.push(item);
+      descer(item.id, profundidade + 1);
+    }
+  };
+  descer(null, 0);
+
+  // Rede de seguranca: nada pode desaparecer da lista por causa da ordenacao.
+  for (const item of itens) {
+    if (!visitados.has(item.id)) {
+      profundidadePorId.set(item.id, 0);
+      ordenados.push(item);
+    }
+  }
+  return { ordenados, profundidadePorId };
+}
+
 export const listInstruments = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
@@ -88,11 +144,21 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
       : {}),
   };
 
-  const [items, total] = await Promise.all([
+  // A pagina precisa sair da arvore inteira, nao de um pedaco dela: paginar antes de
+  // ordenar deixaria o filho numa pagina e o pai noutra. Este primeiro passo traz so o
+  // esqueleto (id/pai/TAG), que e' barato mesmo num parque grande.
+  const esqueleto = await prisma.instrument.findMany({
+    where,
+    select: { id: true, parentId: true, tag: true },
+  });
+  const { ordenados: naOrdem, profundidadePorId } = ordenarPelaArvore(esqueleto);
+  const { skip, take } = toSkipTake(pageParams);
+  const idsDaPagina = naOrdem.slice(skip, skip + take).map((i) => i.id);
+  const posicao = new Map(idsDaPagina.map((id, i) => [id, i]));
+
+  const [itemsFora, total] = await Promise.all([
     prisma.instrument.findMany({
-      where,
-      orderBy: { nextDueDate: "asc" },
-      ...toSkipTake(pageParams),
+      where: { id: { in: idsDaPagina } },
       include: {
         client: { select: { id: true, companyName: true, tradeName: true } },
         parent: { select: { id: true, type: true, model: true, serialNumber: true, tag: true, description: true } },
@@ -102,11 +168,17 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
         costCenter: { select: { id: true, name: true, code: true } },
       },
     }),
-    prisma.instrument.count({ where }),
+    Promise.resolve(esqueleto.length),
   ]);
 
+  // O `in` volta em ordem do banco; a ordem da arvore e' reposta aqui.
+  const items = itemsFora.sort((a, b) => (posicao.get(a.id) ?? 0) - (posicao.get(b.id) ?? 0));
+
   const withLevel = await attachPhotoUrl(attachAssetTypeLevel(items.map(withDerivedStatus)));
-  res.json(buildPagedResult(withLevel, total, pageParams));
+  // A tela recua cada linha pela profundidade real, e nao mais so "tem pai ou nao tem":
+  // com tres niveis, filho e neto ficavam no mesmo recuo.
+  const comProfundidade = withLevel.map((i) => ({ ...i, treeDepth: profundidadePorId.get(i.id) ?? 0 }));
+  res.json(buildPagedResult(comProfundidade, total, pageParams));
 });
 
 const instrumentRefSelect = { id: true, type: true, model: true, serialNumber: true, tag: true, description: true } as const;

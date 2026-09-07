@@ -69,8 +69,13 @@ export default function PortalInstruments() {
             header: "Tag",
             // Filhos entram recuados, para a lista mostrar a arvore de ativos.
             accessor: (i) => (
-              <span className={i.parentId ? "pl-4 text-graphite-600" : ""}>
-                {i.parentId && <span className="mr-1 text-graphite-300">&#8627;</span>}
+              <span
+                className={i.treeDepth ? "text-graphite-600" : ""}
+                // Recuo pela profundidade real na arvore: com tres niveis, filho e neto
+                // ficavam no mesmo lugar e a estrutura sumia.
+                style={i.treeDepth ? { paddingLeft: i.treeDepth * 16 } : undefined}
+              >
+                {!!i.treeDepth && <span className="mr-1 text-graphite-300">&#8627;</span>}
                 {i.tag ?? "-"}
               </span>
             ),

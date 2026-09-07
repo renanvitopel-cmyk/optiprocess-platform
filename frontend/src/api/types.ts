@@ -1317,7 +1317,8 @@ export interface LubricationPoint {
 export interface LubricationPointInput {
   clientId?: string;
   instrumentId: string;
-  code: string;
+  /** Em branco, o servidor numera a partir do TAG do ativo (-PT-01, -PT-02...). */
+  code?: string;
   name: string;
   component?: string | null;
   lubricantId: string;

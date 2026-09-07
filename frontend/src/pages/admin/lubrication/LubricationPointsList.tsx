@@ -23,6 +23,7 @@ import {
   updateLubricationPoint,
   registrarLubrificacao,
   listPendingLubricationPoints,
+  proximoCodigoDePonto,
 } from "../../../api/lubrication";
 import type { LubricationPoint } from "../../../api/types";
 import type { AtivoSemPonto } from "../../../api/lubrication";
@@ -33,7 +34,8 @@ import { ESTADOS_DA_MAQUINA, CONDICOES_DO_PONTO } from "../../../lib/lubrication
 
 const pointSchema = z.object({
   instrumentId: z.string().uuid("Selecione o ativo."),
-  code: z.string().min(1, "Informe o codigo do ponto."),
+  // Em branco o servidor numera sozinho a partir do TAG do ativo.
+  code: z.string().optional(),
   name: z.string().min(2, "Informe o nome do ponto."),
   component: z.string().optional(),
   lubricantId: z.string().uuid("Selecione o lubrificante."),
@@ -117,6 +119,22 @@ export default function LubricationPointsList() {
     defaultValues: { method: "MANUAL_GUN", machineState: "ANY", frequencyDays: 30 },
   });
   const recordForm = useForm<RecordForm>({ resolver: zodResolver(recordSchema) });
+
+  // Um motor tem varios pontos, e batizar cada um na mao e' onde nascem os codigos
+  // repetidos. Escolhido o ativo, o proximo numero livre ja aparece no campo - editavel,
+  // e so quando o campo esta vazio, para nao apagar o que a pessoa digitou.
+  const ativoDoFormulario = pointForm.watch("instrumentId");
+  useEffect(() => {
+    if (!formOpen || editando || !ativoDoFormulario || !clientId) return;
+    if (pointForm.getValues("code")?.trim()) return;
+    let cancelado = false;
+    proximoCodigoDePonto(ativoDoFormulario, clientId)
+      .then((codigo) => {
+        if (!cancelado && !pointForm.getValues("code")?.trim()) pointForm.setValue("code", codigo);
+      })
+      .catch(() => undefined);
+    return () => { cancelado = true; };
+  }, [formOpen, editando, ativoDoFormulario, clientId, pointForm]);
 
   const abrirNovo = useCallback(
     (ativoId = "") => {
@@ -400,9 +418,8 @@ export default function LubricationPointsList() {
           <div className="grid gap-4 sm:grid-cols-2">
             <TextInput
               label="Codigo do ponto"
-              required
-              placeholder="Ex.: MOT-01-MANCAL-LA"
-              hint="Unico na empresa - e' o que o lubrificador procura no campo."
+              placeholder="Preenchido ao escolher o ativo"
+              hint="Numerado a partir do TAG do ativo (-PT-01, -PT-02...). Da para editar; em branco, o sistema numera ao salvar."
               error={pointForm.formState.errors.code?.message}
               {...pointForm.register("code")}
             />

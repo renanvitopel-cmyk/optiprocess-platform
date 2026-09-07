@@ -108,7 +108,9 @@ export const deleteLubricant = asyncHandler(async (req: Request, res: Response) 
 const pointSchema = z.object({
   clientId: z.string().uuid().optional(),
   instrumentId: z.string().uuid(),
-  code: z.string().min(1, "Informe o codigo do ponto."),
+  // Em branco o sistema numera sozinho a partir do TAG do ativo - um motor tem
+  // varios pontos, e batizar cada um na mao e' onde nascem os codigos repetidos.
+  code: z.string().optional(),
   name: z.string().min(2, "Informe o nome do ponto."),
   component: z.string().nullish(),
   lubricantId: z.string().uuid(),
@@ -203,18 +205,76 @@ async function assertRefsDoPonto(clientId: string, data: { instrumentId?: string
   }
 }
 
+
+/**
+ * Proximo codigo livre para um ponto deste ativo: "<TAG do ativo>-PT-01", -PT-02...
+ *
+ * O prefixo e' o TAG e nao o nome da area de proposito: um motor e uma bomba na mesma
+ * area teriam a mesma numeracao, e o codigo do ponto e' unico por empresa. Como o TAG ja
+ * carrega a area na propria estrutura (VMA-VL4-DOS-BAL-001), a area continua legivel no
+ * codigo sem abrir espaco para colisao.
+ */
+export async function sugerirCodigoDePonto(clientId: string, instrumentId: string): Promise<string> {
+  const ativo = await prisma.instrument.findFirst({
+    where: { id: instrumentId, clientId, deletedAt: null },
+    select: { tag: true, area: { select: { code: true, name: true } } },
+  });
+
+  const prefixo =
+    ativo?.tag?.trim() ||
+    ativo?.area?.code?.trim() ||
+    ativo?.area?.name?.trim().toUpperCase().replace(/\s+/g, "-") ||
+    "PT";
+
+  // Numera a partir do maior sufixo ja usado NESTE ativo, e nao da contagem de pontos:
+  // apagar o PT-02 e criar outro nao pode devolver um codigo que ja existiu.
+  const doAtivo = await prisma.lubricationPoint.findMany({
+    where: { clientId, instrumentId, deletedAt: null },
+    select: { code: true },
+  });
+  // O prefixo vem de um TAG digitado pelo usuario: escapado antes de virar regex.
+  const prefixoEscapado = prefixo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const padrao = new RegExp(`^${prefixoEscapado}-PT-(\\d+)$`, "i");
+  let proximo = 1;
+  for (const { code } of doAtivo) {
+    const achado = padrao.exec(code);
+    if (achado) proximo = Math.max(proximo, Number(achado[1]) + 1);
+  }
+
+  // O codigo e' unico por empresa: se alguem ja usou este numero noutro lugar, segue.
+  for (let tentativa = 0; tentativa < 200; tentativa += 1) {
+    const codigo = `${prefixo}-PT-${String(proximo).padStart(2, "0")}`;
+    const existe = await prisma.lubricationPoint.findFirst({ where: { clientId, code: codigo, deletedAt: null }, select: { id: true } });
+    if (!existe) return codigo;
+    proximo += 1;
+  }
+  throw new ValidationError("Nao consegui gerar um codigo livre para este ponto. Informe um manualmente.");
+}
+
+/** A tela pede a sugestao assim que o ativo e' escolhido, para o campo ja vir preenchido
+ * e ainda assim editavel. */
+export const getNextLubricationPointCode = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const { instrumentId, clientId } = req.query as { instrumentId?: string; clientId?: string };
+  if (!instrumentId) throw new ValidationError("Informe o ativo.");
+  res.json({ code: await sugerirCodigoDePonto(resolveClientId(req, clientId), instrumentId) });
+});
+
 export const createLubricationPoint = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = pointSchema.parse(req.body);
   const clientId = resolveClientId(req, data.clientId);
   await assertRefsDoPonto(clientId, data);
 
-  const duplicado = await prisma.lubricationPoint.findFirst({ where: { clientId, code: data.code, deletedAt: null } });
-  if (duplicado) throw new ValidationError(`Ja existe um ponto com o codigo "${data.code}".`);
+  const code = data.code?.trim() || (await sugerirCodigoDePonto(clientId, data.instrumentId));
+
+  const duplicado = await prisma.lubricationPoint.findFirst({ where: { clientId, code, deletedAt: null } });
+  if (duplicado) throw new ValidationError(`Ja existe um ponto com o codigo "${code}".`);
 
   const point = await prisma.lubricationPoint.create({
     data: {
       ...data,
+      code,
       clientId,
       nextDueAt: proximaAplicacao(data.lastLubricatedAt, data.frequencyDays),
       createdById: req.user?.sub,

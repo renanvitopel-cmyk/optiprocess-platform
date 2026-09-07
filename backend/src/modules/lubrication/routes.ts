@@ -8,6 +8,7 @@ import {
   deleteLubricant,
   listLubricationPoints,
   listPendingLubricationPoints,
+  getNextLubricationPointCode,
   getLubricationPoint,
   createLubricationPoint,
   updateLubricationPoint,
@@ -47,6 +48,7 @@ lubricationRouter.delete("/rotas/:id", deleteLubricationRoute);
 
 // Antes de "/pontos/:id", senao "pendentes" viraria um id.
 lubricationRouter.get("/pontos/pendentes", listPendingLubricationPoints);
+lubricationRouter.get("/pontos/proximo-codigo", getNextLubricationPointCode);
 lubricationRouter.get("/pontos", listLubricationPoints);
 lubricationRouter.get("/pontos/:id", getLubricationPoint);
 lubricationRouter.post("/pontos", createLubricationPoint);

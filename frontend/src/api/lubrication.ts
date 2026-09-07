@@ -71,6 +71,14 @@ export async function listPendingLubricationPoints(
   return data;
 }
 
+/** Proximo codigo livre para um ponto deste ativo ("VMA-VL4-001-PT-02"). */
+export async function proximoCodigoDePonto(instrumentId: string, clientId?: string): Promise<string> {
+  const { data } = await api.get<{ code: string }>("/lubrificacao/pontos/proximo-codigo", {
+    params: { instrumentId, clientId },
+  });
+  return data.code;
+}
+
 export async function getLubricationPoint(id: string): Promise<LubricationPoint> {
   const { data } = await api.get<LubricationPoint>(`/lubrificacao/pontos/${id}`);
   return data;

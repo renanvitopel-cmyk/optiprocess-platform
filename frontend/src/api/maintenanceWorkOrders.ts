@@ -39,6 +39,8 @@ export interface ListWorkOrdersParams {
   type?: MaintenanceOrderType;
   technicianId?: string;
   search?: string;
+  /** Com instrumentId: traz tambem as ordens dos ativos abaixo dele na arvore. */
+  incluirComponentes?: boolean;
 }
 
 export async function listMaintenanceWorkOrders(params: ListWorkOrdersParams = {}): Promise<PagedResult<MaintenanceWorkOrder>> {

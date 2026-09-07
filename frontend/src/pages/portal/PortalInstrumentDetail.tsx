@@ -14,6 +14,7 @@ import { FullPageSpinner } from "../../components/Spinner";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Tabs } from "../../components/Tabs";
 import { formatDate, formatServiceCategory, formatCurrency } from "../../lib/format";
+import { TIPOS_DE_OS } from "../../lib/maintenanceLabels";
 import { areaComCentroDeCusto } from "../../lib/centroDeCusto";
 import { EmptyState } from "../../components/EmptyState";
 import { PortalInstrumentFormModal } from "./PortalInstrumentFormModal";
@@ -87,9 +88,13 @@ export default function PortalInstrumentDetail() {
     queryFn: () => listMaintenancePlans({ instrumentId: id, pageSize: 10 }),
     enabled: !!id && hasCmms,
   });
+  // "Todas as ordens relacionadas ao ativo": as dele e as dos componentes abaixo. Numa
+  // linha, o servico acontece nas maquinas do galho - listar so as proprias diria
+  // "nenhuma ordem" numa linha com dezenas delas.
+  const [incluirComponentes, setIncluirComponentes] = useState(true);
   const { data: workOrders } = useQuery({
-    queryKey: ["portal-instrument-maintenance-work-orders", id],
-    queryFn: () => listMaintenanceWorkOrders({ instrumentId: id, pageSize: 10 }),
+    queryKey: ["portal-instrument-work-orders", id, incluirComponentes],
+    queryFn: () => listMaintenanceWorkOrders({ instrumentId: id, incluirComponentes, pageSize: 100 }),
     enabled: !!id && hasCmms,
   });
 
@@ -395,37 +400,87 @@ export default function PortalInstrumentDetail() {
           </div>
 
           <div className="card p-5">
-            <h2 className="mb-3 font-semibold text-navy-900">RLP Maintenance CMMS</h2>
-            {(!plans || plans.items.length === 0) && (!workOrders || workOrders.items.length === 0) ? (
-              <EmptyState title="Nenhuma manutencao" description="Nenhum plano ou ordem de manutencao para este ativo ainda." />
+            <h2 className="mb-3 font-semibold text-navy-900">Planos preventivos</h2>
+            {!plans || plans.items.length === 0 ? (
+              <EmptyState title="Nenhum plano" description="Este ativo ainda nao tem plano de manutencao." />
             ) : (
-              <>
-                {plans && plans.items.length > 0 && (
-                  <ul className="divide-y divide-gray-100">
-                    {plans.items.map((p) => (
-                      <li key={p.id} className="flex items-center justify-between py-2.5 text-sm">
-                        <span className="font-medium text-graphite-800">{p.name}</span>
-                        <StatusBadge status={p.active ? (p.derivedStatus ?? "VALID") : "INACTIVE"} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {workOrders && workOrders.items.length > 0 && (
-                  <>
-                    <p className="mt-3 text-xs uppercase tracking-wide text-graphite-400">Ordens de manutencao</p>
-                    <ul className="divide-y divide-gray-100">
-                      {workOrders.items.map((w) => (
-                        <li key={w.id}>
-                          <Link to={`/portal/manutencao/ordens/${w.id}`} className="flex items-center justify-between py-2.5 text-sm hover:text-navy-700">
-                            <span className="font-medium text-graphite-800">{w.number}</span>
-                            <StatusBadge status={w.status} />
+              <ul className="divide-y divide-gray-100">
+                {plans.items.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between py-2.5 text-sm">
+                    <span className="font-medium text-graphite-800">{p.name}</span>
+                    <StatusBadge status={p.active ? (p.derivedStatus ?? "VALID") : "INACTIVE"} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="card p-5">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-semibold text-navy-900">
+                Ordens de manutencao
+                {workOrders && <span className="ml-2 text-sm font-normal text-graphite-500">({workOrders.total})</span>}
+              </h2>
+              {/* Numa linha, o servico acontece nas maquinas abaixo dela: o historico util
+                  e' o do galho, nao so o da propria linha. Da para restringir. */}
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-graphite-600">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300"
+                  checked={incluirComponentes}
+                  onChange={(e) => setIncluirComponentes(e.target.checked)}
+                />
+                Incluir os componentes abaixo
+              </label>
+            </div>
+
+            {!workOrders || workOrders.items.length === 0 ? (
+              <EmptyState
+                title="Nenhuma ordem"
+                description={
+                  incluirComponentes
+                    ? "Nem este ativo nem os componentes abaixo dele tem ordem de manutencao."
+                    : "Este ativo nao tem ordem propria - marque acima para incluir os componentes."
+                }
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase tracking-wide text-graphite-500">
+                    <tr>
+                      <th className="px-3 py-2">Ordem</th>
+                      <th className="px-3 py-2">Tipo</th>
+                      <th className="px-3 py-2">Ativo</th>
+                      <th className="px-3 py-2">Abertura</th>
+                      <th className="px-3 py-2">Conclusao</th>
+                      <th className="px-3 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {workOrders.items.map((w) => (
+                      <tr key={w.id} className="hover:bg-gray-50">
+                        <td className="px-3 py-2">
+                          <Link to={`/portal/manutencao/ordens/${w.id}`} className="font-medium text-navy-800 hover:underline">
+                            {w.number}
                           </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </>
+                          <span className="block text-xs text-graphite-400">{w.title}</span>
+                        </td>
+                        <td className="px-3 py-2 text-graphite-700">{TIPOS_DE_OS[w.type] ?? w.type}</td>
+                        <td className="px-3 py-2 text-graphite-600">
+                          {w.instrumentId === id ? (
+                            <span className="text-graphite-400">este ativo</span>
+                          ) : (
+                            w.instrument?.tag ?? w.instrument?.description ?? "-"
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-graphite-600">{formatDate(w.createdAt)}</td>
+                        <td className="px-3 py-2 text-graphite-600">{w.completedAt ? formatDate(w.completedAt) : "-"}</td>
+                        <td className="px-3 py-2"><StatusBadge status={w.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>

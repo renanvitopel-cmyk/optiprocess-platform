@@ -78,6 +78,14 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
     enabled: !!parentId,
   });
 
+  // Areas da planta do PAI - e' entre elas que um ativo do meio da arvore escolhe a sua.
+  const { data: areasDaPlantaDoPai } = useQuery({
+    queryKey: ["areas-do-pai", pai?.plantId],
+    queryFn: () => listAreas({ plantId: pai?.plantId as string, active: true }),
+    enabled: !!parentId && !!pai?.plantId,
+  });
+
+
   useEffect(() => {
     if (open) {
       reset(
@@ -203,19 +211,34 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
             pedia esses campos e o backend os descartava em seguida, substituindo pelo
             contexto do pai: o usuario preenchia e nao entendia por que mudava sozinho. */}
         {parentId ? (
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-graphite-400">Contexto herdado</p>
-            <p className="mt-0.5 text-xs text-graphite-500">Vem do ativo pai - a arvore e' a verdade tecnica.</p>
-            <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-2">
-              <div>
-                <dt className="text-xs text-graphite-400">Planta</dt>
-                <dd className="font-medium text-graphite-800">{pai?.plant?.name ?? "-"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-graphite-400">Area / Centro de custo</dt>
-                <dd className="font-medium text-graphite-800">{areaComCentroDeCusto(pai?.area, pai?.costCenter)}</dd>
-              </div>
-            </dl>
+          <div className="rounded-lg border border-gray-200 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-graphite-400">Onde fica</p>
+            <p className="mt-0.5 text-xs text-graphite-500">
+              A planta vem do ativo pai - um componente nao muda de fabrica.
+            </p>
+            <p className="mt-2 text-sm">
+              <span className="text-xs text-graphite-400">Planta: </span>
+              <span className="font-medium text-graphite-800">{pai?.plant?.name ?? "-"}</span>
+            </p>
+
+            {/* A area NAO e' so do topo. A raiz costuma ser a planta inteira, que tem
+                varias linhas: se o ativo que representa a linha nao pudesse dizer em que
+                area fica, a arvore toda ficaria sem area - e portanto sem centro de custo,
+                que e' exatamente o que aconteceu antes desta correcao. */}
+            <div className="mt-3">
+              <SelectInput
+                label="Area / Centro de custo"
+                placeholder={
+                  pai?.area ? `Herdar do pai: ${areaComCentroDeCusto(pai.area, pai.costCenter)}` : "Herdar do pai (sem area definida)"
+                }
+                hint="Preencha no ativo que representa a linha/area. Tudo abaixo dele herda daqui, com o centro de custo junto."
+                options={(areasDaPlantaDoPai ?? []).map((a) => ({
+                  value: a.id,
+                  label: areaComCentroDeCusto(a, a.costCenter),
+                }))}
+                {...register("areaId")}
+              />
+            </div>
           </div>
         ) : (
           <div className="rounded-lg border border-gray-200 p-4">

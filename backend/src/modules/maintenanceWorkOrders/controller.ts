@@ -55,10 +55,27 @@ const detailInclude = {
   rootCauseAnalyses: { where: { deletedAt: null }, select: { id: true, status: true }, orderBy: { createdAt: "desc" as const } },
 };
 
+
+/** O ativo mais tudo que esta abaixo dele na arvore. Vai ate 20 niveis - ciclo ja e'
+ * barrado na escrita, o limite aqui e' so para nunca travar a listagem. */
+async function idsDoAtivoEDescendentes(instrumentId: string): Promise<string[]> {
+  const todos = [instrumentId];
+  let camada = [instrumentId];
+  for (let nivel = 0; nivel < 20 && camada.length > 0; nivel += 1) {
+    const filhos = await prisma.instrument.findMany({
+      where: { parentId: { in: camada }, deletedAt: null },
+      select: { id: true },
+    });
+    camada = filhos.map((f) => f.id);
+    todos.push(...camada);
+  }
+  return todos;
+}
+
 export const listMaintenanceWorkOrders = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
-  const { clientId, instrumentId, planId, status, type, technicianId, search } = req.query as {
+  const { clientId, instrumentId, planId, status, type, technicianId, search, incluirComponentes } = req.query as {
     clientId?: string;
     instrumentId?: string;
     planId?: string;
@@ -66,12 +83,19 @@ export const listMaintenanceWorkOrders = asyncHandler(async (req: Request, res: 
     type?: MaintenanceOrderType;
     technicianId?: string;
     search?: string;
+    incluirComponentes?: string;
   };
+
+  // A ficha de uma LINHA quase nao tem ordem propria - o servico acontece nas maquinas
+  // abaixo dela. Sem isso a tela dizia "nenhuma ordem" numa linha com dezenas delas no
+  // galho, que e' o oposto do que quem abre a ficha quer saber.
+  const idsDoGalho =
+    instrumentId && incluirComponentes === "true" ? await idsDoAtivoEDescendentes(instrumentId) : null;
 
   const where = {
     deletedAt: null,
     ...resolveClientScope(req, clientId),
-    ...(instrumentId ? { instrumentId } : {}),
+    ...(idsDoGalho ? { instrumentId: { in: idsDoGalho } } : instrumentId ? { instrumentId } : {}),
     ...(planId ? { planId } : {}),
     ...(status ? { status } : {}),
     ...(type ? { type } : {}),

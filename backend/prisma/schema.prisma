@@ -668,6 +668,9 @@ model Instrument {
   // Sem isso, o primeiro ponto ja tirava o ativo da fila e o segundo nunca era cobrado -
   // e ninguem alem de quem olhou a maquina sabe quantos pontos ela tem.
   lubricationPointsComplete  Boolean           @default(false)
+  // Este ativo define a propria area (em vez de herdar a do pai). Irmao de
+  // costCenterOverride: existe para a propagacao vinda de cima nao apagar a escolha.
+  areaOverride               Boolean           @default(false)
   // Opcional: so faz sentido para ativos com calibracao periodica rastreada. Uma empresa
   // que contratou so o CMMS (sem Calibracao) cadastra o ativo sem preencher isso.
   calibrationFrequencyMonths Int?

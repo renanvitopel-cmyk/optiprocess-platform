@@ -334,7 +334,13 @@ export const TIPO_A_DEFINIR = "A definir";
 /** Contexto (planta/area/centro de custo) que este ativo deve ter, dado o pai escolhido.
  * O centro de custo vem do padrao da area; um ativo marcado como excecao (so ADMIN) fica
  * com o que foi definido a mao. */
-async function resolveInheritedContext(parentId: string | null | undefined, fallback: { plantId?: string | null; areaId?: string | null }) {
+async function resolveInheritedContext(
+  parentId: string | null | undefined,
+  fallback: { plantId?: string | null; areaId?: string | null },
+  /** Este ativo define a propria area? Sem isso, o filho ficaria preso a area antiga
+   * quando o pai mudasse de area - o valor dele venceria a heranca por acidente. */
+  areaPropria = false,
+) {
   let plantId = fallback.plantId ?? null;
   let areaId = fallback.areaId ?? null;
 
@@ -343,9 +349,13 @@ async function resolveInheritedContext(parentId: string | null | undefined, fall
       where: { id: parentId, deletedAt: null },
       select: { plantId: true, areaId: true },
     });
-    // Ativo filho nao escolhe planta/area: herda o do pai, sempre.
+    // A planta e' sempre a do pai: um componente nao muda de fabrica.
     plantId = parent?.plantId ?? null;
-    areaId = parent?.areaId ?? null;
+    // A AREA, nao. A raiz costuma ser a planta inteira, que tem varias linhas - forcar a
+    // area so no topo obrigava a fabrica inteira a ficar numa area so, e o resultado era
+    // uma arvore inteira sem area nenhuma (foi o que aconteceu na Votorantim). O ativo que
+    // representa a linha define a sua area; dali para baixo, herda de novo.
+    areaId = (areaPropria ? fallback.areaId : null) ?? parent?.areaId ?? null;
   }
 
   let costCenterId: string | null = null;
@@ -371,23 +381,30 @@ async function propagateContextToDescendants(instrumentId: string, depth = 0): P
 
   const children = await prisma.instrument.findMany({
     where: { parentId: instrumentId, deletedAt: null },
-    select: { id: true, costCenterOverride: true },
+    select: { id: true, costCenterOverride: true, areaOverride: true, areaId: true },
   });
   if (children.length === 0) return;
 
-  let areaCostCenterId: string | null = null;
-  if (parent.areaId) {
-    const area = await prisma.area.findFirst({ where: { id: parent.areaId, deletedAt: null }, select: { costCenterId: true } });
-    areaCostCenterId = area?.costCenterId ?? null;
-  }
+  const centroDaArea = async (areaId: string | null) => {
+    if (!areaId) return null;
+    const area = await prisma.area.findFirst({ where: { id: areaId, deletedAt: null }, select: { costCenterId: true } });
+    return area?.costCenterId ?? null;
+  };
+  const centroDoPai = await centroDaArea(parent.areaId);
 
   for (const child of children) {
+    // Filho que definiu a propria area (a linha, tipicamente) mantem a dela - e leva o
+    // centro de custo dela junto. Sem isso, salvar qualquer coisa na raiz apagaria a area
+    // escolhida no meio da arvore.
+    const areaDoFilho = child.areaOverride ? child.areaId : parent.areaId;
+    const centro = child.areaOverride ? await centroDaArea(child.areaId) : centroDoPai;
+
     await prisma.instrument.update({
       where: { id: child.id },
       data: {
         plantId: parent.plantId,
-        areaId: parent.areaId,
-        ...(child.costCenterOverride ? {} : { costCenterId: areaCostCenterId }),
+        areaId: areaDoFilho,
+        ...(child.costCenterOverride ? {} : { costCenterId: centro }),
       },
     });
     await propagateContextToDescendants(child.id, depth + 1);
@@ -475,7 +492,11 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
 
   // Planta/area/centro de custo nao sao digitados no filho: vem do pai (e o centro de
   // custo, do padrao da area). Excecao de centro de custo so o ADMIN faz.
-  const context = await resolveInheritedContext(data.parentId, data);
+  // Um ativo do meio da arvore pode dizer em que area ele fica (a linha, tipicamente); dali
+  // para baixo o galho herda dele. A marca existe para a propagacao vinda da raiz nao
+  // apagar essa escolha depois.
+  const areaOverride = !!data.parentId && !!data.areaId;
+  const context = await resolveInheritedContext(data.parentId, data, areaOverride);
   // No cadastro o centro de custo vem SEMPRE da area (propria, ou herdada do pai). Abrir
   // excecao e' um ato deliberado sobre um ativo que ja existe, feito na edicao: antes,
   // qualquer costCenterId que viesse no corpo virava excecao em silencio - inclusive num
@@ -505,6 +526,7 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
       areaId: context.areaId,
       costCenterId: context.costCenterId,
       costCenterOverride,
+      areaOverride,
       nextDueDate,
       createdById: req.user?.sub,
     },
@@ -548,9 +570,16 @@ export const updateInstrument = asyncHandler(async (req: Request, res: Response)
   // Mesma heranca do cadastro. Se o contexto mudou (trocou de pai, ou a area mudou de
   // centro de custo), o galho inteiro abaixo precisa acompanhar - senao o filho ficaria
   // apontando para a area antiga.
+  // Informar a area num ativo que tem pai e' dizer "esta linha fica nesta area" - a marca
+  // sobrevive as propagacoes seguintes. Limpar a area volta a herdar do pai.
+  const temPai = (data.parentId !== undefined ? data.parentId : existing.parentId) != null;
+  const areaOverride =
+    data.areaId !== undefined ? temPai && data.areaId != null : existing.areaOverride && temPai;
+
   const context = await resolveInheritedContext(
     data.parentId !== undefined ? data.parentId : existing.parentId,
     { plantId: data.plantId ?? existing.plantId, areaId: data.areaId ?? existing.areaId },
+    areaOverride,
   );
   const isAdmin = req.user?.role === "ADMIN";
   const querSetarCentroCusto = data.costCenterId !== undefined && data.costCenterId !== null;
@@ -573,6 +602,7 @@ export const updateInstrument = asyncHandler(async (req: Request, res: Response)
       areaId: context.areaId,
       costCenterId,
       costCenterOverride,
+      areaOverride,
       nextDueDate,
     },
   });

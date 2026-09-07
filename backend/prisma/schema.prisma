@@ -664,6 +664,10 @@ model Instrument {
   // a ficha cobrar o cadastro do ponto, em vez de o ativo ficar sem lubrificacao so
   // porque ninguem abriu a tela de Lubrificacao para cria-lo.
   lubricatable               Boolean           @default(false)
+  // Marcado por quem cadastrou, dizendo que a lista de pontos deste ativo esta completa.
+  // Sem isso, o primeiro ponto ja tirava o ativo da fila e o segundo nunca era cobrado -
+  // e ninguem alem de quem olhou a maquina sabe quantos pontos ela tem.
+  lubricationPointsComplete  Boolean           @default(false)
   // Opcional: so faz sentido para ativos com calibracao periodica rastreada. Uma empresa
   // que contratou so o CMMS (sem Calibracao) cadastra o ativo sem preencher isso.
   calibrationFrequencyMonths Int?

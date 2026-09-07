@@ -9,6 +9,7 @@ import {
   listLubricationPoints,
   listPendingLubricationPoints,
   getNextLubricationPointCode,
+  setLubricationPointsComplete,
   getLubricationPoint,
   createLubricationPoint,
   updateLubricationPoint,
@@ -49,6 +50,8 @@ lubricationRouter.delete("/rotas/:id", deleteLubricationRoute);
 // Antes de "/pontos/:id", senao "pendentes" viraria um id.
 lubricationRouter.get("/pontos/pendentes", listPendingLubricationPoints);
 lubricationRouter.get("/pontos/proximo-codigo", getNextLubricationPointCode);
+// Concluir e' do ativo, nao do ponto: e' o ativo que sai (ou volta) para a fila.
+lubricationRouter.patch("/ativos/:id/pontos-concluidos", setLubricationPointsComplete);
 lubricationRouter.get("/pontos", listLubricationPoints);
 lubricationRouter.get("/pontos/:id", getLubricationPoint);
 lubricationRouter.post("/pontos", createLubricationPoint);

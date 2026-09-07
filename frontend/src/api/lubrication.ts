@@ -54,6 +54,8 @@ export async function listLubricationPoints(
 
 /** Ativos marcados como lubrificaveis que ainda nao tem ponto cadastrado. */
 export interface AtivoSemPonto {
+  /** Quantos pontos ja foram cadastrados neste ativo (0 = nem comecou). */
+  pontosCadastrados: number;
   id: string;
   tag: string | null;
   description: string | null;
@@ -77,6 +79,11 @@ export async function proximoCodigoDePonto(instrumentId: string, clientId?: stri
     params: { instrumentId, clientId },
   });
   return data.code;
+}
+
+/** Diz que a lista de pontos deste ativo esta completa - e' o que tira o ativo da fila. */
+export async function concluirPontosDoAtivo(instrumentId: string, concluido: boolean): Promise<void> {
+  await api.patch(`/lubrificacao/ativos/${instrumentId}/pontos-concluidos`, { concluido });
 }
 
 export async function getLubricationPoint(id: string): Promise<LubricationPoint> {

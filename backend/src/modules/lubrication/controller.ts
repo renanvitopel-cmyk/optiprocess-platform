@@ -311,6 +311,19 @@ export const deleteLubricationPoint = asyncHandler(async (req: Request, res: Res
   if (!existing) throw new NotFoundError("Ponto de lubrificacao");
   assertOwnClient(req, existing.clientId);
   await prisma.lubricationPoint.update({ where: { id: existing.id }, data: { deletedAt: new Date(), active: false } });
+
+  // Removido o ultimo ponto, o ativo volta para a fila: um ativo lubrificavel sem nenhum
+  // ponto nao pode continuar marcado como concluido.
+  const restantes = await prisma.lubricationPoint.count({
+    where: { instrumentId: existing.instrumentId, deletedAt: null, active: true },
+  });
+  if (restantes === 0) {
+    await prisma.instrument.updateMany({
+      where: { id: existing.instrumentId, lubricationPointsComplete: true },
+      data: { lubricationPointsComplete: false },
+    });
+  }
+
   res.status(204).send();
 });
 
@@ -694,7 +707,7 @@ export const getLubricationDashboard = asyncHandler(async (req: Request, res: Re
       where: {
         deletedAt: null,
         lubricatable: true,
-        lubricationPoints: { none: { deletedAt: null, active: true } },
+        lubricationPointsComplete: false,
         ...resolveClientScope(req, clientId),
       },
     }),
@@ -735,9 +748,10 @@ export const listPendingLubricationPoints = asyncHandler(async (req: Request, re
   const where = {
     deletedAt: null,
     lubricatable: true,
-    // "Nenhum ponto ativo" e nao "nenhum ponto": um ponto desativado deixa o ativo
-    // descoberto do mesmo jeito, e some da rota igual.
-    lubricationPoints: { none: { deletedAt: null, active: true } },
+    // Sai da fila quando ALGUEM DIZ que acabou, nao quando aparece o primeiro ponto: um
+    // motor tem mancal LA, mancal LOA e acoplamento, e cadastrar so o primeiro deixava os
+    // outros dois para tras sem nada avisar.
+    lubricationPointsComplete: false,
     ...resolveClientScope(req, clientId),
     ...(plantId ? { plantId } : {}),
     ...(areaId ? { areaId } : {}),
@@ -765,10 +779,47 @@ export const listPendingLubricationPoints = asyncHandler(async (req: Request, re
         plant: { select: { id: true, name: true } },
         area: { select: { id: true, name: true } },
         parent: { select: { id: true, tag: true, description: true } },
+        _count: { select: { lubricationPoints: { where: { deletedAt: null, active: true } } } },
       },
     }),
     prisma.instrument.count({ where }),
   ]);
 
-  res.json(buildPagedResult(items, total, pageParams));
+  // "0 pontos" e "2 pontos, falta confirmar" sao situacoes diferentes na hora de decidir
+  // por onde comecar - a tela mostra as duas.
+  const comContagem = items.map(({ _count, ...ativo }) => ({ ...ativo, pontosCadastrados: _count.lubricationPoints }));
+  res.json(buildPagedResult(comContagem, total, pageParams));
+});
+
+/**
+ * Marca (ou desmarca) que a lista de pontos deste ativo esta completa - e' o que tira o
+ * ativo da fila. So aceita concluir um ativo que ja tenha pelo menos um ponto: concluir
+ * com zero seria o mesmo que dizer que a maquina nao precisa de lubrificacao, e para isso
+ * existe desmarcar "lubrificavel" na ficha.
+ */
+export const setLubricationPointsComplete = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const { concluido } = z.object({ concluido: z.boolean() }).parse(req.body);
+
+  const ativo = await prisma.instrument.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  if (!ativo) throw new NotFoundError("Ativo");
+  assertOwnClient(req, ativo.clientId);
+
+  if (concluido) {
+    const pontos = await prisma.lubricationPoint.count({
+      where: { instrumentId: ativo.id, deletedAt: null, active: true },
+    });
+    if (pontos === 0) {
+      throw new ValidationError(
+        "Este ativo ainda nao tem nenhum ponto. Cadastre os pontos, ou desmarque \"lubrificavel\" na ficha se ele nao precisa de lubrificacao.",
+      );
+    }
+  }
+
+  const atualizado = await prisma.instrument.update({
+    where: { id: ativo.id },
+    data: { lubricationPointsComplete: concluido },
+    select: { id: true, tag: true, lubricationPointsComplete: true },
+  });
+  res.json(atualizado);
 });

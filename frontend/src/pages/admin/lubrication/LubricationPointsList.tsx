@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Droplets, AlertTriangle } from "lucide-react";
+import { Plus, Droplets, AlertTriangle, Check, Search } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
 import { Tabs } from "../../../components/Tabs";
 import { DataTable } from "../../../components/DataTable";
@@ -24,6 +24,7 @@ import {
   registrarLubrificacao,
   listPendingLubricationPoints,
   proximoCodigoDePonto,
+  concluirPontosDoAtivo,
 } from "../../../api/lubrication";
 import type { LubricationPoint } from "../../../api/types";
 import type { AtivoSemPonto } from "../../../api/lubrication";
@@ -85,6 +86,10 @@ export default function LubricationPointsList() {
   // e um ativo sem ponto nao aparece em rota nenhuma: a falta dele e' silenciosa. Esta
   // aba e' a fila de trabalho de quem esta montando o plano.
   const [aba, setAba] = useState<"cadastrados" | "pendentes">("cadastrados");
+  const [busca, setBusca] = useState("");
+  // Marcado por padrao no cadastro em lote: quem abre pelo "Cadastrar ponto" de um ativo
+  // pendente quase sempre tem mais de um ponto para lancar.
+  const [continuarNoAtivo, setContinuarNoAtivo] = useState(true);
   const abrirNovoAoEntrar = searchParams.get("novo") === "1";
 
   const { data: clients } = useQuery({
@@ -98,13 +103,13 @@ export default function LubricationPointsList() {
     enabled: !!clientId,
   });
   const { data, isLoading } = useQuery({
-    queryKey: ["pontos-lubrificacao", clientId, situacao, page, instrumentId],
-    queryFn: () => listLubricationPoints({ clientId, situacao: situacao || undefined, instrumentId: instrumentId || undefined, page, pageSize: 20 }),
+    queryKey: ["pontos-lubrificacao", clientId, situacao, page, instrumentId, busca],
+    queryFn: () => listLubricationPoints({ clientId, situacao: situacao || undefined, instrumentId: instrumentId || undefined, search: busca || undefined, page, pageSize: 20 }),
     enabled: !!clientId,
   });
   const { data: pendentes, isLoading: carregandoPendentes } = useQuery({
-    queryKey: ["pontos-pendentes", clientId, page],
-    queryFn: () => listPendingLubricationPoints({ clientId, page, pageSize: 20 }),
+    queryKey: ["pontos-pendentes", clientId, page, busca],
+    queryFn: () => listPendingLubricationPoints({ clientId, search: busca || undefined, page, pageSize: 20 }),
     enabled: !!clientId,
   });
 
@@ -187,9 +192,42 @@ export default function LubricationPointsList() {
       if (editando) await updateLubricationPoint(editando.id, payload);
       else await createLubricationPoint(payload);
       notify("success", editando ? "Ponto atualizado." : "Ponto cadastrado.");
+      atualizarListas();
+
+      // Um motor tem varios pontos. Fechar o formulario a cada um obrigava a escolher o
+      // ativo de novo tres vezes seguidas - e' quando alguem para no primeiro e esquece o
+      // resto. Continuando, o ativo fica, o codigo avanca sozinho e o resto entra limpo.
+      if (continuarNoAtivo && !editando) {
+        const ativo = values.instrumentId;
+        pointForm.reset({
+          method: "MANUAL_GUN",
+          machineState: "ANY",
+          frequencyDays: values.frequencyDays,
+          lubricantId: values.lubricantId,
+          instrumentId: ativo,
+          code: "",
+          name: "",
+        });
+        return;
+      }
       setFormOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["pontos-lubrificacao"] });
-      queryClient.invalidateQueries({ queryKey: ["lubrificacao-dashboard"] });
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    }
+  }
+
+  function atualizarListas() {
+    queryClient.invalidateQueries({ queryKey: ["pontos-lubrificacao"] });
+    queryClient.invalidateQueries({ queryKey: ["pontos-pendentes"] });
+    queryClient.invalidateQueries({ queryKey: ["pontos-do-ativo"] });
+    queryClient.invalidateQueries({ queryKey: ["lubrificacao-dashboard"] });
+  }
+
+  async function concluirAtivo(instrumentId: string) {
+    try {
+      await concluirPontosDoAtivo(instrumentId, true);
+      notify("success", "Ativo concluido - saiu da fila de pendentes.");
+      atualizarListas();
     } catch (error) {
       notify("error", getApiErrorMessage(error));
     }
@@ -261,6 +299,15 @@ export default function LubricationPointsList() {
           <option value="vencidos">Somente vencidos</option>
           <option value="proximos">Vencem em 7 dias</option>
         </select>
+        <div className="relative flex-1 sm:min-w-64">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-graphite-400" />
+          <input
+            className="input pl-9"
+            placeholder={aba === "pendentes" ? "Buscar ativo por TAG ou nome..." : "Buscar ponto por codigo, nome ou ativo..."}
+            value={busca}
+            onChange={(e) => { setBusca(e.target.value); setPage(1); }}
+          />
+        </div>
       </div>
 
       {clientId && (
@@ -284,7 +331,7 @@ export default function LubricationPointsList() {
           pagination={pendentes}
           onPageChange={setPage}
           emptyTitle="Nenhum ativo esperando ponto"
-          emptyDescription="Todo ativo marcado como lubrificavel ja tem pelo menos um ponto cadastrado."
+          emptyDescription="Todo ativo marcado como lubrificavel ja foi concluido."
           columns={[
             {
               header: "Ativo",
@@ -299,15 +346,38 @@ export default function LubricationPointsList() {
             { header: "Planta", accessor: (a) => a.plant?.name ?? "-" },
             { header: "Area", accessor: (a) => a.area?.name ?? "-" },
             {
+              // Um TAG pode ter varios pontos: "2 pontos, falta confirmar" e "nem comecou"
+              // sao situacoes diferentes na hora de decidir por onde comecar.
+              header: "Pontos",
+              accessor: (a) =>
+                a.pontosCadastrados > 0 ? (
+                  <span className="font-medium text-navy-900">{a.pontosCadastrados}</span>
+                ) : (
+                  <span className="text-graphite-400">nenhum</span>
+                ),
+            },
+            {
               header: "",
               accessor: (a) => (
-                <button
-                  className="btn-outline text-sm"
-                  onClick={() => abrirNovo(a.id)}
-                  disabled={opcoesDeLubrificante.length === 0}
-                >
-                  <Plus className="h-4 w-4" /> Cadastrar ponto
-                </button>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    className="btn-outline text-sm"
+                    onClick={() => abrirNovo(a.id)}
+                    disabled={opcoesDeLubrificante.length === 0}
+                  >
+                    <Plus className="h-4 w-4" /> Adicionar ponto
+                  </button>
+                  {/* So quem olhou a maquina sabe quantos pontos ela tem - por isso quem
+                      tira o ativo da fila e' a pessoa, e nao o primeiro ponto salvo. */}
+                  <button
+                    className="btn-ghost text-sm"
+                    onClick={() => concluirAtivo(a.id)}
+                    disabled={a.pontosCadastrados === 0}
+                    title={a.pontosCadastrados === 0 ? "Cadastre ao menos um ponto antes de concluir" : "Nao ha mais pontos neste ativo"}
+                  >
+                    <Check className="h-4 w-4" /> Concluir
+                  </button>
+                </div>
               ),
             },
           ]}
@@ -400,9 +470,26 @@ export default function LubricationPointsList() {
         size="lg"
         footer={
           <>
-            <button type="button" className="btn-outline" onClick={() => setFormOpen(false)}>Cancelar</button>
+            {!editando && (
+              <label className="mr-auto flex cursor-pointer items-center gap-2 text-sm text-graphite-600">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300"
+                  checked={continuarNoAtivo}
+                  onChange={(e) => setContinuarNoAtivo(e.target.checked)}
+                />
+                Continuar neste ativo (para lancar o proximo ponto)
+              </label>
+            )}
+            <button type="button" className="btn-outline" onClick={() => setFormOpen(false)}>
+              {continuarNoAtivo && !editando ? "Concluir" : "Cancelar"}
+            </button>
             <button type="submit" form="ponto-form" className="btn-primary" disabled={pointForm.formState.isSubmitting}>
-              {pointForm.formState.isSubmitting ? "Salvando..." : "Salvar"}
+              {pointForm.formState.isSubmitting
+                ? "Salvando..."
+                : continuarNoAtivo && !editando
+                  ? "Salvar e adicionar outro"
+                  : "Salvar"}
             </button>
           </>
         }

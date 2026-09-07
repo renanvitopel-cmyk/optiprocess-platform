@@ -15,7 +15,7 @@ import { DataTable } from "../../../components/DataTable";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { EmptyState } from "../../../components/EmptyState";
 import { Modal } from "../../../components/Modal";
-import { TextInput, SelectInput } from "../../../components/form/Field";
+import { TextInput } from "../../../components/form/Field";
 import { listCostCenters } from "../../../api/costCenters";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
@@ -27,7 +27,7 @@ const schema = z.object({
   name: z.string().min(2, "Informe o nome da area."),
   code: z.string().optional(),
   // Centro de custo padrao: todo ativo dentro da area herda este centro de custo.
-  costCenterId: z.string().uuid().optional().or(z.literal("")),
+  costCenterCode: z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -73,18 +73,18 @@ export default function AreasList() {
   });
 
   function openCreate() {
-    reset({ name: "", code: "", costCenterId: "" });
+    reset({ name: "", code: "", costCenterCode: "" });
     setEditing(null);
     setCreateOpen(true);
   }
   function openEdit(area: Area) {
-    reset({ name: area.name, code: area.code ?? "", costCenterId: area.costCenterId ?? "" });
+    reset({ name: area.name, code: area.code ?? "", costCenterCode: area.costCenter?.code ?? area.costCenter?.name ?? "" });
     setEditing(area);
     setCreateOpen(true);
   }
 
   async function onSubmit(values: FormValues) {
-    const payload = { name: values.name, code: values.code || null, costCenterId: values.costCenterId || null };
+    const payload = { name: values.name, code: values.code || null, costCenterCode: values.costCenterCode?.trim() ?? "" };
     try {
       if (editing) {
         await updateArea(editing.id, payload);
@@ -124,9 +124,9 @@ export default function AreasList() {
   return (
     <div>
       <PageHeader
-        title="Areas"
-        description="Areas/processos dentro de cada planta (ex.: Recebimento de materia-prima)"
-        breadcrumbs={[{ label: "Ativos", to: assetsBase }, { label: "Cadastros tecnicos", to: `${assetsBase}/cadastros` }, { label: "Areas" }]}
+        title="Areas / Centros de custo"
+        description="Cada area da planta e o centro de custo em que ela rateia - um cadastro so, porque o centro existe por causa da area"
+        breadcrumbs={[{ label: "Ativos", to: assetsBase }, { label: "Cadastros tecnicos", to: `${assetsBase}/cadastros` }, { label: "Areas / Centros de custo" }]}
         actions={
           canManage &&
           plantId && (
@@ -179,7 +179,7 @@ export default function AreasList() {
           columns={[
             { header: "Nome", accessor: (a) => <span className="font-medium text-navy-900">{a.name}</span> },
             { header: "Codigo", accessor: (a) => <span className="text-xs text-graphite-500">{a.code ?? "-"}</span> },
-            { header: "Centro de custo padrao", accessor: (a) => (a.costCenter ? centroDeCustoComDescricao(a.costCenter) : <span className="text-graphite-400">Nenhum</span>) },
+            { header: "Centro de custo", accessor: (a) => (a.costCenter ? centroDeCustoComDescricao(a.costCenter) : <span className="text-graphite-400">Nenhum</span>) },
             {
               header: "Status",
               accessor: (a) =>
@@ -226,13 +226,21 @@ export default function AreasList() {
         <form id="area-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
           <TextInput label="Nome" required placeholder="Ex.: Recebimento de materia-prima" error={errors.name?.message} {...register("name")} />
           <TextInput label="Codigo (opcional)" placeholder="Ex.: RMP" error={errors.code?.message} {...register("code")} />
-          <SelectInput
-            label="Centro de custo padrao"
-            placeholder="Nenhum"
-            hint="Todo ativo desta area herda este centro de custo. Excecao por ativo so o administrador faz."
-            options={(costCenters ?? []).map((c) => ({ value: c.id, label: centroDeCustoComDescricao(c) }))}
-            {...register("costCenterId")}
+          <TextInput
+            label="Centro de custo (numero)"
+            placeholder="Ex.: 108"
+            list="centros-de-custo-existentes"
+            hint="Digite o numero. Se ja existir, e' reaproveitado; se nao, e' criado agora. Todo ativo desta area - e todos os filhos dele - herdam este centro de custo."
+            error={errors.costCenterCode?.message}
+            {...register("costCenterCode")}
           />
+          {/* Sugestoes do que a empresa ja usa, sem fechar a lista: um centro novo se
+              digita aqui mesmo, que e' o motivo de area e centro terem virado um cadastro so. */}
+          <datalist id="centros-de-custo-existentes">
+            {(costCenters ?? []).map((c) => (
+              <option key={c.id} value={c.code ?? c.name} label={c.code ? c.name : undefined} />
+            ))}
+          </datalist>
         </form>
       </Modal>
     </div>

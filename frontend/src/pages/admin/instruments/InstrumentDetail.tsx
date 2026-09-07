@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { centroDeCustoComDescricao } from "../../../lib/centroDeCusto";
+import { areaComCentroDeCusto } from "../../../lib/centroDeCusto";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Trash2, Plus, AlertTriangle } from "lucide-react";
@@ -230,10 +230,15 @@ export default function InstrumentDetail() {
             {/* Herdados do ativo raiz - o rotulo diz isso para ninguem procurar onde editar
                 num ativo filho. "Sistema" saiu: era um nivel da propria arvore repetido aqui. */}
             <Info label={instrument.parentId ? "Planta (herdada)" : "Planta"} value={instrument.plant?.name ?? "-"} />
-            <Info label={instrument.parentId ? "Area (herdada)" : "Area"} value={instrument.area?.name ?? "-"} />
             <Info
-              label={instrument.costCenterOverride ? "Centro de custo (excecao)" : "Centro de custo (da area)"}
-              value={centroDeCustoComDescricao(instrument.costCenter)}
+              label={
+                instrument.costCenterOverride
+                  ? "Area / Centro de custo (excecao no centro)"
+                  : instrument.parentId
+                    ? "Area / Centro de custo (herdado do pai)"
+                    : "Area / Centro de custo"
+              }
+              value={areaComCentroDeCusto(instrument.area, instrument.costCenter)}
             />
             <Info label="Periodicidade" value={instrument.calibrationFrequencyMonths ? `${instrument.calibrationFrequencyMonths} meses` : "Nao rastreada"} />
             <Info label="Ultima calibracao" value={formatDate(instrument.lastCalibrationDate)} />

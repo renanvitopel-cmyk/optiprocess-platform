@@ -23,3 +23,21 @@ export function centroDeCustoComDescricao(cc?: { name?: string | null; code?: st
   if (numero && nome) return `${numero} - ${nome}`;
   return numero || nome || "-";
 }
+
+/**
+ * Area e centro de custo num rotulo so: "Linha 3 - CC 108".
+ *
+ * Sao um cadastro so - o centro de custo existe por causa da area e vem junto dela para
+ * todo ativo do galho. Mostrar em dois campos separados fazia parecer que dava para
+ * escolher um sem o outro, e era exatamente o que confundia no cadastro do ativo.
+ */
+export function areaComCentroDeCusto(
+  area?: { name?: string | null } | null,
+  centro?: { name?: string | null; code?: string | null } | null,
+): string {
+  const nomeDaArea = area?.name?.trim();
+  const numero = centro?.code?.trim() || centro?.name?.trim();
+  if (nomeDaArea && numero) return `${nomeDaArea} - CC ${numero}`;
+  if (nomeDaArea) return `${nomeDaArea} - sem centro de custo`;
+  return numero ? `CC ${numero}` : "-";
+}

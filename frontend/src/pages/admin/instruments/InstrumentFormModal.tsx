@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { centroDeCustoComDescricao } from "../../../lib/centroDeCusto";
+import { areaComCentroDeCusto, centroDeCustoComDescricao } from "../../../lib/centroDeCusto";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -277,18 +277,14 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
             <p className="mt-0.5 text-xs text-graphite-500">
               Vem do ativo pai e do centro de custo padrao da area - nao se edita aqui.
             </p>
-            <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-3">
+            <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-xs text-graphite-400">Planta</dt>
                 <dd className="font-medium text-graphite-800">{parent?.plant?.name ?? "-"}</dd>
               </div>
               <div>
-                <dt className="text-xs text-graphite-400">Area</dt>
-                <dd className="font-medium text-graphite-800">{parent?.area?.name ?? "-"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-graphite-400">Centro de custo</dt>
-                <dd className="font-medium text-graphite-800">{centroDeCustoComDescricao(parent?.costCenter)}</dd>
+                <dt className="text-xs text-graphite-400">Area / Centro de custo</dt>
+                <dd className="font-medium text-graphite-800">{areaComCentroDeCusto(parent?.area, parent?.costCenter)}</dd>
               </div>
             </dl>
           </div>
@@ -388,7 +384,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
             </div>
             {areaId && (
               <p className="mt-3 text-xs text-graphite-500">
-                Centro de custo: <span className="font-medium text-graphite-800">{centroDeCustoDaArea ?? "a area escolhida ainda nao tem um padrao"}</span>
+                Centro de custo: <span className="font-medium text-graphite-800">{centroDeCustoDaArea ?? "a area escolhida ainda nao tem um numero"}</span>
                 {" "}- vem da area, nao se digita aqui.
               </p>
             )}

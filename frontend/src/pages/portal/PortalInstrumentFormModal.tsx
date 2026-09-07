@@ -10,7 +10,7 @@ import { AssetLevelInput } from "../../components/AssetLevelInput";
 import { AssetTypeInput } from "../../components/AssetTypeInput";
 import { LocationPicker } from "../../components/LocationPicker";
 import { listAreas } from "../../api/areas";
-import { centroDeCustoComDescricao } from "../../lib/centroDeCusto";
+import { areaComCentroDeCusto, centroDeCustoComDescricao } from "../../lib/centroDeCusto";
 import { createInstrument, updateInstrument, getInstrument } from "../../api/instruments";
 import type { Instrument } from "../../api/types";
 import { useToast } from "../../components/Toast";
@@ -206,18 +206,14 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-graphite-400">Contexto herdado</p>
             <p className="mt-0.5 text-xs text-graphite-500">Vem do ativo pai - a arvore e' a verdade tecnica.</p>
-            <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-3">
+            <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-xs text-graphite-400">Planta</dt>
                 <dd className="font-medium text-graphite-800">{pai?.plant?.name ?? "-"}</dd>
               </div>
               <div>
-                <dt className="text-xs text-graphite-400">Area</dt>
-                <dd className="font-medium text-graphite-800">{pai?.area?.name ?? "-"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-graphite-400">Centro de custo</dt>
-                <dd className="font-medium text-graphite-800">{pai?.costCenter?.name ?? "-"}</dd>
+                <dt className="text-xs text-graphite-400">Area / Centro de custo</dt>
+                <dd className="font-medium text-graphite-800">{areaComCentroDeCusto(pai?.area, pai?.costCenter)}</dd>
               </div>
             </dl>
           </div>
@@ -234,9 +230,9 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
               <p className="mt-3 text-xs text-graphite-500">
                 Centro de custo:{" "}
                 <span className="font-medium text-graphite-800">
-                  {centroDaArea ? centroDeCustoComDescricao(centroDaArea) : "a area escolhida ainda nao tem um padrao"}
+                  {centroDaArea ? centroDeCustoComDescricao(centroDaArea) : "a area escolhida ainda nao tem um numero"}
                 </span>{" "}
-                - vem da area, nao se digita aqui.
+                - vem junto da area, e todo ativo abaixo deste herda os dois.
               </p>
             )}
           </div>

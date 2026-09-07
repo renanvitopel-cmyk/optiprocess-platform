@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Tags, Factory, Workflow, Wallet, ChevronRight, ListChecks, OctagonPause, LayoutTemplate, HardHat, ClipboardPlus, IdCard } from "lucide-react";
+import { Tags, Factory, Workflow, ChevronRight, ListChecks, OctagonPause, LayoutTemplate, HardHat, ClipboardPlus, IdCard } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
 import { useCmms } from "../../../lib/cmms";
 
@@ -16,8 +16,9 @@ export default function TechnicalCatalogsHub() {
       items: [
         { to: `${assetsBase}/tipos`, icon: Tags, title: "Tipos de ativo", description: "Nivel na hierarquia (Planta, Maquina, Subconjunto, Parte...)" },
         { to: `${assetsBase}/plantas`, icon: Factory, title: "Plantas", description: "Unidades/fabricas da empresa" },
-        { to: `${assetsBase}/areas`, icon: Workflow, title: "Areas", description: "Areas/processos dentro de cada planta" },
-        { to: `${assetsBase}/centros-custo`, icon: Wallet, title: "Centros de custo", description: "Classificacao contabil para apurar custo de manutencao" },
+        // Um cadastro so: o centro de custo existe por causa da area, e mante-los em
+        // telas separadas obrigava a cadastrar o centro antes para so entao voltar aqui.
+        { to: `${assetsBase}/areas`, icon: Workflow, title: "Areas / Centros de custo", description: "Areas da planta e o centro de custo em que cada uma rateia" },
       ],
     },
     {

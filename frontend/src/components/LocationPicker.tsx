@@ -67,8 +67,9 @@ export function LocationPicker<T extends FieldValues>({ clientId, register, watc
         })}
       />
       <SelectInput
-        label="Area"
+        label="Area / Centro de custo"
         placeholder={plantId ? "Nenhuma" : "Selecione a planta primeiro"}
+        hint="O centro de custo vem junto da area escolhida."
         options={(areas ?? []).map((a) => ({ value: a.id, label: a.name }))}
         disabled={!plantId}
         {...register("areaId" as Path<T>)}

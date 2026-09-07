@@ -13,6 +13,7 @@ import { FullPageSpinner } from "../../components/Spinner";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Tabs } from "../../components/Tabs";
 import { formatDate, formatServiceCategory, formatCurrency } from "../../lib/format";
+import { areaComCentroDeCusto } from "../../lib/centroDeCusto";
 import { EmptyState } from "../../components/EmptyState";
 import { PortalInstrumentFormModal } from "./PortalInstrumentFormModal";
 import { MeterFormModal } from "../admin/instruments/MeterFormModal";
@@ -175,9 +176,12 @@ export default function PortalInstrumentDetail() {
             <Info label="Faixa de medicao" value={instrument.measurementRange ?? "-"} />
             <Info label="Local de instalacao" value={instrument.installationLocation ?? "-"} />
             <Info label="Planta" value={instrument.plant?.name ?? "-"} />
-            <Info label="Area" value={instrument.area?.name ?? "-"} />
-            <Info label="Sistema" value={instrument.system?.name ?? "-"} />
-            <Info label="Centro de custo" value={instrument.costCenter?.name ?? "-"} />
+            {/* Um campo so: o centro de custo vem da area e nao se escolhe separado.
+                "Sistema" saiu - era um nivel da propria arvore repetido aqui. */}
+            <Info
+              label={instrument.parentId ? "Area / Centro de custo (herdado do pai)" : "Area / Centro de custo"}
+              value={areaComCentroDeCusto(instrument.area, instrument.costCenter)}
+            />
             <Info label="Periodicidade" value={instrument.calibrationFrequencyMonths ? `${instrument.calibrationFrequencyMonths} meses` : "Nao rastreada"} />
             <Info label="Ultima calibracao" value={formatDate(instrument.lastCalibrationDate)} />
             <Info label="Proxima calibracao" value={formatDate(instrument.nextDueDate)} />

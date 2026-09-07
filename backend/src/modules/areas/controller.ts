@@ -36,7 +36,37 @@ const areaSchema = z.object({
   code: z.string().nullish(),
   // Centro de custo padrao da area - todo ativo dentro dela herda este centro de custo.
   costCenterId: z.string().uuid().nullish(),
+  // O numero do centro de custo, digitado na propria linha da area. Area e centro de
+  // custo viraram um cadastro so: exigir que o centro existisse antes, numa outra tela,
+  // era um passo a mais para uma informacao que so existe por causa da area.
+  costCenterCode: z.string().nullish(),
 });
+
+/**
+ * Encontra o centro de custo pelo numero, ou cria na hora.
+ *
+ * undefined = o formulario nao mexeu no campo. "" = limpar. Um numero = usar esse centro,
+ * reaproveitando o que ja existe (varias areas podem ratear no mesmo) e reativando um que
+ * tenha sido desativado, em vez de criar um numero repetido.
+ */
+async function resolverCentroDeCusto(clientId: string, codigo: string | null | undefined): Promise<string | null | undefined> {
+  if (codigo === undefined) return undefined;
+  const numero = codigo?.trim();
+  if (!numero) return null;
+
+  const existente = await prisma.costCenter.findFirst({
+    where: { clientId, deletedAt: null, OR: [{ code: numero }, { name: numero }] },
+  });
+  if (existente) {
+    if (!existente.active) await prisma.costCenter.update({ where: { id: existente.id }, data: { active: true } });
+    return existente.id;
+  }
+
+  // O nome recebe o proprio numero: e' o numero que identifica o centro em toda a tela,
+  // e o banco exige nome unico por empresa - assim o unico nao vira o campo errado.
+  const criado = await prisma.costCenter.create({ data: { clientId, code: numero, name: numero } });
+  return criado.id;
+}
 
 /** A planta escolhida precisa existir e ser da mesma empresa - senao a area ficaria
  * pendurada numa planta de outro cliente. */
@@ -64,6 +94,10 @@ export const createArea = asyncHandler(async (req: Request, res: Response) => {
   await assertPlantBelongsToClient(data.plantId, data.clientId!);
   if (data.costCenterId) await assertCostCenterBelongsToClient(data.costCenterId, data.clientId!);
 
+  const { costCenterCode, ...campos } = data;
+  const resolvido = await resolverCentroDeCusto(data.clientId!, costCenterCode);
+  if (resolvido !== undefined) campos.costCenterId = resolvido;
+
   const existing = await prisma.area.findFirst({
     where: { plantId: data.plantId, name: { equals: data.name, mode: "insensitive" } },
   });
@@ -76,7 +110,7 @@ export const createArea = asyncHandler(async (req: Request, res: Response) => {
     if (!existing.active || existing.deletedAt) {
       const reactivated = await prisma.area.update({
         where: { id: existing.id },
-        data: { ...data, clientId: undefined, active: true, deletedAt: null },
+        data: { ...campos, clientId: undefined, active: true, deletedAt: null },
         include: areaInclude,
       });
       return res.status(200).json(reactivated);
@@ -84,7 +118,7 @@ export const createArea = asyncHandler(async (req: Request, res: Response) => {
     throw new ValidationError(`A area "${data.name}" ja existe nesta planta.`);
   }
 
-  const area = await prisma.area.create({ data: { ...data, clientId: data.clientId! }, include: areaInclude });
+  const area = await prisma.area.create({ data: { ...campos, clientId: data.clientId! }, include: areaInclude });
 
   await writeAuditLog({
     userId: req.user?.sub,
@@ -110,7 +144,11 @@ export const updateArea = asyncHandler(async (req: Request, res: Response) => {
   }
   if (data.plantId) await assertPlantBelongsToClient(data.plantId, data.clientId ?? existing.clientId);
 
-  const area = await prisma.area.update({ where: { id: existing.id }, data, include: areaInclude });
+  const { costCenterCode, ...campos } = data;
+  const resolvido = await resolverCentroDeCusto(existing.clientId, costCenterCode);
+  if (resolvido !== undefined) campos.costCenterId = resolvido;
+
+  const area = await prisma.area.update({ where: { id: existing.id }, data: campos, include: areaInclude });
 
   await writeAuditLog({
     userId: req.user?.sub,

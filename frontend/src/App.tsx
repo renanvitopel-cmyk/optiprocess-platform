@@ -41,7 +41,6 @@ const TechnicalCatalogsHub = lazyPagina(() => import("./pages/admin/instruments/
 const PlantsList = lazyPagina(() => import("./pages/admin/instruments/PlantsList"));
 const AreasList = lazyPagina(() => import("./pages/admin/instruments/AreasList"));
 const AssetSystemsList = lazyPagina(() => import("./pages/admin/instruments/AssetSystemsList"));
-const CostCentersList = lazyPagina(() => import("./pages/admin/instruments/CostCentersList"));
 const CalibrationsList = lazyPagina(() => import("./pages/admin/calibrations/CalibrationsList"));
 const CalibrationForm = lazyPagina(() => import("./pages/admin/calibrations/CalibrationForm"));
 const CalibrationDetail = lazyPagina(() => import("./pages/admin/calibrations/CalibrationDetail"));
@@ -144,7 +143,6 @@ export default function App() {
                 <Route path="instrumentos/plantas" element={<PlantsList />} />
                 <Route path="instrumentos/areas" element={<AreasList />} />
                 <Route path="instrumentos/sistemas" element={<AssetSystemsList />} />
-                <Route path="instrumentos/centros-custo" element={<CostCentersList />} />
                 <Route path="instrumentos/:id" element={<InstrumentDetail />} />
                 <Route path="manutencao/arvore" element={<InstrumentsTree />} />
 
@@ -226,7 +224,6 @@ export default function App() {
                 <Route path="instrumentos/plantas" element={<PlantsList />} />
                 <Route path="instrumentos/areas" element={<AreasList />} />
                 <Route path="instrumentos/sistemas" element={<AssetSystemsList />} />
-                <Route path="instrumentos/centros-custo" element={<CostCentersList />} />
                 <Route path="instrumentos/:id" element={<PortalInstrumentDetail />} />
                 <Route path="certificados" element={<PortalCertificates />} />
                 <Route path="certificados/:id" element={<PortalCertificateDetail />} />

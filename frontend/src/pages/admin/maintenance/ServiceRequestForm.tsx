@@ -16,7 +16,9 @@ import { useCmms } from "../../../lib/cmms";
 
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
-  areaId: z.string().uuid().optional().or(z.literal("")),
+  // Obrigatoria: e' a area que diz de quem e' o problema e quem atende. Sem ela, a
+  // solicitacao cai numa fila sem dono e a lista de ativos vira o parque inteiro.
+  areaId: z.string().uuid("Selecione a area."),
   instrumentId: z.string().uuid().optional().or(z.literal("")),
   location: z.string().optional(),
   categoryId: z.string().uuid().optional().or(z.literal("")),
@@ -36,11 +38,13 @@ export default function ServiceRequestForm() {
   const { notify } = useToast();
   const { isClient, ownClientId, base } = useCmms();
 
-  const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { clientId: ownClientId ?? "", suggestedPriority: "MEDIUM" },
   });
   const clientId = watch("clientId");
+  // Trocar a area troca a lista de ativos - o ativo escolhido antes pode nao ser mais dela.
+  const areaId = watch("areaId");
 
   const { data: areas } = useQuery({
     queryKey: ["areas-picker", clientId],
@@ -56,7 +60,7 @@ export default function ServiceRequestForm() {
     try {
       const payload = {
         ...values,
-        areaId: values.areaId || null,
+        areaId: values.areaId,
         instrumentId: values.instrumentId || null,
         categoryId: values.categoryId || null,
       };
@@ -89,14 +93,29 @@ export default function ServiceRequestForm() {
               <ClientPicker required error={errors.clientId?.message} {...register("clientId")} />
             )}
             <SelectInput
-              label="Area (opcional)"
-              placeholder="Selecione"
+              label="Area"
+              required
+              placeholder="Selecione a area"
+              hint="A lista de ativos abaixo mostra so os desta area."
+              error={errors.areaId?.message}
               options={(areas ?? []).map((a) => ({ value: a.id, label: a.name }))}
-              {...register("areaId")}
+              {...register("areaId", {
+                // Trocar a area invalida o ativo escolhido: ele pode nao pertencer mais a
+                // lista, e mandar um ativo de outra area seria pior do que campo vazio.
+                onChange: () => setValue("instrumentId", ""),
+              })}
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <InstrumentPicker label="Ativo (opcional)" clientId={clientId} error={errors.instrumentId?.message} {...register("instrumentId")} />
+            <InstrumentPicker
+              label="Ativo (opcional)"
+              clientId={clientId}
+              areaId={areaId}
+              bloqueadoMsg="Selecione a area primeiro"
+              hint="So os ativos da area escolhida."
+              error={errors.instrumentId?.message}
+              {...register("instrumentId")}
+            />
             <SelectInput
               label="Categoria (opcional)"
               placeholder="Selecione"

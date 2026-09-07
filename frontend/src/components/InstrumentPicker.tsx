@@ -13,6 +13,11 @@ interface InstrumentPickerProps {
   /** Exclui este ativo das opcoes - usado no seletor de "Ativo pai" para nao deixar
    * um ativo apontar para si mesmo. */
   excludeId?: string;
+  /** Restringe a busca aos ativos de uma area. Sem area escolhida, o seletor fica
+   * bloqueado: escolher o ativo antes da area deixaria a lista enorme e desconexa. */
+  areaId?: string;
+  /** Texto quando ainda falta escolher a area. */
+  bloqueadoMsg?: string;
   name: string;
   value?: string;
   // Assinaturas compativeis com o que o react-hook-form entrega em register().
@@ -29,13 +34,13 @@ interface InstrumentPickerProps {
  * traz os 20 mais proximos do que se digitou.
  */
 export const InstrumentPicker = forwardRef<HTMLInputElement, InstrumentPickerProps>(function InstrumentPicker(
-  { label = "Ativo", hint, error, required, clientId, excludeId, name, onChange, onBlur },
+  { label = "Ativo", hint, error, required, clientId, excludeId, areaId, bloqueadoMsg, name, onChange, onBlur },
   ref,
 ) {
   // No portal o backend ja restringe a lista a empresa do usuario, entao nao ha
   // (nem faz sentido pedir) um clientId para liberar o seletor.
   const { isClient } = useCmms();
-  const pronto = isClient || !!clientId;
+  const pronto = (isClient || !!clientId) && (bloqueadoMsg === undefined || !!areaId);
 
   const escondido = useRef<HTMLInputElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -60,8 +65,8 @@ export const InstrumentPicker = forwardRef<HTMLInputElement, InstrumentPickerPro
   }, []);
 
   const { data, isFetching } = useQuery({
-    queryKey: ["instruments-busca", clientId ?? "own", buscaAplicada],
-    queryFn: () => listInstruments({ clientId, search: buscaAplicada || undefined, scope: "cmms", pageSize: 20 }),
+    queryKey: ["instruments-busca", clientId ?? "own", areaId ?? "todas", buscaAplicada],
+    queryFn: () => listInstruments({ clientId, areaId: areaId || undefined, search: buscaAplicada || undefined, scope: "cmms", pageSize: 20 }),
     enabled: pronto && aberto,
   });
 
@@ -148,7 +153,11 @@ export const InstrumentPicker = forwardRef<HTMLInputElement, InstrumentPickerPro
           <input
             type="text"
             className="input pl-9"
-            placeholder={pronto ? "Buscar por TAG, descricao, modelo ou numero de serie" : "Selecione o cliente primeiro"}
+            placeholder={
+              pronto
+                ? "Buscar por TAG, descricao, modelo ou numero de serie"
+                : (bloqueadoMsg ?? "Selecione o cliente primeiro")
+            }
             disabled={!pronto}
             value={termo}
             onChange={(e) => { setTermo(e.target.value); setAberto(true); }}

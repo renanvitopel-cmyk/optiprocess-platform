@@ -101,6 +101,12 @@ async function assertRefsBelongToClient(clientId: string, data: { areaId?: strin
     const instrument = await prisma.instrument.findFirst({ where: { id: data.instrumentId, deletedAt: null } });
     if (!instrument) throw new NotFoundError("Ativo");
     if (instrument.clientId !== clientId) throw new ValidationError("O ativo selecionado e' de outra empresa.");
+    // A tela ja mostra so os ativos da area escolhida; aqui e' a garantia de que uma
+    // solicitacao nao chega apontando para uma area e um ativo de lugares diferentes -
+    // seria impossivel saber qual dos dois esta certo na hora da triagem.
+    if (data.areaId && instrument.areaId && instrument.areaId !== data.areaId) {
+      throw new ValidationError("O ativo escolhido nao pertence a area selecionada.");
+    }
   }
   if (data.categoryId) {
     const category = await prisma.serviceRequestCategory.findFirst({ where: { id: data.categoryId } });
@@ -112,6 +118,10 @@ async function assertRefsBelongToClient(clientId: string, data: { areaId?: strin
 export const createServiceRequest = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = requestSchema.parse(req.body);
+  // Area e' obrigatoria ao ABRIR (na edicao continua opcional, para nao travar
+  // solicitacoes antigas que nasceram sem ela). E' a area que diz de quem e' o problema e
+  // quem atende - sem ela a solicitacao cai numa fila sem dono.
+  if (!data.areaId) throw new ValidationError("Informe a area da solicitacao.");
   const clientId = resolveClientId(req, data.clientId);
   await assertRefsBelongToClient(clientId, data);
 

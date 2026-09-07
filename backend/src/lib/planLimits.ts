@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { ValidationError } from "../utils/errors";
+import { PERFIS_QUE_OCUPAM_VAGA } from "./perfis";
 
 /** Sem plano atribuido = sem limite (todo cliente cadastrado antes da Fase 7 continua
  * exatamente como estava). So bloqueia quando ha um plano com o limite especifico definido. */
@@ -11,7 +12,7 @@ export async function assertUserLimitNotExceeded(clientId: string) {
   // avisa que a maquina esta ruim afastaria justamente quem precisa avisar.
   // So conta quem esta ATIVO: acesso desativado devolve a vaga - manter a vaga presa a um
   // usuario que nao entra mais obrigaria a apagar o historico dele para liberar espaco.
-  const current = await prisma.user.count({ where: { clientId, deletedAt: null, active: true, role: { not: "REQUESTER" } } });
+  const current = await prisma.user.count({ where: { clientId, deletedAt: null, active: true, role: { in: PERFIS_QUE_OCUPAM_VAGA } } });
   if (current >= client.plan.maxUsers) {
     throw new ValidationError(
       `Limite de usuarios do plano "${client.plan.name}" atingido (${current}/${client.plan.maxUsers}). Aumente o plano do cliente para liberar mais acessos.`,
@@ -37,7 +38,7 @@ export async function getClientPlanUsage(clientId: string) {
   const client = await prisma.client.findFirst({ where: { id: clientId }, select: { plan: true } });
   const [users, instruments] = await Promise.all([
     // Mesma regra da cobranca: so acesso ativo ocupa vaga.
-    prisma.user.count({ where: { clientId, deletedAt: null, active: true, role: { not: "REQUESTER" } } }),
+    prisma.user.count({ where: { clientId, deletedAt: null, active: true, role: { in: PERFIS_QUE_OCUPAM_VAGA } } }),
     prisma.instrument.count({ where: { clientId, deletedAt: null } }),
   ]);
   const requesters = await prisma.user.count({ where: { clientId, deletedAt: null, active: true, role: "REQUESTER" } });

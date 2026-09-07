@@ -25,6 +25,11 @@ export function ProtectedRoute({ roles }: ProtectedRouteProps) {
 }
 
 export function homeForRole(role: Role): string {
-  if (role === "CLIENT") return "/portal";
+  // O Solicitante nao tem dashboard: mandar ele para /portal seria mandar para uma rota
+  // que ele nao alcanca - e o redirecionamento entraria em laco.
+  if (role === "REQUESTER") return "/portal/manutencao/solicitacoes";
+  // O resto da equipe do cliente entra pelo portal - o que muda entre os perfis e' o que
+  // cada um alcanca la dentro, nao o endereco.
+  if (["CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN"].includes(role)) return "/portal";
   return "/gestao";
 }

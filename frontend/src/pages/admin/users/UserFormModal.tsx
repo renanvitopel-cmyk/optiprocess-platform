@@ -13,7 +13,7 @@ import { getApiErrorMessage } from "../../../api/client";
 const baseSchema = z.object({
   name: z.string().min(2, "Informe o nome."),
   email: z.string().email("E-mail invalido."),
-  role: z.enum(["ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT", "REQUESTER"]),
+  role: z.enum(["ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN", "REQUESTER"]),
   clientId: z.string().uuid().optional().or(z.literal("")),
 });
 const createSchema = baseSchema.extend({ password: z.string().min(8, "Minimo de 8 caracteres.") });

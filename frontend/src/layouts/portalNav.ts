@@ -28,7 +28,7 @@ import {
   Settings,
   FileSpreadsheet,
 } from "lucide-react";
-import type { ServiceCategory } from "../api/types";
+import type { Role, ServiceCategory } from "../api/types";
 
 export interface PortalNavItem {
   to: string;
@@ -38,6 +38,10 @@ export interface PortalNavItem {
   requires?: ServiceCategory[];
   /** So marca como ativo na rota exata - usado nos itens que sao "pai" de sub-rotas. */
   exact?: boolean;
+  /** Perfis que veem o item. Omitido = toda a equipe de manutencao (nao o Solicitante,
+   * que tem menu proprio). O menu acompanha as rotas: item que leva a uma tela bloqueada
+   * so faz a pessoa bater na porta fechada. */
+  perfis?: Role[];
 }
 
 export interface PortalNavSection {
@@ -83,9 +87,9 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
       { to: "/portal/manutencao", label: "Painel do CMMS", icon: Wrench, requires: ["CMMS_MAINTENANCE"], exact: true },
       { to: "/portal/manutencao/solicitacoes", label: "Solicitacoes", icon: ClipboardPlus, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/ordens", label: "Ordens de manutencao", icon: ClipboardList, requires: ["CMMS_MAINTENANCE"] },
-      { to: "/portal/manutencao/programacao", label: "Programacao", icon: CalendarDays, requires: ["CMMS_MAINTENANCE"] },
-      { to: "/portal/manutencao/planos", label: "Planos preventivos", icon: ShieldCheck, requires: ["CMMS_MAINTENANCE"] },
-      { to: "/portal/manutencao/preditiva", label: "Preditiva", icon: Radar, requires: ["CMMS_MAINTENANCE"] },
+      { perfis: ["CLIENT", "CLIENT_PLANNER"], to: "/portal/manutencao/programacao", label: "Programacao", icon: CalendarDays, requires: ["CMMS_MAINTENANCE"] },
+      { perfis: ["CLIENT", "CLIENT_PLANNER"], to: "/portal/manutencao/planos", label: "Planos preventivos", icon: ShieldCheck, requires: ["CMMS_MAINTENANCE"] },
+      { perfis: ["CLIENT", "CLIENT_PLANNER"], to: "/portal/manutencao/preditiva", label: "Preditiva", icon: Radar, requires: ["CMMS_MAINTENANCE"] },
     ],
   },
   {
@@ -99,8 +103,8 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
       { to: "/portal/lubrificacao", label: "Painel", icon: Droplets, requires: ["CMMS_MAINTENANCE"], exact: true },
       { to: "/portal/lubrificacao/pontos", label: "Pontos", icon: MapPin, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/lubrificacao/rotas", label: "Rotas", icon: Route, requires: ["CMMS_MAINTENANCE"] },
-      { to: "/portal/lubrificacao/lubrificantes", label: "Lubrificantes", icon: FlaskConical, requires: ["CMMS_MAINTENANCE"] },
-      { to: "/portal/lubrificacao/previsao", label: "Previsao de consumo", icon: TrendingUp, requires: ["CMMS_MAINTENANCE"] },
+      { perfis: ["CLIENT", "CLIENT_PLANNER"], to: "/portal/lubrificacao/lubrificantes", label: "Lubrificantes", icon: FlaskConical, requires: ["CMMS_MAINTENANCE"] },
+      { perfis: ["CLIENT", "CLIENT_PLANNER"], to: "/portal/lubrificacao/previsao", label: "Previsao de consumo", icon: TrendingUp, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/lubrificacao/historico", label: "Historico", icon: History, requires: ["CMMS_MAINTENANCE"] },
     ],
   },
@@ -113,10 +117,10 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
       // funcoes da equipe precisam existir para o primeiro ativo ser cadastrado inteiro.
       // Ficava em "Configuracao", no rodape, como se fosse ajuste raro - e quem chegava
       // para cadastrar o parque so descobria os catalogos depois de tropecar neles.
-      { to: "/portal/instrumentos/cadastros", label: "Cadastros tecnicos", icon: SlidersHorizontal, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
+      { perfis: ["CLIENT", "CLIENT_PLANNER"], to: "/portal/instrumentos/cadastros", label: "Cadastros tecnicos", icon: SlidersHorizontal, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
       { to: "/portal/instrumentos", label: "Meus ativos", icon: Gauge, requires: ["CALIBRATION", "CMMS_MAINTENANCE"] },
       { to: "/portal/almoxarifado", label: "Almoxarifado", icon: Boxes, requires: ["CMMS_MAINTENANCE"] },
-      { to: "/portal/manutencao/pareto", label: "Falhas e RCA", icon: BarChart3, requires: ["CMMS_MAINTENANCE"] },
+      { perfis: ["CLIENT", "CLIENT_PLANNER"], to: "/portal/manutencao/pareto", label: "Falhas e RCA", icon: BarChart3, requires: ["CMMS_MAINTENANCE"] },
     ],
   },
   {
@@ -136,8 +140,8 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
     title: "Configuracao",
     icon: Settings,
     items: [
-      { to: "/portal/manutencao/importar", label: "Importar dados", icon: FileSpreadsheet, requires: ["CMMS_MAINTENANCE"] },
-      { to: "/portal/contrato", label: "Meu contrato", icon: ReceiptText },
+      { perfis: ["CLIENT"], to: "/portal/manutencao/importar", label: "Importar dados", icon: FileSpreadsheet, requires: ["CMMS_MAINTENANCE"] },
+      { perfis: ["CLIENT"], to: "/portal/contrato", label: "Meu contrato", icon: ReceiptText },
       { to: "/portal/perfil", label: "Meu perfil", icon: User },
     ],
   },
@@ -161,7 +165,12 @@ export function getPortalNav(contractedServices: ServiceCategory[], role?: strin
 
   return PORTAL_NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => !item.requires || item.requires.some((c) => contractedServices.includes(c))),
+    items: section.items.filter(
+      (item) =>
+        (!item.requires || item.requires.some((c) => contractedServices.includes(c))) &&
+        // O ADMIN da OptiProcess entra por acesso master de suporte: ve tudo.
+        (!item.perfis || !role || role === "ADMIN" || item.perfis.includes(role as Role)),
+    ),
   })).filter((section) => section.items.length > 0);
 }
 

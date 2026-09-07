@@ -9,11 +9,14 @@
 -- Separado de ClientStatus (que diz se a EMPRESA e' cliente, prospect ou inativa):
 -- uma empresa ativa pode estar em teste, e uma empresa com contrato cancelado nao
 -- deixa de ser um registro valido no cadastro.
+-- Nome proprio: "ContractStatus" ja existe para os contratos de servico da OptiProcess
+-- (ACTIVE/EXPIRING_SOON/EXPIRED/CANCELED), que sao outra coisa. Reaproveitar o nome fazia
+-- a migracao falhar inteira - e foi o que derrubou o primeiro deploy desta etapa.
 DO $$ BEGIN
-  CREATE TYPE "ContractStatus" AS ENUM ('TRIAL', 'ACTIVE', 'SUSPENDED', 'CANCELED');
+  CREATE TYPE "CmmsContractStatus" AS ENUM ('TRIAL', 'ACTIVE', 'SUSPENDED', 'CANCELED');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "contractStatus" "ContractStatus" NOT NULL DEFAULT 'TRIAL';
+ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "contractStatus" "CmmsContractStatus" NOT NULL DEFAULT 'TRIAL';
 
 -- Empresa que ja estava ativa no cadastro tem contrato ativo: marcar todas como
 -- "em teste" seria mentir sobre quem ja e' cliente.

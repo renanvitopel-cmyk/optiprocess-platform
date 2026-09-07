@@ -215,60 +215,75 @@ export default function App() {
               </Route>
             </Route>
 
-            <Route element={<ProtectedRoute roles={["CLIENT"]} />}>
+            {/* Todo o portal e' da equipe do cliente. Os blocos aninhados abaixo separam o
+                que cada perfil alcanca - a mesma regra que a API cobra em cada rota, porque
+                esconder o item do menu nunca foi permissao: quem sabe a URL entra assim mesmo. */}
+            <Route element={<ProtectedRoute roles={["CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN", "REQUESTER"]} />}>
               <Route path="/portal" element={<ClientPortalLayout />}>
-                <Route index element={<PortalDashboard />} />
-                <Route path="instrumentos" element={<PortalInstruments />} />
-                <Route path="instrumentos/tipos" element={<AssetTypesList />} />
-                <Route path="instrumentos/cadastros" element={<TechnicalCatalogsHub />} />
-                <Route path="instrumentos/plantas" element={<PlantsList />} />
-                <Route path="instrumentos/areas" element={<AreasList />} />
-                <Route path="instrumentos/sistemas" element={<AssetSystemsList />} />
-                <Route path="instrumentos/:id" element={<PortalInstrumentDetail />} />
-                <Route path="certificados" element={<PortalCertificates />} />
-                <Route path="certificados/:id" element={<PortalCertificateDetail />} />
-                <Route path="laudos" element={<PortalReports />} />
-                <Route path="ordens-servico" element={<PortalServiceOrders />} />
-                <Route path="ordens-servico/:id" element={<PortalServiceOrderDetail />} />
-                <Route path="contratos" element={<PortalContracts />} />
-                <Route path="pedidos" element={<PortalOrders />} />
-                <Route path="manutencao" element={<MaintenanceDashboard />} />
-                <Route path="manutencao/planos" element={<MaintenancePlansList />} />
-                <Route path="manutencao/planos/novo" element={<MaintenancePlanForm />} />
-                <Route path="manutencao/planos/:id/editar" element={<MaintenancePlanForm />} />
-                <Route path="manutencao/planos/:id" element={<MaintenancePlanDetail />} />
-                <Route path="manutencao/modelos-de-plano" element={<MaintenancePlanTemplatesList />} />
-                <Route path="manutencao/ordens" element={<WorkOrdersList />} />
-                <Route path="manutencao/kanban" element={<KanbanBoard />} />
-                <Route path="manutencao/programacao" element={<SchedulingBoard />} />
-                <Route path="manutencao/preditiva" element={<PredictivePanel />} />
-                <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
-                <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
-                <Route path="manutencao/ordens/:id" element={<WorkOrderDetail />} />
+                {/* Solicitante: so as proprias solicitacoes e o proprio perfil. */}
                 <Route path="manutencao/solicitacoes" element={<ServiceRequestsList />} />
                 <Route path="manutencao/solicitacoes/novo" element={<ServiceRequestForm />} />
                 <Route path="manutencao/solicitacoes/:id" element={<ServiceRequestDetail />} />
-                <Route path="manutencao/falhas" element={<FailureCodesList />} />
-                <Route path="manutencao/pareto" element={<FailureAnalysis />} />
-                <Route path="manutencao/rca" element={<RcaList />} />
-                <Route path="manutencao/rca/novo" element={<RcaForm />} />
-                <Route path="manutencao/rca/:id" element={<RcaForm />} />
-                <Route path="manutencao/paradas" element={<StoppageReasonsList />} />
-                <Route path="manutencao/arvore" element={<PortalInstrumentsTree />} />
-                <Route path="lubrificacao" element={<LubricationDashboard />} />
-                <Route path="lubrificacao/pontos" element={<LubricationPointsList />} />
-                <Route path="lubrificacao/rotas" element={<LubricationRoutesList />} />
-                <Route path="lubrificacao/lubrificantes" element={<LubricantsList />} />
-                <Route path="lubrificacao/previsao" element={<LubricationForecast />} />
-                <Route path="lubrificacao/historico" element={<LubricationHistory />} />
-                <Route path="manutencao/importar" element={<DataImport />} />
-                <Route path="almoxarifado" element={<PortalSpareParts />} />
-                <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
-                <Route path="manutencao/tipos-mao-de-obra" element={<LaborTypesList />} />
-                {/* "Meu contrato" estava so em /gestao: o menu do portal apontava para
-                    /portal/contrato, que nao existia, e o item dava "Pagina nao encontrada". */}
-                <Route path="contrato" element={<PortalContract />} />
                 <Route path="perfil" element={<PortalProfile />} />
+
+                {/* Equipe de manutencao: consulta o parque e trabalha nas ordens. */}
+                <Route element={<ProtectedRoute roles={["CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN"]} />}>
+                  <Route index element={<PortalDashboard />} />
+                  <Route path="instrumentos" element={<PortalInstruments />} />
+                  <Route path="instrumentos/:id" element={<PortalInstrumentDetail />} />
+                  <Route path="manutencao/arvore" element={<PortalInstrumentsTree />} />
+                  <Route path="certificados" element={<PortalCertificates />} />
+                  <Route path="certificados/:id" element={<PortalCertificateDetail />} />
+                  <Route path="laudos" element={<PortalReports />} />
+                  <Route path="ordens-servico" element={<PortalServiceOrders />} />
+                  <Route path="ordens-servico/:id" element={<PortalServiceOrderDetail />} />
+                  <Route path="contratos" element={<PortalContracts />} />
+                  <Route path="pedidos" element={<PortalOrders />} />
+                  <Route path="manutencao" element={<MaintenanceDashboard />} />
+                  <Route path="manutencao/ordens" element={<WorkOrdersList />} />
+                  <Route path="manutencao/ordens/:id" element={<WorkOrderDetail />} />
+                  <Route path="manutencao/kanban" element={<KanbanBoard />} />
+                  <Route path="almoxarifado" element={<PortalSpareParts />} />
+                  <Route path="lubrificacao" element={<LubricationDashboard />} />
+                  <Route path="lubrificacao/pontos" element={<LubricationPointsList />} />
+                  <Route path="lubrificacao/rotas" element={<LubricationRoutesList />} />
+                  <Route path="lubrificacao/historico" element={<LubricationHistory />} />
+                </Route>
+
+                {/* Planejamento: monta plano, programa, aprova e olha custo. O Tecnico
+                    executa o que foi programado, entao nao reestrutura nada disto. */}
+                <Route element={<ProtectedRoute roles={["CLIENT", "CLIENT_PLANNER"]} />}>
+                  <Route path="instrumentos/cadastros" element={<TechnicalCatalogsHub />} />
+                  <Route path="instrumentos/tipos" element={<AssetTypesList />} />
+                  <Route path="instrumentos/plantas" element={<PlantsList />} />
+                  <Route path="instrumentos/areas" element={<AreasList />} />
+                  <Route path="instrumentos/sistemas" element={<AssetSystemsList />} />
+                  <Route path="manutencao/planos" element={<MaintenancePlansList />} />
+                  <Route path="manutencao/planos/novo" element={<MaintenancePlanForm />} />
+                  <Route path="manutencao/planos/:id/editar" element={<MaintenancePlanForm />} />
+                  <Route path="manutencao/planos/:id" element={<MaintenancePlanDetail />} />
+                  <Route path="manutencao/modelos-de-plano" element={<MaintenancePlanTemplatesList />} />
+                  <Route path="manutencao/ordens/novo" element={<WorkOrderForm />} />
+                  <Route path="manutencao/ordens/:id/editar" element={<WorkOrderForm />} />
+                  <Route path="manutencao/programacao" element={<SchedulingBoard />} />
+                  <Route path="manutencao/preditiva" element={<PredictivePanel />} />
+                  <Route path="manutencao/falhas" element={<FailureCodesList />} />
+                  <Route path="manutencao/pareto" element={<FailureAnalysis />} />
+                  <Route path="manutencao/rca" element={<RcaList />} />
+                  <Route path="manutencao/rca/novo" element={<RcaForm />} />
+                  <Route path="manutencao/rca/:id" element={<RcaForm />} />
+                  <Route path="manutencao/paradas" element={<StoppageReasonsList />} />
+                  <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
+                  <Route path="manutencao/tipos-mao-de-obra" element={<LaborTypesList />} />
+                  <Route path="lubrificacao/lubrificantes" element={<LubricantsList />} />
+                  <Route path="lubrificacao/previsao" element={<LubricationForecast />} />
+                </Route>
+
+                {/* Contrato e importacao mexem na empresa inteira: so o Administrador. */}
+                <Route element={<ProtectedRoute roles={["CLIENT"]} />}>
+                  <Route path="contrato" element={<PortalContract />} />
+                  <Route path="manutencao/importar" element={<DataImport />} />
+                </Route>
               </Route>
             </Route>
 

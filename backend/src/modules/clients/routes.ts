@@ -18,7 +18,9 @@ export const clientsRouter = Router();
 clientsRouter.use(requireAuth);
 
 // Portal do cliente: acesso somente ao proprio registro (antes do gate de staff abaixo).
-clientsRouter.get("/me", getOwnClient);
+// O Solicitante fica de fora: contrato, plano e lista de acessos nao sao assunto de quem
+// so abre solicitacao - e a resposta traz os usuarios da empresa inteira.
+clientsRouter.get("/me", requireRole("ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN"), getOwnClient);
 
 clientsRouter.use(requireRole(...STAFF_ROLES));
 

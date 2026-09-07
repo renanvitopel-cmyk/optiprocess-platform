@@ -31,12 +31,19 @@ export const STAFF_ROLES: Role[] = ["ADMIN", "TECHNICIAN", "COMMERCIAL"];
  *
  * ADMIN fica como acesso master do dono da plataforma - suporte e administracao.
  */
-export const CMMS_ROLES: Role[] = ["ADMIN", "CLIENT"];
+export const CMMS_ROLES: Role[] = ["ADMIN", "CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN"];
+
+/** Quem PLANEJA: monta plano, programa, aprova e encerra. O Tecnico executa, mas nao
+ * reestrutura - por isso ele fica de fora daqui. */
+export const CMMS_PLANNING_ROLES: Role[] = ["ADMIN", "CLIENT", "CLIENT_PLANNER"];
+
+/** Quem mexe no que e' comercial e estrutural da empresa (contrato, plano, cadastros). */
+export const CMMS_ADMIN_ROLES: Role[] = ["ADMIN", "CLIENT"];
 
 /** Perfis presos a uma empresa: tudo o que fazem e' dentro do proprio clientId. O
  * Solicitante entra aqui junto do CLIENT - a diferenca entre os dois nao e' o escopo de
  * empresa, e' o que cada um pode fazer dentro dela. */
-export const CLIENT_SCOPED_ROLES: Role[] = ["CLIENT", "REQUESTER"];
+export const CLIENT_SCOPED_ROLES: Role[] = ["CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN", "REQUESTER"];
 
 /** true quando o usuario da requisicao esta preso a uma empresa (e, portanto, tem clientId). */
 function presoAoCliente(req: Request): req is Request & { user: { role: Role; clientId?: string | null; sub: string } } {
@@ -87,14 +94,14 @@ export function resolveClientScope(req: Request, clientId?: string): { clientId?
   return clientId ? { clientId } : {};
 }
 
-export const CLIENT_PORTAL_ROLES: Role[] = ["ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT"];
+export const CLIENT_PORTAL_ROLES: Role[] = ["ADMIN", "TECHNICIAN", "COMMERCIAL", "CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN"];
 
 /**
  * Quem pode abrir solicitacao de servico: a equipe do cliente, o Solicitante (que so faz
  * isso) e o ADMIN pelo acesso master. E' a unica porta do Solicitante no sistema - ele nao
  * alcanca ativos, ordens, planos nem estoque.
  */
-export const SERVICE_REQUEST_ROLES: Role[] = ["ADMIN", "CLIENT", "REQUESTER"];
+export const SERVICE_REQUEST_ROLES: Role[] = ["ADMIN", "CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN", "REQUESTER"];
 
 /**
  * Espelho do clientScopeFilter para criacao: um usuario CLIENT sempre grava no proprio

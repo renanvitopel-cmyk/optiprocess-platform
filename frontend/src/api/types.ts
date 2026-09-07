@@ -1,6 +1,14 @@
 /** REQUESTER (Solicitante) so abre e acompanha as proprias solicitacoes de servico - e'
  * ilimitado em qualquer plano. */
-export type Role = "ADMIN" | "TECHNICIAN" | "COMMERCIAL" | "CLIENT" | "REQUESTER";
+export type Role =
+  | "ADMIN"
+  | "TECHNICIAN"
+  | "COMMERCIAL"
+  /** Administrador da empresa cliente - o enum continua CLIENT para nao renomear producao. */
+  | "CLIENT"
+  | "CLIENT_PLANNER"
+  | "CLIENT_TECHNICIAN"
+  | "REQUESTER";
 
 export interface AuthUser {
   id: string;

@@ -8,36 +8,62 @@ import { hashPassword, generateTemporaryPassword } from "../../lib/password";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { assertUserLimitNotExceeded } from "../../lib/planLimits";
+import {
+  CLIENT_ADMIN,
+  PERFIS_DA_EMPRESA,
+  ROTULO_DO_PERFIL,
+  perfisQuePodeGerenciar,
+  podeGerenciarPerfil,
+} from "../../lib/perfis";
 
 /** Perfis que pertencem a uma empresa e por isso exigem clientId. */
-const PERFIS_DE_CLIENTE: Role[] = ["CLIENT", "REQUESTER"];
+const PERFIS_DE_CLIENTE: Role[] = PERFIS_DA_EMPRESA;
 
-/**
- * O gestor da empresa administra o acesso da propria equipe - e nada alem disso.
- *
- * Antes so a OptiProcess criava usuario, e a tela do cliente dizia "fale com a
- * OptiProcess" para cada pessoa nova. Abrir isso exige tres cercas, todas aqui:
- * so a propria empresa, so os perfis do portal, e nunca contra si mesmo.
- */
-function ehGestorDeCliente(req: Request): boolean {
-  return req.user?.role === "CLIENT";
+/** true quando quem esta pedindo e' da equipe do cliente (e nao da OptiProcess). */
+function ehDaEmpresa(req: Request): boolean {
+  return !!req.user && PERFIS_DA_EMPRESA.includes(req.user.role);
 }
 
-/** Perfis que um gestor de cliente pode criar ou atribuir. */
-const PERFIS_QUE_O_GESTOR_CRIA: Role[] = ["CLIENT", "REQUESTER"];
+/**
+ * Cerca de quem administra quem.
+ *
+ * Vale para criar, editar, desativar, reativar e redefinir senha. A regra e' a mesma da
+ * vida real - ninguem administra quem esta acima - e mora em src/lib/perfis.ts, porque a
+ * tela, a rota e a API precisam responder a mesma coisa.
+ */
+function assertPodeAdministrar(req: Request, alvo: { id: string; clientId: string | null; role: Role }) {
+  if (!ehDaEmpresa(req) || !req.user) return;
 
-function assertGestorPodeMexer(req: Request, alvo: { id: string; clientId: string | null; role: Role }) {
-  if (!ehGestorDeCliente(req)) return;
-  if (!req.user?.clientId || alvo.clientId !== req.user.clientId) {
+  if (!req.user.clientId || alvo.clientId !== req.user.clientId) {
     throw new ForbiddenError("Voce so administra os acessos da sua propria empresa.");
   }
-  if (!PERFIS_QUE_O_GESTOR_CRIA.includes(alvo.role)) {
-    throw new ForbiddenError("Este acesso e' da equipe OptiProcess e nao pode ser alterado por aqui.");
-  }
   if (alvo.id === req.user.sub) {
-    // Rebaixar ou desativar o proprio acesso tranca a empresa para fora do portal, e
-    // ninguem la dentro consegue desfazer.
+    // Rebaixar ou desativar o proprio acesso tranca a pessoa para fora sem ninguem para
+    // desfazer. Trocar a propria senha continua sendo em "Meu perfil".
     throw new ValidationError("Voce nao pode alterar o proprio acesso por aqui. Use Meu perfil.");
+  }
+  if (!podeGerenciarPerfil(req.user.role, alvo.role)) {
+    throw new ForbiddenError(
+      `Como ${ROTULO_DO_PERFIL[req.user.role]}, voce nao administra acessos do perfil ${ROTULO_DO_PERFIL[alvo.role] ?? alvo.role}.`,
+    );
+  }
+}
+
+/**
+ * A empresa nao pode ficar sem Administrador.
+ *
+ * Sem nenhum ativo, ninguem la dentro consegue criar acesso, mexer no contrato nem
+ * reativar o proprio time - so abrindo chamado para a OptiProcess.
+ */
+async function assertNaoEhOUltimoAdmin(alvo: { id: string; clientId: string | null; role: Role }, acao: string) {
+  if (alvo.role !== CLIENT_ADMIN || !alvo.clientId) return;
+  const outros = await prisma.user.count({
+    where: { clientId: alvo.clientId, deletedAt: null, active: true, role: CLIENT_ADMIN, id: { not: alvo.id } },
+  });
+  if (outros === 0) {
+    throw new ValidationError(
+      `Este e' o unico Administrador ativo da empresa - ${acao} deixaria a empresa sem quem administre acessos e contrato. Promova outra pessoa antes.`,
+    );
   }
 }
 
@@ -60,7 +86,7 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
   const where = {
     deletedAt: null,
     // O gestor enxerga a propria equipe; a OptiProcess enxerga todos.
-    ...(ehGestorDeCliente(req) ? { clientId: req.user?.clientId ?? "" } : {}),
+    ...(ehDaEmpresa(req) ? { clientId: req.user?.clientId ?? "" } : {}),
     ...(role ? { role } : {}),
     ...(active !== undefined ? { active: active === "true" } : {}),
     ...(search
@@ -83,7 +109,7 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
 
 export const getUser = asyncHandler(async (req: Request, res: Response) => {
   const user = await prisma.user.findFirst({
-    where: { id: req.params.id, deletedAt: null, ...(ehGestorDeCliente(req) ? { clientId: req.user?.clientId ?? "" } : {}) },
+    where: { id: req.params.id, deletedAt: null, ...(ehDaEmpresa(req) ? { clientId: req.user?.clientId ?? "" } : {}) },
     select: userSelect,
   });
   if (!user) throw new NotFoundError("Usuario");
@@ -101,13 +127,17 @@ const createUserSchema = z.object({
 export const createUser = asyncHandler(async (req: Request, res: Response) => {
   const data = createUserSchema.parse(req.body);
 
-  if (ehGestorDeCliente(req)) {
+  if (ehDaEmpresa(req)) {
     if (!req.user?.clientId) throw new ForbiddenError();
-    // O gestor nao escolhe a empresa nem cria perfil da OptiProcess: a empresa e' sempre a
-    // dele, e o perfil so pode ser um dos dois que existem no portal.
+    // A empresa e' sempre a de quem esta criando - nao se escolhe.
     data.clientId = req.user.clientId;
-    if (!PERFIS_QUE_O_GESTOR_CRIA.includes(data.role)) {
-      throw new ForbiddenError("Voce pode criar apenas acessos de Gestor ou de Solicitante.");
+    if (!podeGerenciarPerfil(req.user.role, data.role)) {
+      const permitidos = perfisQuePodeGerenciar(req.user.role).map((r) => ROTULO_DO_PERFIL[r] ?? r);
+      throw new ForbiddenError(
+        permitidos.length > 0
+          ? `Voce pode criar apenas acessos do(s) perfil(is): ${permitidos.join(", ")}.`
+          : "Seu perfil nao cria acessos.",
+      );
     }
   }
 
@@ -154,13 +184,17 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const data = updateUserSchema.parse(req.body);
   const existing = await prisma.user.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Usuario");
-  assertGestorPodeMexer(req, existing);
-  if (ehGestorDeCliente(req)) {
+  assertPodeAdministrar(req, existing);
+  if (ehDaEmpresa(req)) {
     delete data.clientId; // nunca transfere alguem para outra empresa
-    if (data.role && !PERFIS_QUE_O_GESTOR_CRIA.includes(data.role)) {
-      throw new ForbiddenError("Voce pode atribuir apenas os perfis Gestor ou Solicitante.");
+    if (data.role && !podeGerenciarPerfil(req.user!.role, data.role)) {
+      throw new ForbiddenError(`Voce nao pode atribuir o perfil ${ROTULO_DO_PERFIL[data.role] ?? data.role}.`);
     }
   }
+  // Desativar ou rebaixar o unico Administrador ativo deixaria a empresa sem quem
+  // administre - vale para a equipe da OptiProcess tambem.
+  if (data.active === false) await assertNaoEhOUltimoAdmin(existing, "desativa-lo");
+  if (data.role && data.role !== existing.role) await assertNaoEhOUltimoAdmin(existing, "mudar o perfil dele");
 
   // So conta contra o limite do plano quando o usuario esta passando a ocupar uma vaga
   // nova naquele cliente (role virando CLIENT, ou mudando de empresa) - reativar
@@ -195,7 +229,8 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
 export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   const existing = await prisma.user.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Usuario");
-  assertGestorPodeMexer(req, existing);
+  assertPodeAdministrar(req, existing);
+  await assertNaoEhOUltimoAdmin(existing, "remove-lo");
 
   await prisma.user.update({ where: { id: req.params.id }, data: { deletedAt: new Date(), active: false } });
 
@@ -213,7 +248,7 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
 export const resetPassword = asyncHandler(async (req: Request, res: Response) => {
   const existing = await prisma.user.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Usuario");
-  assertGestorPodeMexer(req, existing);
+  assertPodeAdministrar(req, existing);
 
   const temporaryPassword = generateTemporaryPassword();
   const passwordHash = await hashPassword(temporaryPassword);
@@ -241,7 +276,7 @@ export const setUserPassword = asyncHandler(async (req: Request, res: Response) 
   const { password } = setPasswordSchema.parse(req.body);
   const existing = await prisma.user.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Usuario");
-  assertGestorPodeMexer(req, existing);
+  assertPodeAdministrar(req, existing);
 
   await prisma.user.update({
     where: { id: existing.id },

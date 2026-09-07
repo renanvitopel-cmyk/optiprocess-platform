@@ -20,7 +20,16 @@ enum Role {
   ADMIN
   TECHNICIAN
   COMMERCIAL
+  // --- Perfis da equipe do CLIENTE -------------------------------------------------
+  // CLIENT e' o Administrador da empresa: faz tudo dentro dela, inclusive gerir contrato
+  // e acessos. O nome do enum fica como esta para nao renomear nada em producao.
   CLIENT
+  // Planejador/Supervisor: planeja, programa, aprova e encerra OS. Nao mexe em contrato,
+  // plano, limites nem em usuarios Administradores.
+  CLIENT_PLANNER
+  // Tecnico: executa o que foi programado. Nao alcanca cadastro estrutural, custo,
+  // contrato nem a criacao de outros perfis alem do Solicitante.
+  CLIENT_TECHNICIAN
   // Solicitante: pessoa da fabrica (operador, lider de turno) que so abre e acompanha as
   // proprias solicitacoes de servico. Nao entra em ativos, ordens, planos nem estoque, e
   // por isso e' ilimitado em todos os planos - cobrar por quem so pede conserto afastaria
@@ -37,7 +46,7 @@ enum ClientStatus {
 // Situacao do CONTRATO do CMMS - separada de ClientStatus, que diz se a EMPRESA e' cliente,
 // prospect ou inativa no cadastro. Uma empresa ativa pode estar em periodo de teste, e um
 // contrato cancelado nao apaga a empresa nem o historico dela.
-enum ContractStatus {
+enum CmmsContractStatus {
   TRIAL
   ACTIVE
   SUSPENDED
@@ -503,7 +512,7 @@ model Client {
   commercialContactName  String?
   status                 ClientStatus @default(PROSPECT)
   // Situacao do contrato do CMMS (teste, ativo, suspenso, cancelado).
-  contractStatus         ContractStatus @default(TRIAL)
+  contractStatus         CmmsContractStatus @default(TRIAL)
   // Areas de servico que o cliente contratou (marcacao rapida na ficha, usada
   // para segmentar). Contratos com vigencia e valor ficam em ServiceContract.
   contractedServices     ServiceCategory[]

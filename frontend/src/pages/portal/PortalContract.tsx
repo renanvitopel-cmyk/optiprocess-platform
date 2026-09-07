@@ -8,6 +8,13 @@ import { TextInput, SelectInput } from "../../components/form/Field";
 import { useToast } from "../../components/Toast";
 import { getApiErrorMessage } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
+import {
+  DESCRICAO_DO_PERFIL,
+  PERFIS_QUE_OCUPAM_VAGA,
+  ROTULO_DO_PERFIL,
+  perfisQuePodeGerenciar,
+} from "../../lib/perfis";
+import type { Role } from "../../api/types";
 import { getOwnClient } from "../../api/clients";
 import { PageHeader } from "../../components/PageHeader";
 import { FullPageSpinner } from "../../components/Spinner";
@@ -96,7 +103,7 @@ export default function PortalContract() {
 
   const [novoAberto, setNovoAberto] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "REQUESTER" as "CLIENT" | "REQUESTER" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "REQUESTER" as Role });
   const [desativando, setDesativando] = useState<{ id: string; name: string } | null>(null);
   const [senhaGerada, setSenhaGerada] = useState<{ email: string; senha: string } | null>(null);
 
@@ -159,6 +166,9 @@ export default function PortalContract() {
   const plano = empresa.plan;
   const uso = empresa.planUsage;
   const usuarios = empresa.users ?? [];
+  // Limite atingido: a API recusa e a tela precisa dizer antes, e nao depois de preencher
+  // o formulario inteiro.
+  const semVaga = uso?.users.limit != null && uso.users.current >= uso.users.limit;
 
   return (
     <div>
@@ -256,7 +266,7 @@ export default function PortalContract() {
                     {u.id === eu?.id && <span className="ml-2 text-xs font-normal text-graphite-400">(voce)</span>}
                   </p>
                   <p className="text-xs text-graphite-500">
-                    {u.email} - {u.role === "REQUESTER" ? "Solicitante" : "Gestor"}
+                    {u.email} - {u.role ? ROTULO_DO_PERFIL[u.role] : "-"}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-4">
@@ -318,7 +328,12 @@ export default function PortalContract() {
             <button
               type="button"
               className="btn-primary"
-              disabled={salvando || form.name.trim().length < 2 || !form.email.includes("@")}
+              disabled={
+                salvando ||
+                form.name.trim().length < 2 ||
+                !form.email.includes("@") ||
+                (PERFIS_QUE_OCUPAM_VAGA.includes(form.role) && semVaga)
+              }
               onClick={() => void criarAcesso()}
             >
               {salvando ? "Liberando..." : "Liberar acesso"}
@@ -336,16 +351,24 @@ export default function PortalContract() {
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
+          {/* So os perfis que ESTE usuario pode criar - a mesma lista que a API aceita.
+              Um Tecnico so cadastra Solicitante; oferecer mais so geraria um 403. */}
           <SelectInput
             label="Perfil"
-            hint="Solicitante nao ocupa vaga do plano."
-            options={[
-              { value: "REQUESTER", label: "Solicitante - so abre e acompanha solicitacoes" },
-              { value: "CLIENT", label: "Gestor - usa o CMMS inteiro (ocupa vaga)" },
-            ]}
+            hint="Solicitante nao ocupa vaga do plano; os demais ocupam."
+            options={perfisQuePodeGerenciar(eu?.role).map((r) => ({
+              value: r,
+              label: `${ROTULO_DO_PERFIL[r]} - ${DESCRICAO_DO_PERFIL[r] ?? ""}`,
+            }))}
             value={form.role}
-            onChange={(e) => setForm({ ...form, role: e.target.value as "CLIENT" | "REQUESTER" })}
+            onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
           />
+          {PERFIS_QUE_OCUPAM_VAGA.includes(form.role) && semVaga && (
+            <p className="rounded-lg border border-safety-red/30 bg-red-50/50 px-3 py-2 text-xs text-safety-red">
+              O limite de acessos do plano foi atingido. Contrate um plano superior, ou desative um acesso que nao
+              esteja em uso - Solicitante continua liberado, porque nao ocupa vaga.
+            </p>
+          )}
           <div>
             <TextInput
               label="Senha inicial"

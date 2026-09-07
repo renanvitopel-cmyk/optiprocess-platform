@@ -34,6 +34,16 @@ enum ClientStatus {
   PROSPECT
 }
 
+// Situacao do CONTRATO do CMMS - separada de ClientStatus, que diz se a EMPRESA e' cliente,
+// prospect ou inativa no cadastro. Uma empresa ativa pode estar em periodo de teste, e um
+// contrato cancelado nao apaga a empresa nem o historico dela.
+enum ContractStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELED
+}
+
 enum ServiceCategory {
   ELECTRICAL_MAINTENANCE
   PANEL_MAINTENANCE
@@ -492,6 +502,8 @@ model Client {
   technicalContactName   String?
   commercialContactName  String?
   status                 ClientStatus @default(PROSPECT)
+  // Situacao do contrato do CMMS (teste, ativo, suspenso, cancelado).
+  contractStatus         ContractStatus @default(TRIAL)
   // Areas de servico que o cliente contratou (marcacao rapida na ficha, usada
   // para segmentar). Contratos com vigencia e valor ficam em ServiceContract.
   contractedServices     ServiceCategory[]

@@ -23,6 +23,10 @@ export interface PortalUserRef {
 
 export type ClientStatus = "ACTIVE" | "INACTIVE" | "PROSPECT";
 
+/** Situacao do contrato do CMMS - separada do status da empresa no cadastro E do
+ * ContractStatus dos contratos de servico da OptiProcess, que e' outra coisa. */
+export type CmmsContractStatus = "TRIAL" | "ACTIVE" | "SUSPENDED" | "CANCELED";
+
 export interface ClientRef {
   id: string;
   companyName: string;
@@ -59,6 +63,8 @@ export interface PlanUsage {
 }
 
 export interface Client {
+  /** Teste, ativo, suspenso ou cancelado. */
+  contractStatus?: CmmsContractStatus;
   id: string;
   companyName: string;
   tradeName: string | null;

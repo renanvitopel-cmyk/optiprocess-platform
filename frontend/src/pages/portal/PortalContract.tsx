@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users, Gauge, BadgeCheck, CircleSlash, Plus, KeyRound, UserX } from "lucide-react";
+import { Users, Gauge, BadgeCheck, CircleSlash, Plus, KeyRound, UserX, AlertTriangle } from "lucide-react";
 import { createUser, updateUser, resetUserPassword } from "../../api/users";
 import { Modal } from "../../components/Modal";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -16,14 +16,44 @@ import { formatCurrency, formatDate } from "../../lib/format";
 
 /** Barra de uso de um limite do contrato. Sem limite definido nao existe percentual - e'
  * "ilimitado", nao 0% nem 100%. */
-function Uso({ rotulo, atual, limite, icone: Icone }: { rotulo: string; atual: number; limite: number | null; icone: typeof Users }) {
+function Uso({
+  rotulo,
+  atual,
+  limite,
+  unidade,
+  icone: Icone,
+}: {
+  rotulo: string;
+  atual: number;
+  limite: number | null;
+  unidade: string;
+  icone: typeof Users;
+}) {
   const semLimite = limite == null;
   const restantes = semLimite ? null : Math.max(0, limite - atual);
   const pct = semLimite ? null : Math.min(100, Math.round((atual / Math.max(1, limite)) * 100));
-  const apertado = pct != null && pct >= 90;
+
+  // Tres faixas, e nao so "cheio": a 80% ainda da tempo de conversar sobre o plano sem
+  // pressa; a 100% o cadastro ja esta bloqueado e o aviso precisa dizer isso.
+  const faixa = pct == null ? "ok" : pct >= 100 ? "cheio" : pct >= 90 ? "critico" : pct >= 80 ? "atencao" : "ok";
+  const cor = {
+    ok: { borda: "", barra: "bg-navy-600", texto: "text-graphite-500" },
+    atencao: { borda: "border-safety-yellow/40", barra: "bg-safety-yellow", texto: "text-safety-yellow-dark" },
+    critico: { borda: "border-safety-yellow/60", barra: "bg-safety-yellow", texto: "font-medium text-safety-yellow-dark" },
+    cheio: { borda: "border-safety-red/50", barra: "bg-safety-red", texto: "font-medium text-safety-red" },
+  }[faixa];
+
+  const mensagem =
+    faixa === "cheio"
+      ? `Limite atingido - contrate um plano superior para incluir mais ${unidade}.`
+      : faixa === "critico"
+        ? `Ainda cabem ${restantes} ${unidade} - o limite esta perto.`
+        : faixa === "atencao"
+          ? `Ainda cabem ${restantes} ${unidade} (${pct}% do plano em uso).`
+          : `Ainda cabem ${restantes} ${unidade}.`;
 
   return (
-    <div className={`card p-5 ${apertado ? "border-safety-yellow/50" : ""}`}>
+    <div className={`card p-5 ${cor.borda}`}>
       <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-graphite-400">
         <Icone className="h-4 w-4" /> {rotulo}
       </div>
@@ -37,21 +67,24 @@ function Uso({ rotulo, atual, limite, icone: Icone }: { rotulo: string; atual: n
       ) : (
         <>
           <div className="mt-2 h-2 rounded-full bg-gray-100">
-            <div
-              className={`h-2 rounded-full ${apertado ? "bg-safety-yellow" : "bg-navy-600"}`}
-              style={{ width: `${Math.max(2, pct ?? 0)}%` }}
-            />
+            <div className={`h-2 rounded-full ${cor.barra}`} style={{ width: `${Math.max(2, pct ?? 0)}%` }} />
           </div>
-          <p className={`mt-1.5 text-xs ${restantes === 0 ? "font-medium text-safety-red" : "text-graphite-500"}`}>
-            {restantes === 0
-              ? "Limite atingido - fale com a OptiProcess para ampliar."
-              : `Ainda cabem ${restantes}.`}
+          <p className={`mt-1.5 flex items-center gap-1.5 text-xs ${cor.texto}`}>
+            {faixa !== "ok" && <AlertTriangle className="h-3.5 w-3.5 shrink-0" />}
+            {mensagem}
           </p>
         </>
       )}
     </div>
   );
 }
+
+const SITUACAO_DO_CONTRATO: Record<string, { rotulo: string; classe: string }> = {
+  TRIAL: { rotulo: "Em teste", classe: "border-navy-200 bg-navy-50 text-navy-700" },
+  ACTIVE: { rotulo: "Ativo", classe: "border-green-200 bg-green-50 text-safety-green-dark" },
+  SUSPENDED: { rotulo: "Suspenso", classe: "border-yellow-200 bg-yellow-50 text-safety-yellow-dark" },
+  CANCELED: { rotulo: "Cancelado", classe: "border-red-200 bg-red-50 text-safety-red" },
+};
 
 /** Contrato do cliente: qual plano, o que ele da direito, quem ja usa e quanto ainda cabe.
  * Antes o cliente so descobria o limite quando um cadastro era recusado. */
@@ -139,7 +172,14 @@ export default function PortalContract() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-graphite-400">Plano contratado</p>
-            <p className="mt-0.5 text-xl font-bold text-navy-900">{plano?.name ?? "Sem plano atribuido"}</p>
+            <div className="mt-0.5 flex flex-wrap items-center gap-2">
+              <p className="text-xl font-bold text-navy-900">{plano?.name ?? "Sem plano atribuido"}</p>
+              {empresa.contractStatus && SITUACAO_DO_CONTRATO[empresa.contractStatus] && (
+                <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${SITUACAO_DO_CONTRATO[empresa.contractStatus].classe}`}>
+                  {SITUACAO_DO_CONTRATO[empresa.contractStatus].rotulo}
+                </span>
+              )}
+            </div>
             {plano?.description && <p className="mt-1 text-sm text-graphite-600">{plano.description}</p>}
             {!plano && (
               <p className="mt-1 text-sm text-graphite-500">
@@ -175,8 +215,8 @@ export default function PortalContract() {
 
       {uso && (
         <div className="mb-8 grid gap-4 sm:grid-cols-2">
-          <Uso rotulo="Acessos (usuarios)" atual={uso.users.current} limite={uso.users.limit} icone={Users} />
-          <Uso rotulo="Ativos cadastrados" atual={uso.instruments.current} limite={uso.instruments.limit} icone={Gauge} />
+          <Uso rotulo="Acessos (usuarios)" atual={uso.users.current} limite={uso.users.limit} unidade="acessos" icone={Users} />
+          <Uso rotulo="Ativos cadastrados" atual={uso.instruments.current} limite={uso.instruments.limit} unidade="ativos" icone={Gauge} />
         </div>
       )}
 

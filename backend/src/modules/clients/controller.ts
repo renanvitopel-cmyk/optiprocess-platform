@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { ClientStatus, ServiceCategory } from "@prisma/client";
+import { ClientStatus, ContractStatus, ServiceCategory } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -114,6 +114,8 @@ const clientSchema = z.object({
   technicalContactName: z.string().nullish(),
   commercialContactName: z.string().nullish(),
   status: z.nativeEnum(ClientStatus).optional(),
+  // Situacao do contrato do CMMS. So a equipe da OptiProcess mexe: e' dado comercial.
+  contractStatus: z.nativeEnum(ContractStatus).optional(),
   contractedServices: z.array(z.nativeEnum(ServiceCategory)).optional(),
   planId: z.string().uuid().nullish(),
   notes: z.string().nullish(),

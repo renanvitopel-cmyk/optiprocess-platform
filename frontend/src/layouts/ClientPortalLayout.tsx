@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
-import { Menu, X, LogOut, ChevronDown } from "lucide-react";
+import { Menu, X, LogOut, ChevronDown, ReceiptText } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { getOwnClient } from "../api/clients";
 import { useAuth } from "../auth/AuthContext";
 import { getPortalNav, PORTAL_NAV_PADRAO_FECHADO } from "./portalNav";
 import { CmmsLogo } from "../components/CmmsLogo";
@@ -22,6 +24,16 @@ export function ClientPortalLayout() {
     }
   });
   const { user, logout } = useAuth();
+
+  // O contrato do proprio cliente - so para o rotulo do cabecalho. Em cache longo: nao e'
+  // informacao que muda no meio da navegacao. So quem gerencia (e tem empresa) consulta:
+  // o ADMIN em acesso master nao tem contrato proprio, e o Solicitante nao administra nada.
+  const { data: contrato } = useQuery({
+    queryKey: ["own-client"],
+    queryFn: getOwnClient,
+    enabled: user?.role === "CLIENT" && !!user?.clientId,
+    staleTime: 300_000,
+  });
 
   // Quais secoes o usuario deixou fechadas. Guardado no navegador dele: cada um usa o
   // sistema de um jeito, e reabrir tudo a cada visita e' trabalho repetido.
@@ -181,10 +193,33 @@ export function ClientPortalLayout() {
           <button type="button" className="text-graphite-600 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Abrir menu">
             <Menu className="h-6 w-6" />
           </button>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-navy-900">{clientDisplayName(user?.client)}</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-navy-900">{clientDisplayName(user?.client)}</p>
             <p className="text-xs text-graphite-500">{usesCmms ? "RLP Maintenance" : "Portal do cliente"}</p>
           </div>
+
+          {/* O plano contratado no cabecalho, sempre visivel: ele estava so no rodape do
+              menu, em "Meu contrato", e quem precisava saber quantas vagas ainda tem nao
+              achava. Aqui e' tambem o atalho para a tela inteira. */}
+          <Link
+            to="/portal/contrato"
+            className="hidden shrink-0 items-center gap-2 rounded-full border border-gray-200 px-3 py-1.5 text-xs hover:border-navy-300 hover:bg-gray-50 sm:flex"
+            title="Ver o contrato, os acessos e quanto ainda cabe"
+          >
+            <ReceiptText className="h-3.5 w-3.5 text-graphite-400" />
+            {contrato?.plan ? (
+              <>
+                <span className="font-medium text-navy-900">{contrato.plan.name}</span>
+                {contrato.planUsage?.users.limit != null && (
+                  <span className="text-graphite-500">
+                    {contrato.planUsage.users.current}/{contrato.planUsage.users.limit} acessos
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-graphite-500">Sem plano definido</span>
+            )}
+          </Link>
         </header>
         <main className="flex-1 px-4 py-6 sm:px-6">
           <Outlet />

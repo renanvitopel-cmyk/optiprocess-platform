@@ -265,6 +265,9 @@ export default function App() {
                 <Route path="almoxarifado" element={<PortalSpareParts />} />
                 <Route path="manutencao/mao-de-obra" element={<LaborResourcesList />} />
                 <Route path="manutencao/tipos-mao-de-obra" element={<LaborTypesList />} />
+                {/* "Meu contrato" estava so em /gestao: o menu do portal apontava para
+                    /portal/contrato, que nao existia, e o item dava "Pagina nao encontrada". */}
+                <Route path="contrato" element={<PortalContract />} />
                 <Route path="perfil" element={<PortalProfile />} />
               </Route>
             </Route>

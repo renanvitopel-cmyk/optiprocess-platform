@@ -8,7 +8,7 @@ import { assertServiceAccess, clientScopeFilter, resolveClientId } from "../../m
 import { writeAuditLog } from "../../utils/audit";
 import { applySparePartMovement } from "../../lib/inventory";
 import { assertInstrumentLimitNotExceeded } from "../../lib/planLimits";
-import { ABAS, gerarPlanilhaModelo } from "./template";
+import { ABAS, gerarPlanilhaModelo, type ListasDoCliente } from "./template";
 
 /**
  * Importacao por planilha.
@@ -26,12 +26,26 @@ export const baixarModelo = asyncHandler(async (req: Request, res: Response) => 
   const alvo = clientId ?? clientScopeFilter(req).clientId;
 
   let nome: string | undefined;
+  const listas: ListasDoCliente = {};
   if (alvo) {
-    const cliente = await prisma.client.findFirst({ where: { id: alvo }, select: { companyName: true } });
+    // O modelo sai com o que a empresa JA tem: planta, area, tipo de ativo e funcao viram
+    // menu suspenso na celula. Digitar um nome que nao existe era o erro mais comum da
+    // importacao, e so aparecia depois de enviar o arquivo inteiro.
+    const [cliente, plantas, areas, tipos, funcoes] = await Promise.all([
+      prisma.client.findFirst({ where: { id: alvo }, select: { companyName: true } }),
+      prisma.plant.findMany({ where: { clientId: alvo, deletedAt: null, active: true }, select: { name: true }, orderBy: { name: "asc" } }),
+      prisma.area.findMany({ where: { clientId: alvo, deletedAt: null, active: true }, select: { name: true }, orderBy: { name: "asc" } }),
+      prisma.assetType.findMany({ where: { active: true, OR: [{ clientId: null }, { clientId: alvo }] }, select: { name: true }, orderBy: { name: "asc" } }),
+      prisma.laborType.findMany({ where: { active: true, OR: [{ clientId: null }, { clientId: alvo }] }, select: { name: true }, orderBy: { name: "asc" } }),
+    ]);
     nome = cliente?.companyName;
+    listas.plantas = plantas.map((x) => x.name);
+    listas.areas = areas.map((x) => x.name);
+    listas.tiposDeAtivo = tipos.map((x) => x.name);
+    listas.funcoes = funcoes.map((x) => x.name);
   }
 
-  const arquivo = await gerarPlanilhaModelo(nome);
+  const arquivo = await gerarPlanilhaModelo(nome, listas);
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", 'attachment; filename="modelo-importacao-cmms.xlsx"');
   res.end(arquivo);

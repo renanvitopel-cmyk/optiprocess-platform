@@ -1388,7 +1388,7 @@ export interface LubricationRouteInput {
 }
 
 export interface LubricationDashboard {
-  totais: { pontos: number; vencidos: number; proximos7Dias: number; rotas: number; aplicacoes30Dias: number };
+  totais: { pontos: number; vencidos: number; proximos7Dias: number; rotas: number; aplicacoes30Dias: number; pendentesDeCadastro: number };
   /** null quando nao ha ponto cadastrado - nao se mostra 100% de aderencia sobre nada. */
   aderenciaPct: number | null;
   atrasados: LubricationPoint[];

@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus, Droplets, AlertTriangle } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
+import { Tabs } from "../../../components/Tabs";
 import { DataTable } from "../../../components/DataTable";
 import { EmptyState } from "../../../components/EmptyState";
 import { Modal } from "../../../components/Modal";
@@ -21,8 +22,10 @@ import {
   createLubricationPoint,
   updateLubricationPoint,
   registrarLubrificacao,
+  listPendingLubricationPoints,
 } from "../../../api/lubrication";
 import type { LubricationPoint } from "../../../api/types";
+import type { AtivoSemPonto } from "../../../api/lubrication";
 import { clientDisplayName, formatDate } from "../../../lib/format";
 import { useCmms } from "../../../lib/cmms";
 import { METODOS_DE_LUBRIFICACAO } from "../../../lib/maintenanceLabels";
@@ -76,6 +79,10 @@ export default function LubricationPointsList() {
   // Chegando pela ficha do ativo ("Cadastrar ponto"), a tela ja abre filtrada nele - e com
   // o formulario aberto e o ativo preenchido quando o link pede.
   const instrumentId = searchParams.get("instrumentId") ?? "";
+  // Com dois mil pontos ninguem abre ficha por ficha para achar o que ficou pela metade,
+  // e um ativo sem ponto nao aparece em rota nenhuma: a falta dele e' silenciosa. Esta
+  // aba e' a fila de trabalho de quem esta montando o plano.
+  const [aba, setAba] = useState<"cadastrados" | "pendentes">("cadastrados");
   const abrirNovoAoEntrar = searchParams.get("novo") === "1";
 
   const { data: clients } = useQuery({
@@ -93,6 +100,12 @@ export default function LubricationPointsList() {
     queryFn: () => listLubricationPoints({ clientId, situacao: situacao || undefined, instrumentId: instrumentId || undefined, page, pageSize: 20 }),
     enabled: !!clientId,
   });
+  const { data: pendentes, isLoading: carregandoPendentes } = useQuery({
+    queryKey: ["pontos-pendentes", clientId, page],
+    queryFn: () => listPendingLubricationPoints({ clientId, page, pageSize: 20 }),
+    enabled: !!clientId,
+  });
+
   const { data: equipe } = useQuery({
     queryKey: ["labor-resources-picker", clientId],
     queryFn: () => listLaborResources({ clientId, active: true, pageSize: 200 }),
@@ -232,7 +245,56 @@ export default function LubricationPointsList() {
         </select>
       </div>
 
-      {!clientId ? (
+      {clientId && (
+        <div className="mb-4">
+          <Tabs
+            tabs={[
+              { id: "cadastrados", label: `Cadastrados${data ? ` (${data.total})` : ""}` },
+              { id: "pendentes", label: `Pendentes de cadastro${pendentes ? ` (${pendentes.total})` : ""}` },
+            ]}
+            active={aba}
+            onChange={(id) => { setAba(id as typeof aba); setPage(1); }}
+          />
+        </div>
+      )}
+
+      {clientId && aba === "pendentes" ? (
+        <DataTable<AtivoSemPonto>
+          rows={pendentes?.items ?? []}
+          loading={carregandoPendentes}
+          keyField={(a) => a.id}
+          pagination={pendentes}
+          onPageChange={setPage}
+          emptyTitle="Nenhum ativo esperando ponto"
+          emptyDescription="Todo ativo marcado como lubrificavel ja tem pelo menos um ponto cadastrado."
+          columns={[
+            {
+              header: "Ativo",
+              accessor: (a) => (
+                <div>
+                  <p className="font-medium text-navy-900">{a.description || a.type}</p>
+                  <p className="text-xs text-graphite-400">TAG {a.tag ?? "sem TAG"}</p>
+                </div>
+              ),
+            },
+            { header: "Componente de", accessor: (a) => (a.parent ? `TAG ${a.parent.tag ?? ""}` : "-") },
+            { header: "Planta", accessor: (a) => a.plant?.name ?? "-" },
+            { header: "Area", accessor: (a) => a.area?.name ?? "-" },
+            {
+              header: "",
+              accessor: (a) => (
+                <button
+                  className="btn-outline text-sm"
+                  onClick={() => abrirNovo(a.id)}
+                  disabled={opcoesDeLubrificante.length === 0}
+                >
+                  <Plus className="h-4 w-4" /> Cadastrar ponto
+                </button>
+              ),
+            },
+          ]}
+        />
+      ) : !clientId ? (
         <EmptyState title="Selecione o cliente" description="Os pontos de lubrificacao sao dos equipamentos de cada empresa." />
       ) : opcoesDeLubrificante.length === 0 ? (
         <EmptyState

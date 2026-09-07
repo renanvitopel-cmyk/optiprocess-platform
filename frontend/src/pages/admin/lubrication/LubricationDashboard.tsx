@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Droplets, AlertTriangle, CalendarClock, Route, CheckCircle2 } from "lucide-react";
+import { Droplets, AlertTriangle, CalendarClock, Route, CheckCircle2, CircleAlert } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
 import { StatCard } from "../../../components/StatCard";
 import { FullPageSpinner } from "../../../components/Spinner";
@@ -62,6 +62,18 @@ export default function LubricationDashboard() {
             <StatCard label="Vencidos" value={data.totais.vencidos} icon={AlertTriangle} tone="red" />
             <StatCard label="Vencem em 7 dias" value={data.totais.proximos7Dias} icon={CalendarClock} tone="yellow" />
             <StatCard label="Rotas ativas" value={data.totais.rotas} icon={Route} tone="navy" />
+            {/* Ativo marcado como lubrificavel e sem ponto nao entra em rota nenhuma: a
+                falta dele nao aparece em vencido nem em atrasado. So aqui. */}
+            {data.totais.pendentesDeCadastro > 0 && (
+              <Link to={`${base}/lubrificacao/pontos`}>
+                <StatCard
+                  label="Ativos esperando ponto"
+                  value={data.totais.pendentesDeCadastro}
+                  icon={CircleAlert}
+                  tone="yellow"
+                />
+              </Link>
+            )}
             <StatCard
               label="Aderencia"
               /* Sem ponto cadastrado nao ha aderencia a mostrar - "100%" ali seria mentira. */

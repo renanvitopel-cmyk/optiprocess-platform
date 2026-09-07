@@ -620,13 +620,23 @@ export const getLubricationDashboard = asyncHandler(async (req: Request, res: Re
   const hoje = new Date();
   const escopo = { deletedAt: null, active: true, ...resolveClientScope(req, clientId) };
 
-  const [total, vencidos, proximos, rotas, ultimos30] = await Promise.all([
+  const [total, vencidos, proximos, rotas, ultimos30, pendentes] = await Promise.all([
     prisma.lubricationPoint.count({ where: escopo }),
     prisma.lubricationPoint.count({ where: { ...escopo, nextDueAt: { lt: hoje } } }),
     prisma.lubricationPoint.count({ where: { ...escopo, nextDueAt: { gte: hoje, lte: somaDias(hoje, 7) } } }),
     prisma.lubricationRoute.count({ where: { deletedAt: null, active: true, ...resolveClientScope(req, clientId) } }),
     prisma.lubricationRecord.count({
       where: { ...resolveClientScope(req, clientId), executedAt: { gte: somaDias(hoje, -30) } },
+    }),
+    // Ativo marcado como lubrificavel e sem ponto: nao aparece em rota nenhuma, entao a
+    // falta dele e' silenciosa. Fica no painel para nao depender de alguem abrir a ficha.
+    prisma.instrument.count({
+      where: {
+        deletedAt: null,
+        lubricatable: true,
+        lubricationPoints: { none: { deletedAt: null, active: true } },
+        ...resolveClientScope(req, clientId),
+      },
     }),
   ]);
 
@@ -639,9 +649,66 @@ export const getLubricationDashboard = asyncHandler(async (req: Request, res: Re
   });
 
   res.json({
-    totais: { pontos: total, vencidos, proximos7Dias: proximos, rotas, aplicacoes30Dias: ultimos30 },
+    totais: { pontos: total, vencidos, proximos7Dias: proximos, rotas, aplicacoes30Dias: ultimos30, pendentesDeCadastro: pendentes },
     // Aderencia so faz sentido com pontos cadastrados; sem eles, null (e nao 100%).
     aderenciaPct: total > 0 ? Number((((total - vencidos) / total) * 100).toFixed(1)) : null,
     atrasados,
   });
+});
+
+/**
+ * Ativos marcados como lubrificaveis que ainda nao tem ponto cadastrado.
+ *
+ * Com dezenas de pontos, o aviso na ficha de cada ativo basta. Com dois mil, ninguem abre
+ * ficha por ficha para descobrir o que ficou pela metade - e um ponto que nunca foi
+ * cadastrado nao aparece em rota nenhuma, entao a falha e' silenciosa: a maquina
+ * simplesmente nunca e' lubrificada, e nada na tela denuncia isso. Esta lista e' a fila
+ * de trabalho de quem esta montando o plano de lubrificacao.
+ */
+export const listPendingLubricationPoints = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const pageParams = parsePageParams(req.query as Record<string, unknown>);
+  const { clientId, plantId, areaId, search } = req.query as {
+    clientId?: string; plantId?: string; areaId?: string; search?: string;
+  };
+
+  const where = {
+    deletedAt: null,
+    lubricatable: true,
+    // "Nenhum ponto ativo" e nao "nenhum ponto": um ponto desativado deixa o ativo
+    // descoberto do mesmo jeito, e some da rota igual.
+    lubricationPoints: { none: { deletedAt: null, active: true } },
+    ...resolveClientScope(req, clientId),
+    ...(plantId ? { plantId } : {}),
+    ...(areaId ? { areaId } : {}),
+    ...(search
+      ? {
+          OR: [
+            { tag: { contains: search, mode: "insensitive" as const } },
+            { description: { contains: search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  const [items, total] = await Promise.all([
+    prisma.instrument.findMany({
+      where,
+      orderBy: [{ plant: { name: "asc" } }, { area: { name: "asc" } }, { tag: "asc" }],
+      ...toSkipTake(pageParams),
+      select: {
+        id: true,
+        tag: true,
+        description: true,
+        type: true,
+        criticality: true,
+        plant: { select: { id: true, name: true } },
+        area: { select: { id: true, name: true } },
+        parent: { select: { id: true, tag: true, description: true } },
+      },
+    }),
+    prisma.instrument.count({ where }),
+  ]);
+
+  res.json(buildPagedResult(items, total, pageParams));
 });

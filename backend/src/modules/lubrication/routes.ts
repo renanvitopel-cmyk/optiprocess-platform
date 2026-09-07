@@ -7,6 +7,7 @@ import {
   updateLubricant,
   deleteLubricant,
   listLubricationPoints,
+  listPendingLubricationPoints,
   getLubricationPoint,
   createLubricationPoint,
   updateLubricationPoint,
@@ -44,6 +45,8 @@ lubricationRouter.post("/rotas", createLubricationRoute);
 lubricationRouter.patch("/rotas/:id", updateLubricationRoute);
 lubricationRouter.delete("/rotas/:id", deleteLubricationRoute);
 
+// Antes de "/pontos/:id", senao "pendentes" viraria um id.
+lubricationRouter.get("/pontos/pendentes", listPendingLubricationPoints);
 lubricationRouter.get("/pontos", listLubricationPoints);
 lubricationRouter.get("/pontos/:id", getLubricationPoint);
 lubricationRouter.post("/pontos", createLubricationPoint);

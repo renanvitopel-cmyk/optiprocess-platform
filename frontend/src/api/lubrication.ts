@@ -52,6 +52,25 @@ export async function listLubricationPoints(
   return data;
 }
 
+/** Ativos marcados como lubrificaveis que ainda nao tem ponto cadastrado. */
+export interface AtivoSemPonto {
+  id: string;
+  tag: string | null;
+  description: string | null;
+  type: string;
+  criticality: string;
+  plant: { id: string; name: string } | null;
+  area: { id: string; name: string } | null;
+  parent: { id: string; tag: string | null; description: string | null } | null;
+}
+
+export async function listPendingLubricationPoints(
+  params: { clientId?: string; plantId?: string; areaId?: string; search?: string; page?: number; pageSize?: number } = {},
+): Promise<PagedResult<AtivoSemPonto>> {
+  const { data } = await api.get<PagedResult<AtivoSemPonto>>("/lubrificacao/pontos/pendentes", { params });
+  return data;
+}
+
 export async function getLubricationPoint(id: string): Promise<LubricationPoint> {
   const { data } = await api.get<LubricationPoint>(`/lubrificacao/pontos/${id}`);
   return data;

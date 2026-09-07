@@ -660,6 +660,10 @@ model Instrument {
   // Ativos da OptiProcess mostra so os calibraveis (o que ela presta servico), enquanto o
   // CMMS do cliente enxerga toda a arvore dele - linha, maquina, componente.
   calibratable               Boolean           @default(false)
+  // Ativo que tem ponto de lubrificacao. Irmao de calibratable: marcar aqui e' o que faz
+  // a ficha cobrar o cadastro do ponto, em vez de o ativo ficar sem lubrificacao so
+  // porque ninguem abriu a tela de Lubrificacao para cria-lo.
+  lubricatable               Boolean           @default(false)
   // Opcional: so faz sentido para ativos com calibracao periodica rastreada. Uma empresa
   // que contratou so o CMMS (sem Calibracao) cadastra o ativo sem preencher isso.
   calibrationFrequencyMonths Int?

@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Modal } from "../../components/Modal";
-import { TextInput, SelectInput } from "../../components/form/Field";
+import { TextInput, SelectInput, CheckboxInput } from "../../components/form/Field";
 import { InstrumentPicker } from "../../components/InstrumentPicker";
 import { AssetLevelInput } from "../../components/AssetLevelInput";
 import { AssetTypeInput } from "../../components/AssetTypeInput";
@@ -26,7 +26,8 @@ const schema = z.object({
   model: z.string().optional(),
   serialNumber: z.string().optional(),
   installationLocation: z.string().optional(),
-  calibrationFrequencyMonths: z.coerce.number().int().min(1).optional().or(z.literal("")),
+  calibratable: z.boolean().optional(),
+  lubricatable: z.boolean().optional(),
   criticality: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   operationalStatus: z.enum(["IN_OPERATION", "STOPPED", "STANDBY", "DEACTIVATED", "IN_MAINTENANCE"]).optional(),
   parentId: z.string().uuid().optional().or(z.literal("")),
@@ -90,7 +91,8 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
               model: instrument.model ?? "",
               serialNumber: instrument.serialNumber ?? "",
               installationLocation: instrument.installationLocation ?? "",
-              calibrationFrequencyMonths: instrument.calibrationFrequencyMonths ?? undefined,
+              calibratable: instrument.calibratable,
+              lubricatable: instrument.lubricatable,
               criticality: instrument.criticality,
               operationalStatus: instrument.operationalStatus,
               parentId: instrument.parentId ?? "",
@@ -115,7 +117,6 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
         type: values.type || undefined,
         plantId: values.plantId || null,
         areaId: values.areaId || null,
-        calibrationFrequencyMonths: values.calibrationFrequencyMonths || null,
       };
       const saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
       notify("success", instrument ? "Ativo atualizado." : "Ativo cadastrado.");
@@ -246,13 +247,30 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
           <TextInput label="Numero de serie" {...register("serialNumber")} />
         </div>
         <TextInput label="Local de instalacao" {...register("installationLocation")} />
-        <TextInput
-          label="Periodicidade de calibracao (meses)"
-          type="number"
-          hint="Deixe em branco se este ativo nao precisa de calibracao periodica."
-          error={errors.calibrationFrequencyMonths?.message}
-          {...register("calibrationFrequencyMonths")}
-        />
+
+        {/* As duas marcas que ligam este ativo aos outros dois modulos. A periodicidade de
+            calibracao saiu daqui: era um numero solto na ficha, digitado uma vez e nunca
+            mais olhado. Ela agora vive no plano de calibracao, que e' onde se decide o que
+            sera feito e quando - a ficha so acompanha. */}
+        <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+          <p className="text-sm font-medium text-graphite-700">Este ativo participa de</p>
+          <CheckboxInput
+            label="Calibracao - envia para a OptiProcess calibrar"
+            {...register("calibratable")}
+          />
+          <p className="-mt-1 pl-6 text-xs text-graphite-500">
+            Ao marcar, o ativo entra na lista de calibracao da OptiProcess. Depois e' preciso criar o plano de
+            calibracao, que define de quanto em quanto tempo - a ficha lembra disso enquanto faltar.
+          </p>
+          <CheckboxInput
+            label="Lubrificacao - este ativo tem ponto de lubrificacao"
+            {...register("lubricatable")}
+          />
+          <p className="-mt-1 pl-6 text-xs text-graphite-500">
+            Ao marcar, o ponto e' cadastrado na ficha do ativo ja com o ativo e o nome preenchidos, e passa a
+            aparecer em Lubrificacao.
+          </p>
+        </div>
       </form>
     </Modal>
   );

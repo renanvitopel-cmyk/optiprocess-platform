@@ -7,7 +7,7 @@ import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagin
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId, resolveClientScope } from "../../middleware/rbac";
-import { deriveDueStatus } from "../../utils/status";
+import { deriveDueStatus, computeNextDueDate } from "../../utils/status";
 import { computeNextDue, computeGenerationDate, frequencyToDays, forecastMeterDue, type TimeScheduleConfig } from "../../lib/planSchedule";
 import { nextClientMaintenanceOrderNumber, nextClientMaintenancePlanCode } from "../../utils/sequence";
 import { reserveSparePart } from "../../lib/inventory";
@@ -253,6 +253,42 @@ function assertLubrificacaoCoerente(
   }
 }
 
+
+/**
+ * Plano de calibracao manda na periodicidade do ativo.
+ *
+ * A periodicidade saiu da ficha do ativo: era um numero solto, digitado uma vez e nunca
+ * mais olhado, que ninguem sabia de onde tinha vindo. Agora ela vive no plano de
+ * calibracao, que e' onde se decide o que sera feito e quando - e o ativo apenas
+ * acompanha, para o vencimento e o certificado seguirem funcionando como antes.
+ */
+async function sincronizarPeriodicidadeDeCalibracao(planId: string): Promise<void> {
+  const plan = await prisma.maintenancePlan.findFirst({
+    where: { id: planId, deletedAt: null },
+    select: { planType: true, status: true, instrumentId: true, frequencyDays: true },
+  });
+  if (!plan || plan.planType !== "CALIBRATION" || plan.status !== "ACTIVE" || !plan.frequencyDays) return;
+
+  // frequencyDays ja e' o intervalo normalizado do plano; a ficha do ativo fala em meses.
+  const meses = Math.max(1, Math.round(plan.frequencyDays / 30));
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: plan.instrumentId, deletedAt: null },
+    select: { id: true, lastCalibrationDate: true, calibrationFrequencyMonths: true },
+  });
+  if (!instrument || instrument.calibrationFrequencyMonths === meses) return;
+
+  await prisma.instrument.update({
+    where: { id: instrument.id },
+    data: {
+      calibratable: true,
+      calibrationFrequencyMonths: meses,
+      nextDueDate: instrument.lastCalibrationDate
+        ? computeNextDueDate(instrument.lastCalibrationDate, meses)
+        : undefined,
+    },
+  });
+}
+
 export const createMaintenancePlan = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = planSchema.parse(req.body);
@@ -318,6 +354,8 @@ export const createMaintenancePlan = asyncHandler(async (req: Request, res: Resp
     },
     include: detailInclude,
   });
+
+  await sincronizarPeriodicidadeDeCalibracao(plan.id);
 
   await writeAuditLog({
     userId: req.user?.sub,
@@ -403,6 +441,8 @@ export const updateMaintenancePlan = asyncHandler(async (req: Request, res: Resp
     },
     include: detailInclude,
   });
+
+  await sincronizarPeriodicidadeDeCalibracao(plan.id);
 
   await writeAuditLog({
     userId: req.user?.sub,

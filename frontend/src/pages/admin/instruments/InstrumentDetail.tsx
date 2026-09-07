@@ -17,6 +17,8 @@ import { Tabs } from "../../../components/Tabs";
 import { InstrumentFormModal } from "./InstrumentFormModal";
 import { MeterFormModal } from "./MeterFormModal";
 import { AssetPhoto } from "../../../components/AssetPhoto";
+import { AssetSetupAlerts } from "../../../components/AssetSetupAlerts";
+import { AssetLubricationCard } from "../../../components/AssetLubricationCard";
 import { InstrumentAttachments } from "../../../components/InstrumentAttachments";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { useAuth } from "../../../auth/AuthContext";
@@ -212,6 +214,8 @@ export default function InstrumentDetail() {
         </div>
       )}
 
+      <AssetSetupAlerts instrument={instrument} base="/gestao/manutencao" />
+
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
       {tab === "overview" && (
@@ -363,6 +367,7 @@ export default function InstrumentDetail() {
 
       {tab === "maintenance" && (
         <div className="space-y-6">
+          <AssetLubricationCard instrumentId={instrument.id} clientId={instrument.clientId} raiz="/gestao" />
           <div className="card p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-semibold text-navy-900">Medidores</h2>

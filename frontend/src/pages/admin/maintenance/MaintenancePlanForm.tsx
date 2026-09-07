@@ -123,7 +123,9 @@ export default function MaintenancePlanForm() {
       initialWorkOrderStatus: "PROGRAMMED",
       materialPolicy: "RESERVE_AUTO",
       status: "ACTIVE",
-      planType: "PREVENTIVE",
+      // Vindo do aviso "criar plano de calibracao" na ficha do ativo, o tipo ja chega
+      // escolhido - senao a pessoa clicaria no atalho e teria que adivinhar o tipo certo.
+      planType: (searchParams.get("planType") as FormValues["planType"] | null) ?? "PREVENTIVE",
       scope: "SINGLE_ASSET",
       defaultPriority: "MEDIUM",
       checklistTemplate: [{ description: "", required: true, responseType: "YES_NO_NA" }],

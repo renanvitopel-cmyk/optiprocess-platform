@@ -160,6 +160,12 @@ export interface Instrument {
   description: string | null;
   /** Sujeito a calibracao - so estes aparecem na lista de Ativos da OptiProcess. */
   calibratable: boolean;
+  /** Tem ponto de lubrificacao - irmao de calibratable. */
+  lubricatable?: boolean;
+  /** O que falta depois de marcar o ativo (so vem na ficha, nao na listagem). */
+  pendencias?: { planoDeCalibracao: boolean; pontoDeLubrificacao: boolean };
+  calibrationPlanCount?: number;
+  lubricationPointCount?: number;
   manufacturer: string | null;
   model: string | null;
   serialNumber: string | null;

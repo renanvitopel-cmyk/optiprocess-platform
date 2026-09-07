@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -73,6 +73,10 @@ export default function LubricationPointsList() {
   const [editando, setEditando] = useState<LubricationPoint | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [registrando, setRegistrando] = useState<LubricationPoint | null>(null);
+  // Chegando pela ficha do ativo ("Cadastrar ponto"), a tela ja abre filtrada nele - e com
+  // o formulario aberto e o ativo preenchido quando o link pede.
+  const instrumentId = searchParams.get("instrumentId") ?? "";
+  const abrirNovoAoEntrar = searchParams.get("novo") === "1";
 
   const { data: clients } = useQuery({
     queryKey: ["clients-picker-cmms"],
@@ -85,8 +89,8 @@ export default function LubricationPointsList() {
     enabled: !!clientId,
   });
   const { data, isLoading } = useQuery({
-    queryKey: ["pontos-lubrificacao", clientId, situacao, page],
-    queryFn: () => listLubricationPoints({ clientId, situacao: situacao || undefined, page, pageSize: 20 }),
+    queryKey: ["pontos-lubrificacao", clientId, situacao, page, instrumentId],
+    queryFn: () => listLubricationPoints({ clientId, situacao: situacao || undefined, instrumentId: instrumentId || undefined, page, pageSize: 20 }),
     enabled: !!clientId,
   });
   const { data: equipe } = useQuery({
@@ -101,11 +105,24 @@ export default function LubricationPointsList() {
   });
   const recordForm = useForm<RecordForm>({ resolver: zodResolver(recordSchema) });
 
-  function abrirNovo() {
-    setEditando(null);
-    pointForm.reset({ method: "MANUAL_GUN", machineState: "ANY", frequencyDays: 30, instrumentId: "", code: "", name: "" });
-    setFormOpen(true);
-  }
+  const abrirNovo = useCallback(
+    (ativoId = "") => {
+      setEditando(null);
+      pointForm.reset({ method: "MANUAL_GUN", machineState: "ANY", frequencyDays: 30, instrumentId: ativoId, code: "", name: "" });
+      setFormOpen(true);
+    },
+    [pointForm],
+  );
+
+  // Abre uma vez so: depois disso o parametro sai da URL, senao fechar o formulario e
+  // recarregar a tela reabriria ele sozinho.
+  useEffect(() => {
+    if (!abrirNovoAoEntrar || !clientId) return;
+    abrirNovo(instrumentId);
+    const resto = new URLSearchParams(searchParams);
+    resto.delete("novo");
+    setSearchParams(resto, { replace: true });
+  }, [abrirNovoAoEntrar, clientId, instrumentId, abrirNovo, searchParams, setSearchParams]);
 
   function abrirEdicao(p: LubricationPoint) {
     setEditando(p);
@@ -185,7 +202,7 @@ export default function LubricationPointsList() {
           { label: "Pontos" },
         ]}
         actions={
-          <button className="btn-primary" onClick={abrirNovo} disabled={!clientId || opcoesDeLubrificante.length === 0}>
+          <button className="btn-primary" onClick={() => abrirNovo(instrumentId)} disabled={!clientId || opcoesDeLubrificante.length === 0}>
             <Plus className="h-4 w-4" /> Novo ponto
           </button>
         }

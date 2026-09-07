@@ -40,7 +40,7 @@ const schema = z.object({
   measurementRange: z.string().optional(),
   resolution: z.string().optional(),
   unit: z.string().optional(),
-  calibrationFrequencyMonths: z.coerce.number().int().min(1).optional().or(z.literal("")),
+  lubricatable: z.boolean().optional(),
   lastCalibrationDate: z.string().optional(),
   status: z.enum(["VALID", "DUE_SOON", "EXPIRED", "IN_MAINTENANCE"]).optional(),
   // Contexto so e' escolhido no ativo raiz (a planta). Nos filhos vem herdado do pai.
@@ -90,7 +90,8 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
   const { user } = useAuth();
   const clientId = watch("clientId");
   const parentId = watch("parentId");
-  const tracksCalibration = !!watch("calibrationFrequencyMonths");
+  // O status do certificado so faz sentido em ativo que de fato e' calibrado.
+  const tracksCalibration = !!watch("calibratable");
 
   // Cadastro novo e' o caminho rapido: so o que identifica o ativo e onde ele fica. A ficha
   // completa (tipo, criticidade, fabricante, calibracao) aparece ao editar - assim ninguem
@@ -138,6 +139,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               parentId: instrument.parentId ?? "",
               installationLocation: instrument.installationLocation ?? "",
               calibratable: instrument.calibratable,
+              lubricatable: instrument.lubricatable,
               costCenterId: instrument.costCenterId ?? "",
               level: instrument.level ?? "",
               manufacturer: instrument.manufacturer ?? "",
@@ -146,7 +148,6 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               measurementRange: instrument.measurementRange ?? "",
               resolution: instrument.resolution ?? "",
               unit: instrument.unit ?? "",
-              calibrationFrequencyMonths: instrument.calibrationFrequencyMonths ?? undefined,
               lastCalibrationDate: instrument.lastCalibrationDate?.slice(0, 10) ?? "",
               status: instrument.status,
               plantId: instrument.plantId ?? "",
@@ -177,7 +178,6 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
         areaId: values.areaId || null,
         costCenterId: values.costCenterId || null,
         level: values.level || null,
-        calibrationFrequencyMonths: values.calibrationFrequencyMonths || null,
       };
       let saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
 
@@ -334,23 +334,25 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
           <TextInput label="Ponto de instalacao" placeholder="Ex.: Casa de maquinas, painel 3" {...register("installationLocation")} />
         </Section>
 
-        <Section title="Calibracao" hint="so para ativos com calibracao periodica">
+        <Section title="Calibracao e lubrificacao" hint="a que este ativo esta sujeito">
           <CheckboxInput
             label="Ativo calibravel - aparece na lista de Ativos da OptiProcess"
             {...register("calibratable")}
           />
           <p className="text-xs text-graphite-500">
             Marque so equipamentos que passam por calibracao. Linha, area, maquina e componente do CMMS
-            ficam desmarcados e nao aparecem para a equipe da OptiProcess.
+            ficam desmarcados e nao aparecem para a equipe da OptiProcess. De quanto em quanto tempo calibrar
+            e' definido no plano de calibracao, nao aqui.
+          </p>
+          <CheckboxInput
+            label="Ativo lubrificavel - tem ponto de lubrificacao"
+            {...register("lubricatable")}
+          />
+          <p className="text-xs text-graphite-500">
+            Ao marcar, a ficha do ativo passa a cobrar o cadastro do ponto (lubrificante, quantidade, metodo e
+            periodicidade), que entra em Lubrificacao ja ligado a este ativo.
           </p>
           <div className="grid gap-4 sm:grid-cols-3">
-            <TextInput
-              label="Periodicidade (meses)"
-              type="number"
-              hint="Em branco = este ativo nao tem calibracao rastreada."
-              error={errors.calibrationFrequencyMonths?.message}
-              {...register("calibrationFrequencyMonths")}
-            />
             <TextInput label="Ultima calibracao" type="date" {...register("lastCalibrationDate")} />
             {instrument && tracksCalibration && (
               <SelectInput

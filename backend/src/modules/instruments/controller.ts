@@ -141,7 +141,31 @@ export const getInstrument = asyncHandler(async (req: Request, res: Response) =>
   });
   if (!instrument) throw new NotFoundError("Instrumento");
   const [withLevel] = await attachPhotoUrl(attachAssetTypeLevel([withDerivedStatus(instrument)]));
-  res.json(withLevel);
+
+  // Marcar o ativo como calibravel ou lubrificavel e' so metade do trabalho: sem plano de
+  // calibracao ele nunca e' chamado para calibrar, e sem ponto cadastrado ele nunca entra
+  // numa rota de lubrificacao. A ficha diz o que ainda falta, em vez de deixar a marca
+  // parecer que resolveu.
+  const [planosDeCalibracao, pontosDeLubrificacao] = await Promise.all([
+    instrument.calibratable
+      ? prisma.maintenancePlan.count({
+          where: { instrumentId: instrument.id, deletedAt: null, planType: "CALIBRATION", status: "ACTIVE" },
+        })
+      : Promise.resolve(0),
+    instrument.lubricatable
+      ? prisma.lubricationPoint.count({ where: { instrumentId: instrument.id, deletedAt: null, active: true } })
+      : Promise.resolve(0),
+  ]);
+
+  res.json({
+    ...withLevel,
+    pendencias: {
+      planoDeCalibracao: instrument.calibratable && planosDeCalibracao === 0,
+      pontoDeLubrificacao: instrument.lubricatable && pontosDeLubrificacao === 0,
+    },
+    calibrationPlanCount: planosDeCalibracao,
+    lubricationPointCount: pontosDeLubrificacao,
+  });
 });
 
 const instrumentSchema = z.object({
@@ -163,6 +187,8 @@ const instrumentSchema = z.object({
   description: z.string().nullish(),
   // Marca o ativo como sujeito a calibracao (entra na lista da OptiProcess).
   calibratable: z.boolean().optional(),
+  // Marca o ativo como ponto de lubrificacao - irmao do calibratable.
+  lubricatable: z.boolean().optional(),
   // Ficha do fabricante e' opcional: nem todo ativo de manutencao tem numero de serie.
   manufacturer: z.string().nullish(),
   model: z.string().nullish(),

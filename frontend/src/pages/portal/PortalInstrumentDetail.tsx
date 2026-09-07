@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2, CornerLeftUp, AlertTriangle } from "lucide-react";
-import { getInstrument, listAssetParts, addAssetPart, removeAssetPart, getInstrumentPartsHistory, getInstrumentCostSummary } from "../../api/instruments";
+import { getInstrument, listAssetParts, addAssetPart, removeAssetPart, getInstrumentPartsHistory, getInstrumentCostSummary, deleteInstrument, getImpactoDaRemocao } from "../../api/instruments";
+import type { ImpactoDaRemocao } from "../../api/instruments";
 import { listSpareParts } from "../../api/spareParts";
 import { listServiceOrders } from "../../api/serviceOrders";
 import { listMeters, addMeterReading } from "../../api/meters";
@@ -16,6 +17,7 @@ import { formatDate, formatServiceCategory, formatCurrency } from "../../lib/for
 import { areaComCentroDeCusto } from "../../lib/centroDeCusto";
 import { EmptyState } from "../../components/EmptyState";
 import { PortalInstrumentFormModal } from "./PortalInstrumentFormModal";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { MeterFormModal } from "../admin/instruments/MeterFormModal";
 import { InstrumentAttachments } from "../../components/InstrumentAttachments";
 import { AssetPhoto } from "../../components/AssetPhoto";
@@ -27,9 +29,31 @@ import { getApiErrorMessage } from "../../api/client";
 
 const PRIORITY_LABELS: Record<string, string> = { LOW: "Baixa", MEDIUM: "Media", HIGH: "Alta", CRITICAL: "Critica" };
 
+/**
+ * O texto da confirmacao diz o TAMANHO do que esta pendurado no ativo.
+ *
+ * "Tem certeza?" sozinho nao ajuda a decidir: o que muda a resposta e' saber que o ativo
+ * tem 3 planos e 12 ordens no historico, ou que nao tem nada.
+ */
+function descricaoDaRemocao(tag: string | null, impacto?: ImpactoDaRemocao): string {
+  const nome = tag ? `O ativo ${tag}` : "O ativo";
+  const base = `${nome} sai das listas, da arvore e da programacao. Nada e' apagado: o historico continua guardado.`;
+  if (!impacto) return base;
+
+  const ligados = [
+    impacto.planos > 0 ? `${impacto.planos} plano(s)` : null,
+    impacto.pontos > 0 ? `${impacto.pontos} ponto(s) de lubrificacao` : null,
+    impacto.ordens > 0 ? `${impacto.ordens} ordem(ns) no historico` : null,
+    impacto.calibracoes > 0 ? `${impacto.calibracoes} calibracao(oes)` : null,
+  ].filter(Boolean);
+
+  return ligados.length > 0 ? `${base} Estao ligados a ele: ${ligados.join(", ")}.` : base;
+}
+
 export default function PortalInstrumentDetail() {
   const { id = "" } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const hasCmms = !!user?.client?.contractedServices?.includes("CMMS_MAINTENANCE");
   const { notify } = useToast();
@@ -38,7 +62,16 @@ export default function PortalInstrumentDetail() {
   const [addChildOpen, setAddChildOpen] = useState(false);
   const [meterModalOpen, setMeterModalOpen] = useState(false);
   const [selectedSparePartId, setSelectedSparePartId] = useState("");
+  const [confirmarRemocao, setConfirmarRemocao] = useState(false);
+  const [removendo, setRemovendo] = useState(false);
   const { data: instrument, isLoading } = useQuery({ queryKey: ["portal-instrument", id], queryFn: () => getInstrument(id) });
+  // O que esta pendurado no ativo. Buscado so ao abrir a confirmacao: a ficha nao
+  // precisa desses numeros para nada alem de avisar antes de remover.
+  const { data: impacto } = useQuery({
+    queryKey: ["impacto-remocao", id],
+    queryFn: () => getImpactoDaRemocao(id),
+    enabled: confirmarRemocao && !!id,
+  });
   const { data: serviceOrders } = useQuery({
     queryKey: ["portal-instrument-service-orders", id],
     queryFn: () => listServiceOrders({ instrumentId: id, pageSize: 20 }),
@@ -109,6 +142,21 @@ export default function PortalInstrumentDetail() {
     }
   }
 
+  async function removerAtivo() {
+    setRemovendo(true);
+    try {
+      await deleteInstrument(id);
+      notify("success", "Ativo removido.");
+      queryClient.invalidateQueries({ queryKey: ["portal-instruments"] });
+      navigate("/portal/instrumentos");
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setRemovendo(false);
+      setConfirmarRemocao(false);
+    }
+  }
+
   async function handleRemoveAssetPart(linkId: string) {
     try {
       await removeAssetPart(id, linkId);
@@ -136,9 +184,14 @@ export default function PortalInstrumentDetail() {
         description={instrument.description || instrument.type}
         breadcrumbs={[{ label: "Meus ativos", to: "/portal/instrumentos" }, { label: instrument.tag ?? instrument.type }]}
         actions={
-          <button className="btn-outline" onClick={() => setEditOpen(true)}>
-            <Pencil className="h-4 w-4" /> Editar
-          </button>
+          <>
+            <button className="btn-outline" onClick={() => setEditOpen(true)}>
+              <Pencil className="h-4 w-4" /> Editar
+            </button>
+            <button className="btn-danger" onClick={() => setConfirmarRemocao(true)}>
+              <Trash2 className="h-4 w-4" /> Remover
+            </button>
+          </>
         }
       />
 
@@ -163,6 +216,17 @@ export default function PortalInstrumentDetail() {
         <StatusBadge status={instrument.criticality} label={`Criticidade: ${PRIORITY_LABELS[instrument.criticality]}`} />
         <StatusBadge status={instrument.operationalStatus} />
       </div>
+
+      <ConfirmDialog
+        open={confirmarRemocao}
+        title="Remover este ativo"
+        description={descricaoDaRemocao(instrument.tag, impacto)}
+        confirmLabel="Remover"
+        danger
+        loading={removendo}
+        onConfirm={() => void removerAtivo()}
+        onCancel={() => setConfirmarRemocao(false)}
+      />
 
       <AssetSetupAlerts instrument={instrument} base="/portal/manutencao" />
 

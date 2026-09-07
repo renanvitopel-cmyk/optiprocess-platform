@@ -590,9 +590,61 @@ export const updateInstrument = asyncHandler(async (req: Request, res: Response)
   res.json(instrument);
 });
 
+/**
+ * O que some junto ao remover o ativo - usado na confirmacao da tela.
+ *
+ * Remover e' exclusao logica: nada e' apagado do banco, e o historico continua ligado ao
+ * ativo. Mas ele sai das listas, das rotas e da programacao, e por isso a tela precisa
+ * dizer o tamanho do que esta pendurado nele antes de perguntar "tem certeza?".
+ */
+async function impactoDaRemocao(instrumentId: string) {
+  const [filhos, ordensAbertas, ordens, planos, pontos, calibracoes] = await Promise.all([
+    prisma.instrument.count({ where: { parentId: instrumentId, deletedAt: null } }),
+    prisma.maintenanceWorkOrder.count({
+      where: { instrumentId, deletedAt: null, status: { notIn: ["COMPLETED", "CANCELED"] } },
+    }),
+    prisma.maintenanceWorkOrder.count({ where: { instrumentId, deletedAt: null } }),
+    prisma.maintenancePlan.count({ where: { instrumentId, deletedAt: null } }),
+    prisma.lubricationPoint.count({ where: { instrumentId, deletedAt: null, active: true } }),
+    prisma.calibration.count({ where: { instrumentId, deletedAt: null } }),
+  ]);
+  return { filhos, ordensAbertas, ordens, planos, pontos, calibracoes };
+}
+
+export const getInstrumentRemovalImpact = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
+  const existing = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+  });
+  if (!existing) throw new NotFoundError("Ativo");
+  res.json(await impactoDaRemocao(existing.id));
+});
+
 export const deleteInstrument = asyncHandler(async (req: Request, res: Response) => {
-  const existing = await prisma.instrument.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  // O escopo do cliente faltava aqui: sem ele, bastava o id para remover ativo de outra
+  // empresa. Nas outras rotas o filtro ja existia; nesta, nao.
+  const existing = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+  });
   if (!existing) throw new NotFoundError("Instrumento");
+
+  const impacto = await impactoDaRemocao(existing.id);
+
+  // Remover o pai deixaria o galho inteiro pendurado num ativo que sumiu das telas: os
+  // filhos continuariam existindo, sem aparecer na arvore e sem como serem alcancados.
+  if (impacto.filhos > 0) {
+    throw new ValidationError(
+      `Este ativo tem ${impacto.filhos} ativo(s) abaixo dele na arvore. Remova ou mova esses componentes antes - senao eles ficariam sem lugar na estrutura.`,
+    );
+  }
+
+  // Ordem em aberto e' trabalho que alguem ainda vai executar. Some da programacao sem
+  // aviso se o ativo for embora agora.
+  if (impacto.ordensAbertas > 0) {
+    throw new ValidationError(
+      `Este ativo tem ${impacto.ordensAbertas} ordem(ns) de manutencao em aberto. Conclua ou cancele antes de remover o ativo.`,
+    );
+  }
 
   await prisma.instrument.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
 

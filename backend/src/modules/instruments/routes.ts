@@ -8,6 +8,7 @@ import {
   createInstrument,
   updateInstrument,
   deleteInstrument,
+  getInstrumentRemovalImpact,
   listAssetParts,
   addAssetPart,
   removeAssetPart,
@@ -35,7 +36,10 @@ instrumentsRouter.get("/:id", getInstrument);
 // e exige que o servico de calibracao esteja contratado.
 instrumentsRouter.post("/", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), createInstrument);
 instrumentsRouter.patch("/:id", requireRole("ADMIN", "TECHNICIAN", "CLIENT"), updateInstrument);
-instrumentsRouter.delete("/:id", requireRole("ADMIN"), deleteInstrument);
+// O parque e' do cliente: quem cadastra tambem corrige e remove. A equipe da OptiProcess
+// alcanca pelo acesso master; o escopo por empresa e' garantido no controller.
+instrumentsRouter.get("/:id/impacto-da-remocao", requireRole("ADMIN", "CLIENT"), getInstrumentRemovalImpact);
+instrumentsRouter.delete("/:id", requireRole("ADMIN", "CLIENT"), deleteInstrument);
 
 // BOM (lista de materiais do ativo) - o cliente tambem vincula pecas do proprio
 // almoxarifado aos proprios ativos, quem tem CMMS_MAINTENANCE contratado.

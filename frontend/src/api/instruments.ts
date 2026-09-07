@@ -109,6 +109,21 @@ export async function getInstrumentAttachmentUrl(instrumentId: string, attachmen
   return data.url;
 }
 
+/** O que esta pendurado no ativo - a tela mostra antes de perguntar "tem certeza?". */
+export interface ImpactoDaRemocao {
+  filhos: number;
+  ordensAbertas: number;
+  ordens: number;
+  planos: number;
+  pontos: number;
+  calibracoes: number;
+}
+
+export async function getImpactoDaRemocao(id: string): Promise<ImpactoDaRemocao> {
+  const { data } = await api.get<ImpactoDaRemocao>(`/instruments/${id}/impacto-da-remocao`);
+  return data;
+}
+
 /** Envia (ou substitui) a foto principal do ativo. */
 export async function uploadInstrumentPhoto(id: string, file: File): Promise<Instrument> {
   const form = new FormData();

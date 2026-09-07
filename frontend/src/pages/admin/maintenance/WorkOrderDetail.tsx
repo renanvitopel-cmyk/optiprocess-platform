@@ -1,8 +1,9 @@
 import { useState } from "react";
+import { CONDICOES_DE_EXECUCAO } from "../../../lib/maintenanceLabels";
 import { centroDeCustoComDescricao } from "../../../lib/centroDeCusto";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2, PlayCircle, CheckCircle2, Plus, X, Square } from "lucide-react";
+import { Pencil, Trash2, PlayCircle, CheckCircle2, Plus, X, Square, ShoppingCart } from "lucide-react";
 import {
   getMaintenanceWorkOrder,
   deleteMaintenanceWorkOrder,
@@ -559,6 +560,19 @@ O que sobrar volta para o estoque.`,
             </span>
           </div>
           <p className="text-sm text-graphite-700">{workOrder.description}</p>
+
+          {/* Compra pendente e' o que segura a OS: fica no topo, e nao perdido num campo
+              la embaixo que ninguem le antes de ir para o campo. */}
+          {workOrder.needsPurchase && (
+            <div className="rounded-lg border border-safety-yellow/40 bg-safety-yellow/10 px-4 py-3">
+              <p className="flex items-center gap-2 text-sm font-medium text-graphite-800">
+                <ShoppingCart className="h-4 w-4 text-safety-yellow-dark" /> Precisa comprar material antes de executar
+              </p>
+              {workOrder.purchaseNotes && (
+                <p className="mt-1 whitespace-pre-wrap text-sm text-graphite-700">{workOrder.purchaseNotes}</p>
+              )}
+            </div>
+          )}
           <dl className="grid gap-4 sm:grid-cols-2">
             {!isClient && <Info label="Tecnico" value={workOrder.technician?.name ?? "-"} />}
             <Info
@@ -569,6 +583,11 @@ O que sobrar volta para o estoque.`,
             <Info label="Codigo de falha" value={workOrder.failureCode ? `${workOrder.failureCode.code} - ${workOrder.failureCode.description}` : "-"} />
             <Info label="Centro de custo" value={centroDeCustoComDescricao(workOrder.costCenter)} />
             <Info label="Janela planejada" value={janelaPlanejada} />
+            {/* Decisao do planejador na conversao da solicitacao: quem executa precisa
+                saber se pode fazer com a maquina rodando ou se espera a parada. */}
+            {workOrder.executionCondition && (
+              <Info label="Condicao de execucao" value={CONDICOES_DE_EXECUCAO[workOrder.executionCondition]} />
+            )}
             <Info label="Iniciada em" value={formatDateTime(workOrder.startedAt)} />
             <Info label="Concluida em" value={formatDateTime(workOrder.completedAt)} />
             {/* Estimado e realizado lado a lado: e' a comparacao que diz se o plano esta

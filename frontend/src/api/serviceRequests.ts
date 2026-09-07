@@ -1,6 +1,6 @@
 import { api } from "./client";
 import type { PagedResult } from "./client";
-import type { AttachmentCategory, CalibrationAttachment, MaintenancePriority, ServiceRequest, ServiceRequestStatus } from "./types";
+import type { AttachmentCategory, CalibrationAttachment, MaintenancePriority, ServiceRequest, ServiceRequestStatus, ConversaoDaSolicitacao } from "./types";
 
 export interface ListServiceRequestsParams {
   page?: number;
@@ -57,8 +57,8 @@ export async function triageServiceRequest(
   return data;
 }
 
-export async function convertServiceRequest(id: string): Promise<ServiceRequest> {
-  const { data } = await api.post<ServiceRequest>(`/service-requests/${id}/convert`);
+export async function convertServiceRequest(id: string, dados?: ConversaoDaSolicitacao): Promise<ServiceRequest> {
+  const { data } = await api.post<ServiceRequest>(`/service-requests/${id}/convert`, dados ?? {});
   return data;
 }
 

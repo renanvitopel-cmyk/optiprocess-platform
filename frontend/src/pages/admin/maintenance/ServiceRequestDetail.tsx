@@ -9,6 +9,8 @@ import {
   convertServiceRequest,
 } from "../../../api/serviceRequests";
 import { PageHeader } from "../../../components/PageHeader";
+import { ConvertRequestModal } from "./ConvertRequestModal";
+import type { ConversaoDaSolicitacao } from "../../../api/types";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
@@ -35,6 +37,7 @@ export default function ServiceRequestDetail() {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [conversaoAberta, setConversaoAberta] = useState(false);
   const [busy, setBusy] = useState(false);
   const [triageNotes, setTriageNotes] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
@@ -67,13 +70,14 @@ export default function ServiceRequestDetail() {
     }
   }
 
-  async function handleConvert() {
+  async function handleConvert(dados: ConversaoDaSolicitacao) {
     setBusy(true);
     try {
-      const updated = await convertServiceRequest(id);
+      const updated = await convertServiceRequest(id, dados);
       notify("success", `OS ${updated.workOrder?.number} gerada.`);
       queryClient.invalidateQueries({ queryKey: ["service-request", id] });
       queryClient.invalidateQueries({ queryKey: ["service-requests"] });
+      setConversaoAberta(false);
     } catch (error) {
       notify("error", getApiErrorMessage(error));
     } finally {
@@ -177,8 +181,11 @@ export default function ServiceRequestDetail() {
           {canConvert && (
             <div className="card p-5">
               <h2 className="mb-3 font-semibold text-navy-900">Planejada</h2>
-              <p className="mb-3 text-sm text-graphite-500">Aprovada na triagem - gere a OS quando estiver pronta para programar o servico.</p>
-              <button className="btn-primary w-full justify-center" onClick={handleConvert} disabled={busy}>
+              <p className="mb-3 text-sm text-graphite-500">
+                Aprovada na triagem. Ao gerar a OS voce reescreve a descricao e diz como o servico sera executado -
+                quem abriu a solicitacao relatou o sintoma, nao o servico.
+              </p>
+              <button className="btn-primary w-full justify-center" onClick={() => setConversaoAberta(true)} disabled={busy}>
                 <Wrench className="h-4 w-4" /> Gerar OS
               </button>
             </div>
@@ -232,6 +239,14 @@ export default function ServiceRequestDetail() {
         loading={deleting}
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}
+      />
+
+      <ConvertRequestModal
+        open={conversaoAberta}
+        request={request}
+        salvando={busy}
+        onClose={() => setConversaoAberta(false)}
+        onConfirm={(dados) => void handleConvert(dados)}
       />
     </div>
   );

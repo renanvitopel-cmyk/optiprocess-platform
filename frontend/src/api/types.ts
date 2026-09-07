@@ -1058,6 +1058,11 @@ export interface FailureRecord {
 }
 
 export interface MaintenanceWorkOrder {
+  /** Como o servico sera executado - decidido na conversao da solicitacao. */
+  executionCondition?: WorkOrderExecutionCondition | null;
+  /** Precisa comprar material antes de executar (a OS nasce aguardando material). */
+  needsPurchase?: boolean;
+  purchaseNotes?: string | null;
   id: string;
   number: string;
   clientId: string;
@@ -1548,6 +1553,22 @@ export interface SparePartHistory {
 /** Resultado de uma importacao por planilha (conferencia ou gravacao). */
 /** O que fazer com um registro que a planilha traz e que ja esta cadastrado. */
 export type ModoDeImportacao = "ignorar" | "completar";
+
+/** Como a OS sera executada - decidido pelo planejador na conversao da solicitacao. */
+export type WorkOrderExecutionCondition = "MACHINE_RUNNING" | "OPPORTUNITY_STOP" | "PLANNED_SHUTDOWN";
+
+/** O que o planejador preenche ao transformar a solicitacao em OS. */
+export interface ConversaoDaSolicitacao {
+  title?: string;
+  description?: string;
+  type?: MaintenanceOrderType;
+  correctiveType?: CorrectiveType | null;
+  priority?: MaintenancePriority;
+  executionCondition?: WorkOrderExecutionCondition | null;
+  needsPurchase?: boolean;
+  purchaseNotes?: string | null;
+  scheduledDate?: string | null;
+}
 
 export interface ResultadoDaImportacao {
   simulacao: boolean;

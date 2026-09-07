@@ -196,6 +196,15 @@ enum OperationalStatus {
 // bloqueio que podem acontecer durante o planejamento ou a execucao. Nao ha validacao
 // rigida de transicao (a equipe pode pular etapas que nao se aplicam) - o valor guia o
 // quadro/relatorio, nao trava o fluxo.
+// Como a OS sera executada - decisao do planejador, nao do operador que abriu a
+// solicitacao. Muda tudo no planejamento: uma troca de rolamento com a maquina rodando
+// nao existe, e uma inspecao que espera a parada anual atrasa um ano se ninguem disser.
+enum WorkOrderExecutionCondition {
+  MACHINE_RUNNING   // com o equipamento em operacao
+  OPPORTUNITY_STOP  // na proxima parada de oportunidade
+  PLANNED_SHUTDOWN  // so na parada programada
+}
+
 enum MaintenanceOrderStatus {
   OPEN
   IN_TRIAGE
@@ -1808,6 +1817,11 @@ model MaintenanceWorkOrder {
   // combinado e permitem comparar planejado x realizado.
   plannedStart DateTime?
   plannedEnd   DateTime?
+  // Como sera executada e o que ainda falta para isso - preenchido na conversao da
+  // solicitacao em OS, que e' onde o planejador decide.
+  executionCondition WorkOrderExecutionCondition?
+  needsPurchase      Boolean  @default(false)
+  purchaseNotes      String?
   // Quanto se espera gastar de mao de obra. Copiado do plano quando a OS e' gerada.
   estimatedHours Float?
   // Alimentam MTTR (tempo de reparo) e disponibilidade.

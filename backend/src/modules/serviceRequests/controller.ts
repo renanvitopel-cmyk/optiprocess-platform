@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { MaintenancePriority, ServiceRequestStatus, MaintenanceOrderType, type AttachmentCategory } from "@prisma/client";
+import { MaintenancePriority, ServiceRequestStatus, MaintenanceOrderType, CorrectiveType, WorkOrderExecutionCondition, type AttachmentCategory } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -254,10 +254,30 @@ export const triageServiceRequest = asyncHandler(async (req: Request, res: Respo
   res.json(request);
 });
 
+/**
+ * O que o planejador decide ao transformar a solicitacao em OS.
+ *
+ * Tudo opcional para nao quebrar quem chama sem corpo, mas a tela manda os campos: quem
+ * escreveu a solicitacao foi o operador ("maquina fazendo barulho"), e o que vai para a
+ * OS precisa ser o servico a executar, escrito por quem planeja.
+ */
+const conversionSchema = z.object({
+  title: z.string().min(3, "Escreva um titulo para a OS.").optional(),
+  description: z.string().min(5, "Descreva o servico a executar.").optional(),
+  type: z.nativeEnum(MaintenanceOrderType).optional(),
+  correctiveType: z.nativeEnum(CorrectiveType).nullish(),
+  priority: z.nativeEnum(MaintenancePriority).optional(),
+  executionCondition: z.nativeEnum(WorkOrderExecutionCondition).nullish(),
+  needsPurchase: z.boolean().optional(),
+  purchaseNotes: z.string().nullish(),
+  scheduledDate: z.coerce.date().nullish(),
+});
+
 /** Converte uma solicitacao Planejada numa Ordem de Manutencao de verdade - fecha o
  * ciclo "Solicitacao -> Triagem -> OS" descrito no pedido do usuario. */
 export const convertServiceRequest = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const dados = conversionSchema.parse(req.body ?? {});
   const existing = await prisma.serviceRequest.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Solicitacao de servico");
   assertOwnClient(req, existing.clientId);
@@ -268,16 +288,39 @@ export const convertServiceRequest = asyncHandler(async (req: Request, res: Resp
     throw new ValidationError("Selecione um ativo na solicitacao antes de gerar a OS.");
   }
 
+  const type = dados.type ?? MaintenanceOrderType.CORRECTIVE;
+  if (type === "CORRECTIVE" && !dados.correctiveType) {
+    throw new ValidationError("Informe se a corretiva e' com a maquina em operacao ou de quebra.");
+  }
+
+  // O status inicial sai da propria decisao do planejador, em vez de nascer sempre "Aberta"
+  // e depender de alguem lembrar de mudar: OS que espera material fica esperando material,
+  // e OS de parada programada fica esperando a parada. Os dois status ja existiam e
+  // ninguem os alcancava pela conversao.
+  const status = dados.needsPurchase
+    ? "AWAITING_MATERIAL"
+    : dados.executionCondition === "PLANNED_SHUTDOWN"
+      ? "AWAITING_STOPPAGE"
+      : "PLANNED";
+
   const number = await nextClientMaintenanceOrderNumber(existing.clientId);
   const workOrder = await prisma.maintenanceWorkOrder.create({
     data: {
       number,
       clientId: existing.clientId,
       instrumentId: existing.instrumentId,
-      type: MaintenanceOrderType.CORRECTIVE,
-      priority: existing.suggestedPriority,
-      status: "OPEN",
-      description: `${existing.number}: ${existing.description}`,
+      type,
+      correctiveType: type === "CORRECTIVE" ? dados.correctiveType : null,
+      priority: dados.priority ?? existing.suggestedPriority,
+      status,
+      title: dados.title ?? null,
+      // A descricao do planejador substitui a do operador; sem ela, a original continua
+      // valendo - nenhuma conversao pode acabar com uma OS sem descricao.
+      description: dados.description?.trim() || `${existing.number}: ${existing.description}`,
+      executionCondition: dados.executionCondition ?? null,
+      needsPurchase: dados.needsPurchase ?? false,
+      purchaseNotes: dados.purchaseNotes?.trim() || null,
+      scheduledDate: dados.scheduledDate ?? null,
       createdById: req.user?.sub,
     },
   });

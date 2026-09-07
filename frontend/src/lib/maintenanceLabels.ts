@@ -1,4 +1,6 @@
-import type { CorrectiveType, MaintenanceOrderType, MaintenancePlanType, FailureSeverity, LubricationMethod } from "../api/types";
+import type { CorrectiveType, MaintenanceOrderType, MaintenancePlanType, FailureSeverity, LubricationMethod,
+  WorkOrderExecutionCondition,
+} from "../api/types";
 
 /** Rotulos dos tipos de servico. Ficam num arquivo so porque apareciam repetidos em cada
  * tela - e, repetidos, saiam de sincronia toda vez que um tipo novo entrava. */
@@ -69,4 +71,11 @@ export const METODOS_DE_LUBRIFICACAO: Record<LubricationMethod, string> = {
   IMMERSION: "Imersao",
   BRUSH: "Pincel",
   SPRAY: "Borrifador",
+};
+
+/** Como o servico sera executado - decisao do planejador na conversao da solicitacao. */
+export const CONDICOES_DE_EXECUCAO: Record<WorkOrderExecutionCondition, string> = {
+  MACHINE_RUNNING: "Com a maquina em operacao",
+  OPPORTUNITY_STOP: "Na proxima parada de oportunidade",
+  PLANNED_SHUTDOWN: "So na parada programada",
 };

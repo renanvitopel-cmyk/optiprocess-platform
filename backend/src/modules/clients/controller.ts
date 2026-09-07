@@ -46,7 +46,12 @@ export const listClients = asyncHandler(async (req: Request, res: Response) => {
 
 /** Portal do cliente: ve os proprios dados de cadastro e contatos, sem acesso ao restante do modulo. */
 export const getOwnClient = asyncHandler(async (req: Request, res: Response) => {
-  if (req.user?.role !== "CLIENT" || !req.user.clientId) throw new ForbiddenError();
+  // Toda a equipe de manutencao ve o contrato da propria empresa (quanto ainda cabe muda
+  // o trabalho de quem planeja e de quem cadastra). O Solicitante nao entra: ja e' barrado
+  // na rota, e a resposta traz a lista de acessos da empresa inteira.
+  if (!req.user?.clientId || !["CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN"].includes(req.user.role)) {
+    throw new ForbiddenError();
+  }
 
   const client = await prisma.client.findFirst({
     where: { id: req.user.clientId, deletedAt: null },

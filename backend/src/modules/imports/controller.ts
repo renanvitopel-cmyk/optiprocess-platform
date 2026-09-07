@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import ExcelJS from "exceljs";
-import { MaintenancePriority } from "@prisma/client";
+import { AssetHierarchyLevel, MaintenancePriority } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { NotFoundError, ValidationError } from "../../utils/errors";
@@ -98,6 +98,97 @@ function numero(valor: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** O TAG e' a identidade do ativo: comparado sem espaco sobrando e sem diferenciar
+ * maiuscula de minuscula, porque " vtp-vot-l4 " e "VTP-VOT-L4" sao o mesmo equipamento
+ * para quem preencheu a planilha. */
+function normalizarTag(valor: string | undefined): string {
+  return (valor ?? "").trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+const NIVEIS: Record<string, AssetHierarchyLevel> = {
+  planta: "PLANT",
+  area: "AREA",
+  "área": "AREA",
+  linha: "AREA",
+  maquina: "MACHINE",
+  "máquina": "MACHINE",
+  equipamento: "MACHINE",
+  subconjunto: "SUBASSEMBLY",
+  parte: "PART",
+  componente: "PART",
+  peca: "PART",
+  "peça": "PART",
+};
+
+const ROTULO_DO_NIVEL: Record<AssetHierarchyLevel, string> = {
+  PLANT: "Planta",
+  AREA: "Area",
+  MACHINE: "Maquina",
+  SUBASSEMBLY: "Subconjunto",
+  PART: "Parte",
+};
+
+const ROTULOS_DE_CAMPO: Record<string, string> = {
+  description: "descricao",
+  manufacturer: "fabricante",
+  model: "modelo",
+  serialNumber: "numero de serie",
+  level: "nivel",
+  type: "tipo",
+  criticality: "criticidade",
+  calibratable: "calibravel",
+  lubricatable: "lubrificavel",
+};
+const rotuloDoCampo = (campo: string) => ROTULOS_DE_CAMPO[campo] ?? campo;
+
+/** Dados do ativo que ja esta no sistema, usados para dizer o que a planilha muda. */
+interface AtivoExistente {
+  description: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  level: AssetHierarchyLevel | null;
+  type: string;
+  criticality: MaintenancePriority;
+  calibratable: boolean;
+  lubricatable: boolean;
+}
+
+/**
+ * O que a planilha diz de diferente do que ja esta gravado.
+ *
+ * E' o que transforma "ja existe, ignorei" numa informacao util: quem reenvia a planilha
+ * corrigida precisa saber que a correcao NAO entrou, e em que campo.
+ */
+function compararComOSistema(
+  atual: AtivoExistente,
+  valores: Record<string, string>,
+  nivel: AssetHierarchyLevel | undefined,
+  criticidade: MaintenancePriority,
+): string[] {
+  const diferencas: string[] = [];
+  const conferir = (campo: string, noSistema: string, naPlanilha: string) => {
+    if (naPlanilha && naPlanilha.trim().toLowerCase() !== (noSistema ?? "").trim().toLowerCase()) {
+      diferencas.push(`${rotuloDoCampo(campo)} (sistema: "${noSistema || "vazio"}", planilha: "${naPlanilha}")`);
+    }
+  };
+
+  conferir("description", atual.description ?? "", valores.descricao ?? "");
+  conferir("manufacturer", atual.manufacturer ?? "", valores.fabricante ?? "");
+  conferir("model", atual.model ?? "", valores.modelo ?? "");
+  conferir("serialNumber", atual.serialNumber ?? "", valores.numeroDeSerie ?? "");
+  if (valores.tipo) conferir("type", atual.type, valores.tipo);
+  if (nivel && atual.level !== nivel) {
+    diferencas.push(`nivel (sistema: "${atual.level ? ROTULO_DO_NIVEL[atual.level] : "sem nivel"}", planilha: "${valores.nivel}")`);
+  }
+  if (valores.criticidade && atual.criticality !== criticidade) {
+    diferencas.push(`criticidade (sistema: "${atual.criticality}", planilha: "${valores.criticidade}")`);
+  }
+  if (valores.calibravel && simNao(valores.calibravel) !== atual.calibratable) diferencas.push("calibravel");
+  if (valores.lubrificavel && simNao(valores.lubrificavel) !== atual.lubricatable) diferencas.push("lubrificavel");
+  return diferencas;
+}
+
 const CRITICIDADES: Record<string, MaintenancePriority> = {
   baixa: "LOW",
   media: "MEDIUM",
@@ -109,10 +200,16 @@ const CRITICIDADES: Record<string, MaintenancePriority> = {
 
 interface Resultado {
   simulacao: boolean;
-  resumo: Record<string, { criados: number; ignorados: number; comErro: number }>;
+  resumo: Record<string, { criados: number; ignorados: number; completados: number; comErro: number }>;
   problemas: Problema[];
   ignorados: { aba: string; linha: number; motivo: string }[];
+  /** Registros que ja existiam e tiveram campos VAZIOS preenchidos (modo "completar"). */
+  completados: { aba: string; linha: number; motivo: string }[];
 }
+
+/** O que fazer com um registro que ja existe. Ignorar e' o padrao: uma importacao repetida
+ * por engano nao pode apagar o que a equipe ajustou a mao depois. */
+export type ModoDeImportacao = "ignorar" | "completar";
 
 /**
  * Processa a planilha. Com `simular`, nao grava nada - so devolve o que aconteceria.
@@ -123,13 +220,14 @@ interface Resultado {
 async function processar(
   wb: ExcelJS.Workbook,
   clientId: string,
-  opcoes: { simular: boolean; userId?: string },
+  opcoes: { simular: boolean; userId?: string; modo?: ModoDeImportacao },
 ): Promise<Resultado> {
   const problemas: Problema[] = [];
   const ignorados: { aba: string; linha: number; motivo: string }[] = [];
   const resumo: Resultado["resumo"] = {};
-  const contar = (aba: string, campo: "criados" | "ignorados" | "comErro") => {
-    resumo[aba] = resumo[aba] ?? { criados: 0, ignorados: 0, comErro: 0 };
+  const completados: { aba: string; linha: number; motivo: string }[] = [];
+  const contar = (aba: string, campo: "criados" | "ignorados" | "completados" | "comErro") => {
+    resumo[aba] = resumo[aba] ?? { criados: 0, ignorados: 0, completados: 0, comErro: 0 };
     resumo[aba][campo] += 1;
   };
 
@@ -140,6 +238,10 @@ async function processar(
   const ignorar = (aba: string, linha: number, motivo: string) => {
     ignorados.push({ aba, linha, motivo });
     contar(aba, "ignorados");
+  };
+  const completar = (aba: string, linha: number, motivo: string) => {
+    completados.push({ aba, linha, motivo });
+    contar(aba, "completados");
   };
 
   // Indices do que ja existe + do que sera criado nesta passada, para uma linha poder
@@ -158,12 +260,38 @@ async function processar(
   for (const a of await prisma.area.findMany({ where: { clientId, deletedAt: null }, select: { id: true, name: true } })) {
     areas.set(a.name.toLowerCase(), a.id);
   }
-  const ativos = new Map<string, string>();
-  for (const i of await prisma.instrument.findMany({ where: { clientId, deletedAt: null, tag: { not: null } }, select: { id: true, tag: true } })) {
-    ativos.set((i.tag ?? "").toLowerCase(), i.id);
+  // Guarda tambem os dados atuais: e' com eles que a conferencia diz o que a planilha
+  // mudaria num ativo que ja existe, em vez de so avisar "ja existe".
+  const ativos = new Map<string, { id: string; dados: AtivoExistente | null }>();
+  for (const i of await prisma.instrument.findMany({
+    where: { clientId, deletedAt: null, tag: { not: null } },
+    select: {
+      id: true, tag: true, description: true, manufacturer: true, model: true,
+      serialNumber: true, level: true, type: true, criticality: true,
+      calibratable: true, lubricatable: true,
+    },
+  })) {
+    const { id, tag, ...dados } = i;
+    ativos.set(normalizarTag(tag ?? ""), { id, dados });
+  }
+
+  const tiposDeAtivo = new Map<string, AssetHierarchyLevel | null>();
+  for (const t of await prisma.assetType.findMany({
+    where: { active: true, OR: [{ clientId: null }, { clientId }] },
+    select: { name: true, level: true },
+  })) {
+    tiposDeAtivo.set(t.name.toLowerCase(), t.level);
   }
   const maoDeObra = new Set(
     (await prisma.laborResource.findMany({ where: { clientId, deletedAt: null }, select: { name: true } })).map((r) => r.name.toLowerCase()),
+  );
+  const funcoes = new Set(
+    (
+      await prisma.laborType.findMany({
+        where: { active: true, OR: [{ clientId: null }, { clientId }] },
+        select: { name: true },
+      })
+    ).map((t) => t.name.toLowerCase()),
   );
   const pecas = new Set(
     (await prisma.sparePart.findMany({ where: { clientId, deletedAt: null }, select: { name: true } })).map((p) => p.name.toLowerCase()),
@@ -184,25 +312,6 @@ async function processar(
     contar("Plantas", "criados");
   }
 
-  // ── Centros de custo ──────────────────────────────────────────────────────
-  for (const { numero: n, valores } of lerAba(wb, "Centros de custo")) {
-    const numeroDoCentro = valores.codigo;
-    const nome = valores.nome;
-    if (!numeroDoCentro) { erro("Centros de custo", n, "Numero e' obrigatorio - e' ele que identifica o centro de custo."); continue; }
-    if (!nome) { erro("Centros de custo", n, "Descricao e' obrigatoria."); continue; }
-    if (centros.has(numeroDoCentro.toLowerCase())) { ignorar("Centros de custo", n, `Centro de custo "${numeroDoCentro}" ja existe.`); continue; }
-
-    if (!opcoes.simular) {
-      const criado = await prisma.costCenter.create({ data: { clientId, name: nome, code: numeroDoCentro } });
-      centros.set(numeroDoCentro.toLowerCase(), criado.id);
-      centros.set(nome.toLowerCase(), criado.id);
-    } else {
-      centros.set(numeroDoCentro.toLowerCase(), "simulado");
-      centros.set(nome.toLowerCase(), "simulado");
-    }
-    contar("Centros de custo", "criados");
-  }
-
   // ── Areas ─────────────────────────────────────────────────────────────────
   for (const { numero: n, valores } of lerAba(wb, "Areas")) {
     const nome = valores.nome;
@@ -213,10 +322,20 @@ async function processar(
     if (!plantaId) { erro("Areas", n, `Planta "${valores.planta}" nao existe - cadastre na aba Plantas.`); continue; }
     if (areas.has(nome.toLowerCase())) { ignorar("Areas", n, `Area "${nome}" ja existe.`); continue; }
 
+    // Area e centro de custo sao um cadastro so: o numero digitado aqui e' reaproveitado
+    // se ja existir, e criado se for novo - nao ha aba separada para cadastra-lo antes.
     let centroId: string | null = null;
-    if (valores.centroDeCusto) {
-      centroId = centros.get(valores.centroDeCusto.toLowerCase()) ?? null;
-      if (!centroId) { erro("Areas", n, `Centro de custo "${valores.centroDeCusto}" nao existe - use o numero cadastrado na aba Centros de custo.`); continue; }
+    const numeroDoCentro = valores.centroDeCusto?.trim();
+    if (numeroDoCentro) {
+      centroId = centros.get(numeroDoCentro.toLowerCase()) ?? null;
+      if (!centroId && !opcoes.simular) {
+        const criado = await prisma.costCenter.create({ data: { clientId, code: numeroDoCentro, name: numeroDoCentro } });
+        centroId = criado.id;
+        centros.set(numeroDoCentro.toLowerCase(), criado.id);
+      } else if (!centroId) {
+        centroId = "simulado";
+        centros.set(numeroDoCentro.toLowerCase(), "simulado");
+      }
     }
 
     if (!opcoes.simular) {
@@ -238,17 +357,94 @@ async function processar(
     await assertInstrumentLimitNotExceeded(clientId);
   }
 
+  const tagsDaPlanilha = new Set<string>();
+
   for (const { numero: n, valores } of linhasDeAtivo) {
-    const tag = valores.tag;
+    const tag = normalizarTag(valores.tag);
     if (!tag) { erro("Ativos", n, "TAG e' obrigatorio."); continue; }
     if (!valores.descricao) { erro("Ativos", n, "Descricao e' obrigatoria."); continue; }
-    if (ativos.has(tag.toLowerCase())) { ignorar("Ativos", n, `Ja existe um ativo com o TAG "${tag}".`); continue; }
+
+    // O mesmo TAG duas vezes na planilha e' engano de quem preencheu, nao um pedido para
+    // gravar a ultima linha em silencio.
+    if (tagsDaPlanilha.has(tag)) { erro("Ativos", n, `O TAG "${valores.tag}" aparece mais de uma vez nesta planilha.`); continue; }
+    tagsDaPlanilha.add(tag);
+
+    const nivel = valores.nivel ? NIVEIS[valores.nivel.trim().toLowerCase()] : undefined;
+    if (valores.nivel && !nivel) {
+      erro("Ativos", n, `Nivel "${valores.nivel}" invalido - use Planta, Area, Maquina, Subconjunto ou Parte.`);
+      continue;
+    }
+
+    let criticidade: MaintenancePriority = "MEDIUM";
+    if (valores.criticidade) {
+      const encontrada = CRITICIDADES[valores.criticidade.trim().toLowerCase()];
+      if (!encontrada) { erro("Ativos", n, `Criticidade "${valores.criticidade}" invalida - use Baixa, Media, Alta ou Critica.`); continue; }
+      criticidade = encontrada;
+    }
+
+    // ── Ja existe? ────────────────────────────────────────────────────────
+    const jaExiste = ativos.get(tag);
+    if (jaExiste) {
+      const atual = jaExiste.dados;
+      const diferencas = atual ? compararComOSistema(atual, valores, nivel, criticidade) : [];
+
+      if (opcoes.modo === "completar" && atual) {
+        // Preenche SO o que esta vazio no sistema. Um valor ja gravado nunca e' trocado:
+        // quem ajustou a ficha a mao depois da ultima planilha nao pode perder o ajuste.
+        const preencher: Record<string, unknown> = {};
+        if (!atual.description && valores.descricao) preencher.description = valores.descricao;
+        if (!atual.manufacturer && valores.fabricante) preencher.manufacturer = valores.fabricante;
+        if (!atual.model && valores.modelo) preencher.model = valores.modelo;
+        if (!atual.serialNumber && valores.numeroDeSerie) preencher.serialNumber = valores.numeroDeSerie;
+        if (!atual.level && nivel) preencher.level = nivel;
+        if ((!atual.type || atual.type === "A definir") && valores.tipo) preencher.type = valores.tipo;
+        if (!atual.calibratable && simNao(valores.calibravel)) preencher.calibratable = true;
+        if (!atual.lubricatable && simNao(valores.lubrificavel)) preencher.lubricatable = true;
+
+        if (Object.keys(preencher).length === 0) {
+          ignorar("Ativos", n, `TAG "${valores.tag}" ja existe e nao tem campo vazio para completar.`);
+          continue;
+        }
+        if (!opcoes.simular) await prisma.instrument.update({ where: { id: jaExiste.id }, data: preencher });
+        completar("Ativos", n, `TAG "${valores.tag}": ${Object.keys(preencher).map(rotuloDoCampo).join(", ")}.`);
+        continue;
+      }
+
+      ignorar(
+        "Ativos",
+        n,
+        diferencas.length > 0
+          ? `TAG "${valores.tag}" ja existe. Diferente da planilha em: ${diferencas.join("; ")}.`
+          : `TAG "${valores.tag}" ja existe, igual ao da planilha.`,
+      );
+      continue;
+    }
 
     let parentId: string | null = null;
     if (valores.tagDoPai) {
-      parentId = ativos.get(valores.tagDoPai.toLowerCase()) ?? null;
+      parentId = ativos.get(normalizarTag(valores.tagDoPai))?.id ?? null;
       if (!parentId) {
         erro("Ativos", n, `Ativo pai "${valores.tagDoPai}" nao encontrado - coloque a linha do pai ANTES da do filho.`);
+        continue;
+      }
+    }
+
+    // Mesma regra do cadastro manual: so o nivel Planta fica na raiz da arvore.
+    if (nivel && nivel !== "PLANT" && !parentId) {
+      erro("Ativos", n, `Nivel "${valores.nivel}" exige o TAG do ativo pai - so Planta fica no topo da arvore.`);
+      continue;
+    }
+
+    // O tipo, quando informado, tem que existir no catalogo e no nivel escolhido - senao
+    // a lista de tipos volta a virar texto livre pela porta da planilha.
+    if (valores.tipo) {
+      const doCatalogo = tiposDeAtivo.get(valores.tipo.trim().toLowerCase());
+      if (!doCatalogo) {
+        erro("Ativos", n, `Tipo "${valores.tipo}" nao existe em Cadastros > Tipos de ativo.`);
+        continue;
+      }
+      if (nivel && doCatalogo !== nivel) {
+        erro("Ativos", n, `Tipo "${valores.tipo}" nao pertence ao nivel "${valores.nivel}".`);
         continue;
       }
     }
@@ -262,13 +458,6 @@ async function processar(
     if (valores.area) {
       areaId = areas.get(valores.area.toLowerCase()) ?? null;
       if (!areaId) { erro("Ativos", n, `Area "${valores.area}" nao existe.`); continue; }
-    }
-
-    let criticidade: MaintenancePriority = "MEDIUM";
-    if (valores.criticidade) {
-      const encontrada = CRITICIDADES[valores.criticidade.trim().toLowerCase()];
-      if (!encontrada) { erro("Ativos", n, `Criticidade "${valores.criticidade}" invalida - use Baixa, Media, Alta ou Critica.`); continue; }
-      criticidade = encontrada;
     }
 
     if (!opcoes.simular) {
@@ -289,9 +478,10 @@ async function processar(
       const criado = await prisma.instrument.create({
         data: {
           clientId,
-          tag,
+          tag: valores.tag.trim(),
           description: valores.descricao,
-          type: valores.tipo || "A definir",
+          level: nivel ?? null,
+          type: valores.tipo || (nivel ? ROTULO_DO_NIVEL[nivel] : "A definir"),
           parentId,
           plantId: contextoPlanta,
           areaId: contextoArea,
@@ -301,12 +491,13 @@ async function processar(
           model: valores.modelo || null,
           serialNumber: valores.numeroDeSerie || null,
           calibratable: simNao(valores.calibravel),
+          lubricatable: simNao(valores.lubrificavel),
           createdById: opcoes.userId,
         },
       });
-      ativos.set(tag.toLowerCase(), criado.id);
+      ativos.set(tag, { id: criado.id, dados: null });
     } else {
-      ativos.set(tag.toLowerCase(), "simulado");
+      ativos.set(tag, { id: "simulado", dados: null });
     }
     contar("Ativos", "criados");
   }
@@ -321,11 +512,20 @@ async function processar(
     if (valores.valorHora && valorHora == null) { erro("Mao de obra", n, `Valor/hora "${valores.valorHora}" nao e' um numero.`); continue; }
 
     if (!opcoes.simular) {
+      // A funcao tem que existir no catalogo - e' de la que o formulario escolhe. Uma
+      // funcao nova vinda da planilha entra no catalogo junto, senao ela ficaria gravada
+      // no recurso mas invisivel para quem for cadastrar o proximo a mao.
+      const chave = valores.tipo.trim().toLowerCase();
+      if (!funcoes.has(chave)) {
+        await prisma.laborType.create({ data: { clientId, name: valores.tipo.trim() } });
+        funcoes.add(chave);
+      }
+
       await prisma.laborResource.create({
         data: {
           clientId,
           name: valores.nome,
-          type: valores.tipo,
+          type: valores.tipo.trim(),
           registrationNumber: valores.registro || null,
           hourlyRate: valorHora,
           createdById: opcoes.userId,
@@ -378,7 +578,7 @@ async function processar(
     contar("Almoxarifado", "criados");
   }
 
-  return { simulacao: opcoes.simular, resumo, problemas, ignorados };
+  return { simulacao: opcoes.simular, resumo, problemas, ignorados, completados };
 }
 
 async function abrirPlanilha(req: Request): Promise<ExcelJS.Workbook> {
@@ -411,7 +611,8 @@ export const simularImportacao = asyncHandler(async (req: Request, res: Response
   if (!cliente) throw new NotFoundError("Cliente");
 
   const wb = await abrirPlanilha(req);
-  const resultado = await processar(wb, clientId, { simular: true, userId: req.user?.sub });
+  const modo = (req.body as { modo?: ModoDeImportacao })?.modo === "completar" ? "completar" : "ignorar";
+  const resultado = await processar(wb, clientId, { simular: true, userId: req.user?.sub, modo });
   res.json(resultado);
 });
 
@@ -433,7 +634,8 @@ export const confirmarImportacao = asyncHandler(async (req: Request, res: Respon
     );
   }
 
-  const resultado = await processar(wb, clientId, { simular: false, userId: req.user?.sub });
+  const modo = (req.body as { modo?: ModoDeImportacao })?.modo === "completar" ? "completar" : "ignorar";
+  const resultado = await processar(wb, clientId, { simular: false, userId: req.user?.sub, modo });
 
   const total = Object.values(resultado.resumo).reduce((soma, r) => soma + r.criados, 0);
   await writeAuditLog({

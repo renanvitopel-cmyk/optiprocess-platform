@@ -1544,9 +1544,14 @@ export interface SparePartHistory {
 }
 
 /** Resultado de uma importacao por planilha (conferencia ou gravacao). */
+/** O que fazer com um registro que a planilha traz e que ja esta cadastrado. */
+export type ModoDeImportacao = "ignorar" | "completar";
+
 export interface ResultadoDaImportacao {
   simulacao: boolean;
-  resumo: Record<string, { criados: number; ignorados: number; comErro: number }>;
+  resumo: Record<string, { criados: number; ignorados: number; completados: number; comErro: number }>;
   problemas: { aba: string; linha: number; mensagem: string }[];
   ignorados: { aba: string; linha: number; motivo: string }[];
+  /** Ja existiam e tiveram campos VAZIOS preenchidos (so no modo "completar"). */
+  completados: { aba: string; linha: number; motivo: string }[];
 }

@@ -29,23 +29,14 @@ export const ABAS: DefinicaoDeAba[] = [
     exemplo: [{ nome: "Planta Votorantim", codigo: "VOT" }],
   },
   {
-    nome: "Centros de custo",
-    descricao:
-      "Para onde o custo da manutencao vai. Cada area aponta para um deles. O centro de custo e' " +
-      "identificado pelo NUMERO - a descricao e' so para leitura humana.",
-    colunas: [
-      { chave: "codigo", titulo: "Numero*", obrigatoria: true, ajuda: "Numero contabil do centro de custo. Ex.: 4101-02", largura: 20 },
-      { chave: "nome", titulo: "Descricao*", obrigatoria: true, ajuda: "Ex.: Manutencao Mecanica", largura: 34 },
-    ],
-    exemplo: [{ codigo: "4101-02", nome: "Manutencao Mecanica" }],
-  },
-  {
     nome: "Areas",
-    descricao: "Areas/linhas dentro de cada planta. O centro de custo daqui e' herdado por todos os ativos da area.",
+    descricao:
+      "Areas/linhas de cada planta, com o centro de custo em que a area rateia. Sao um cadastro so: o " +
+      "centro nao precisa existir antes - se o numero for novo, e' criado na hora. Todo ativo da area herda ele.",
     colunas: [
       { chave: "nome", titulo: "Nome*", obrigatoria: true, ajuda: "Ex.: Linha 4", largura: 30 },
       { chave: "planta", titulo: "Planta*", obrigatoria: true, ajuda: "Nome exato da planta (aba Plantas)", largura: 30 },
-      { chave: "centroDeCusto", titulo: "Centro de custo", ajuda: "Numero do centro de custo (aba Centros de custo)", largura: 28 },
+      { chave: "centroDeCusto", titulo: "Centro de custo (numero)", ajuda: "So o numero. Ex.: 4101-02. Se ainda nao existir, e' criado.", largura: 28 },
       { chave: "codigo", titulo: "Codigo", ajuda: "Opcional", largura: 14 },
     ],
     exemplo: [{ nome: "Linha 4", planta: "Planta Votorantim", centroDeCusto: "4101-02", codigo: "L4" }],
@@ -53,24 +44,34 @@ export const ABAS: DefinicaoDeAba[] = [
   {
     nome: "Ativos",
     descricao:
-      "Equipamentos. O TAG e' o codigo unico da empresa. Para montar a arvore, informe o TAG do ativo pai - " +
-      "e coloque o pai ANTES do filho nas linhas. Planta e area so no ativo do topo: o resto herda.",
+      "Equipamentos. O TAG e' o codigo unico da empresa - e' por ele que o sistema reconhece o que ja existe. " +
+      "Para montar a arvore, informe o TAG do ativo pai e coloque o pai ANTES do filho nas linhas. " +
+      "Planta e area so no ativo do topo: o resto herda.",
     colunas: [
       { chave: "tag", titulo: "TAG*", obrigatoria: true, ajuda: "Codigo unico. Ex.: VTP-VOT-L4-CP01", largura: 24 },
       { chave: "descricao", titulo: "Descricao*", obrigatoria: true, ajuda: "Nome em linguagem de gente. Ex.: Compressor de ar da Linha 4", largura: 40 },
-      { chave: "tagDoPai", titulo: "TAG do ativo pai", ajuda: "Vazio = ativo no topo da arvore", largura: 24 },
+      {
+        chave: "nivel",
+        titulo: "Nivel*",
+        obrigatoria: true,
+        ajuda: "Onde fica na arvore: Planta, Area, Maquina, Subconjunto ou Parte. So Planta fica no topo - o resto exige TAG do ativo pai.",
+        largura: 16,
+      },
+      { chave: "tagDoPai", titulo: "TAG do ativo pai", ajuda: "Obrigatorio em tudo que nao for nivel Planta", largura: 24 },
       { chave: "planta", titulo: "Planta", ajuda: "So no ativo do topo - os filhos herdam do pai", largura: 26 },
-      { chave: "area", titulo: "Area", ajuda: "So no ativo do topo - os filhos herdam do pai", largura: 24 },
-      { chave: "tipo", titulo: "Tipo", ajuda: "Ex.: Maquina, Motor, Bomba. Em branco fica 'A definir'", largura: 18 },
+      { chave: "area", titulo: "Area", ajuda: "So no ativo do topo - os filhos herdam do pai (com o centro de custo dela)", largura: 24 },
+      { chave: "tipo", titulo: "Tipo do equipamento", ajuda: "Opcional. Ex.: Bomba, Motor eletrico, Redutor. Precisa existir em Cadastros > Tipos de ativo, no mesmo nivel.", largura: 22 },
       { chave: "criticidade", titulo: "Criticidade", ajuda: "Baixa, Media, Alta ou Critica (padrao: Media)", largura: 14 },
       { chave: "fabricante", titulo: "Fabricante", ajuda: "Opcional", largura: 20 },
       { chave: "modelo", titulo: "Modelo", ajuda: "Opcional", largura: 20 },
       { chave: "numeroDeSerie", titulo: "Numero de serie", ajuda: "Opcional", largura: 20 },
       { chave: "calibravel", titulo: "Calibravel", ajuda: "Sim/Nao. Sim = entra na lista de calibracao da OptiProcess", largura: 12 },
+      { chave: "lubrificavel", titulo: "Lubrificavel", ajuda: "Sim/Nao. Sim = entra na fila de pontos de lubrificacao a cadastrar", largura: 14 },
     ],
     exemplo: [
-      { tag: "VTP-VOT-L4", descricao: "Linha 4", tagDoPai: "", planta: "Planta Votorantim", area: "Linha 4", tipo: "Linha", criticidade: "Alta", fabricante: "", modelo: "", numeroDeSerie: "", calibravel: "Nao" },
-      { tag: "VTP-VOT-L4-CP01", descricao: "Compressor de ar", tagDoPai: "VTP-VOT-L4", planta: "", area: "", tipo: "Maquina", criticidade: "Alta", fabricante: "Atlas Copco", modelo: "GA75", numeroDeSerie: "ACP-99120", calibravel: "Nao" },
+      { tag: "VTP-VOT", descricao: "Planta Votorantim", nivel: "Planta", tagDoPai: "", planta: "Planta Votorantim", area: "Linha 4", tipo: "", criticidade: "Alta", fabricante: "", modelo: "", numeroDeSerie: "", calibravel: "Nao", lubrificavel: "Nao" },
+      { tag: "VTP-VOT-L4", descricao: "Linha 4", nivel: "Area", tagDoPai: "VTP-VOT", planta: "", area: "", tipo: "", criticidade: "Alta", fabricante: "", modelo: "", numeroDeSerie: "", calibravel: "Nao", lubrificavel: "Nao" },
+      { tag: "VTP-VOT-L4-CP01", descricao: "Compressor de ar", nivel: "Maquina", tagDoPai: "VTP-VOT-L4", planta: "", area: "", tipo: "Compressor de ar", criticidade: "Alta", fabricante: "Atlas Copco", modelo: "GA75", numeroDeSerie: "ACP-99120", calibravel: "Nao", lubrificavel: "Sim" },
     ],
   },
   {
@@ -78,7 +79,7 @@ export const ABAS: DefinicaoDeAba[] = [
     descricao: "Quem executa as OS. O valor/hora alimenta o custo de manutencao por ativo - deixe em branco se nao quiser apurar custo.",
     colunas: [
       { chave: "nome", titulo: "Nome*", obrigatoria: true, ajuda: "Ex.: Joao da Silva", largura: 32 },
-      { chave: "tipo", titulo: "Tipo*", obrigatoria: true, ajuda: "Ex.: Tecnico mecanico, Tecnico eletrico, Terceiro", largura: 24 },
+      { chave: "tipo", titulo: "Funcao*", obrigatoria: true, ajuda: "Do catalogo em Cadastros > Tipos de mao de obra. Funcao nova e' criada no catalogo ao importar.", largura: 24 },
       { chave: "registro", titulo: "Registro (DRT/CREA)", ajuda: "Opcional", largura: 20 },
       { chave: "valorHora", titulo: "Valor/hora", ajuda: "Opcional. Numero. Ex.: 60", largura: 14 },
     ],
@@ -117,7 +118,7 @@ export async function gerarPlanilhaModelo(nomeDaEmpresa?: string): Promise<Buffe
     ["texto", nomeDaEmpresa ? `Planilha gerada para: ${nomeDaEmpresa}` : "Preencha as abas e envie o arquivo pelo sistema."],
     ["vazio", ""],
     ["secao", "Como funciona"],
-    ["texto", "1. Preencha as abas na ordem em que aparecem: Plantas, Centros de custo, Areas, Ativos, Mao de obra, Almoxarifado."],
+    ["texto", "1. Preencha as abas na ordem em que aparecem: Plantas, Areas, Ativos, Mao de obra, Almoxarifado."],
     ["texto", "2. A ordem importa porque um registro depende do outro: a area precisa da planta, o ativo precisa da area, o componente precisa do ativo pai."],
     ["texto", "3. Colunas com * no titulo sao obrigatorias. As demais podem ficar em branco."],
     ["texto", "4. As referencias entre abas sao pelo NOME (ou pelo TAG, no caso de ativo pai) - escreva exatamente igual."],
@@ -127,7 +128,14 @@ export async function gerarPlanilhaModelo(nomeDaEmpresa?: string): Promise<Buffe
     ["vazio", ""],
     ["secao", "Ao enviar"],
     ["texto", "O sistema confere o arquivo inteiro ANTES de gravar qualquer coisa e mostra, linha a linha, o que estiver errado."],
-    ["texto", "Nada e' importado enquanto voce nao confirmar. Registro que ja existe (mesmo TAG, mesmo nome) e' ignorado, nunca sobrescrito."],
+    ["texto", "Nada e' importado enquanto voce nao confirmar."],
+    ["vazio", ""],
+    ["secao", "O que acontece com um ativo que JA existe"],
+    ["texto", "A identidade do ativo e' o TAG (maiusculas/minusculas e espacos sobrando nao contam). Se o TAG ja estiver cadastrado, o ativo NAO e' duplicado."],
+    ["texto", "Na conferencia, cada linha repetida aparece com os campos que estao diferentes do que ja esta no sistema - voce ve antes de decidir."],
+    ["texto", "Ai voce escolhe: IGNORAR os repetidos (padrao, nao encosta em nada), ou COMPLETAR - que preenche apenas os campos hoje vazios no sistema."],
+    ["texto", "Completar nunca troca um valor que ja existe: se o fabricante no sistema esta preenchido e diferente do da planilha, o do sistema fica."],
+    ["texto", "O mesmo TAG repetido DENTRO da planilha e' erro, e nao importacao silenciosa da ultima linha."],
     ["vazio", ""],
     ["secao", "Abas desta planilha"],
   ];

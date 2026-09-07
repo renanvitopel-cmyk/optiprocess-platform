@@ -7,7 +7,7 @@ import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { listClients } from "../../../api/clients";
 import { baixarModeloDeImportacao, simularImportacao, confirmarImportacao } from "../../../api/imports";
-import type { ResultadoDaImportacao } from "../../../api/types";
+import type { ModoDeImportacao, ResultadoDaImportacao } from "../../../api/types";
 import { clientDisplayName } from "../../../lib/format";
 import { useCmms } from "../../../lib/cmms";
 
@@ -27,6 +27,9 @@ export default function DataImport() {
   const [conferencia, setConferencia] = useState<ResultadoDaImportacao | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [concluida, setConcluida] = useState<ResultadoDaImportacao | null>(null);
+  // O que fazer com quem ja esta cadastrado. Ignorar e' o padrao de proposito: uma
+  // importacao repetida por engano nao pode encostar no que a equipe ajustou a mao.
+  const [modo, setModo] = useState<ModoDeImportacao>("ignorar");
 
   const { data: clients } = useQuery({
     queryKey: ["clients-picker-cmms"],
@@ -50,13 +53,20 @@ export default function DataImport() {
     }
   }
 
-  async function conferir(file: File) {
+  async function trocarModo(novo: ModoDeImportacao) {
+    setModo(novo);
+    // Reconfere com a nova regra: o numero de "sera criado" e "completado" muda, e mostrar
+    // o resumo antigo com a regra nova seria mentir sobre o que o botao vai fazer.
+    if (arquivo) await conferir(arquivo, novo);
+  }
+
+  async function conferir(file: File, modoAtual: ModoDeImportacao = modo) {
     setArquivo(file);
     setConferencia(null);
     setConcluida(null);
     setOcupado(true);
     try {
-      setConferencia(await simularImportacao(file, clientId || undefined));
+      setConferencia(await simularImportacao(file, clientId || undefined, modoAtual));
     } catch (error) {
       notify("error", getApiErrorMessage(error));
       setArquivo(null);
@@ -69,7 +79,7 @@ export default function DataImport() {
     if (!arquivo) return;
     setOcupado(true);
     try {
-      const r = await confirmarImportacao(arquivo, clientId || undefined);
+      const r = await confirmarImportacao(arquivo, clientId || undefined, modo);
       setConcluida(r);
       setConferencia(null);
       setArquivo(null);
@@ -82,6 +92,7 @@ export default function DataImport() {
   }
 
   const totalCriar = conferencia ? Object.values(conferencia.resumo).reduce((s, r) => s + r.criados, 0) : 0;
+  const totalCompletar = conferencia ? Object.values(conferencia.resumo).reduce((s, r) => s + r.completados, 0) : 0;
   const temErro = (conferencia?.problemas.length ?? 0) > 0;
 
   return (
@@ -163,6 +174,7 @@ export default function DataImport() {
                     <tr>
                       <th className="px-3 py-2">Aba</th>
                       <th className="px-3 py-2 text-right">Sera criado</th>
+                      <th className="px-3 py-2 text-right">Sera completado</th>
                       <th className="px-3 py-2 text-right">Ja existe (ignorado)</th>
                       <th className="px-3 py-2 text-right">Com erro</th>
                     </tr>
@@ -172,6 +184,7 @@ export default function DataImport() {
                       <tr key={aba}>
                         <td className="px-3 py-2 font-medium text-navy-900">{aba}</td>
                         <td className="px-3 py-2 text-right text-safety-green-dark">{r.criados}</td>
+                        <td className="px-3 py-2 text-right text-navy-700">{r.completados > 0 ? r.completados : "-"}</td>
                         <td className="px-3 py-2 text-right text-graphite-500">{r.ignorados}</td>
                         <td className={`px-3 py-2 text-right ${r.comErro > 0 ? "font-semibold text-safety-red" : "text-graphite-400"}`}>
                           {r.comErro}
@@ -180,7 +193,7 @@ export default function DataImport() {
                     ))}
                     {Object.keys(conferencia.resumo).length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-3 py-4 text-center text-graphite-500">
+                        <td colSpan={5} className="px-3 py-4 text-center text-graphite-500">
                           A planilha nao tem nenhuma linha preenchida.
                         </td>
                       </tr>
@@ -207,29 +220,95 @@ export default function DataImport() {
                 </div>
               )}
 
-              {conferencia.ignorados.length > 0 && (
-                <div className="mt-4 rounded-lg bg-gray-50 p-4">
+              {/* A escolha fica AO LADO da conferencia, e nao antes do envio: so aqui a
+                  pessoa sabe quantos repetidos existem e o que muda em cada um. */}
+              {(conferencia.ignorados.length > 0 || conferencia.completados.length > 0) && (
+                <div className="mt-4 rounded-lg border border-gray-200 p-4">
                   <p className="text-sm font-medium text-graphite-700">
-                    {conferencia.ignorados.length} linha(s) serao ignoradas por ja existirem
+                    {conferencia.ignorados.length + conferencia.completados.length} linha(s) ja estao cadastradas
                   </p>
-                  <p className="text-xs text-graphite-500">
-                    O que ja esta cadastrado nunca e' sobrescrito - uma importacao repetida por engano nao apaga
-                    o que a equipe ajustou depois.
+                  <p className="mt-0.5 text-xs text-graphite-500">
+                    O TAG e' a identidade do ativo - maiuscula, minuscula e espaco sobrando nao contam. O que fazer com elas:
                   </p>
-                  <ul className="mt-2 space-y-0.5 text-sm text-graphite-600">
-                    {conferencia.ignorados.slice(0, 10).map((x, i) => (
-                      <li key={i}>{x.aba}, linha {x.linha}: {x.motivo}</li>
-                    ))}
-                  </ul>
+
+                  <div className="mt-3 space-y-2">
+                    <label className="flex cursor-pointer items-start gap-2 text-sm">
+                      <input
+                        type="radio"
+                        className="mt-1"
+                        checked={modo === "ignorar"}
+                        onChange={() => void trocarModo("ignorar")}
+                        disabled={ocupado}
+                      />
+                      <span>
+                        <span className="font-medium text-navy-900">Ignorar</span>
+                        <span className="block text-xs text-graphite-500">
+                          Nao encosta em nada do que ja esta cadastrado. A lista abaixo mostra o que ficaria diferente.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-2 text-sm">
+                      <input
+                        type="radio"
+                        className="mt-1"
+                        checked={modo === "completar"}
+                        onChange={() => void trocarModo("completar")}
+                        disabled={ocupado}
+                      />
+                      <span>
+                        <span className="font-medium text-navy-900">Completar campos vazios</span>
+                        <span className="block text-xs text-graphite-500">
+                          Preenche so o que esta em branco no sistema (fabricante, modelo, nivel...). Um valor ja
+                          gravado nunca e' trocado pelo da planilha.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+
+                  {conferencia.completados.length > 0 && (
+                    <ul className="mt-3 space-y-0.5 border-t border-gray-100 pt-3 text-sm text-graphite-600">
+                      {conferencia.completados.slice(0, 10).map((x, i) => (
+                        <li key={i}>
+                          <span className="font-medium text-navy-800">{x.aba}, linha {x.linha}:</span> {x.motivo}
+                        </li>
+                      ))}
+                      {conferencia.completados.length > 10 && (
+                        <li className="text-xs text-graphite-500">e mais {conferencia.completados.length - 10}...</li>
+                      )}
+                    </ul>
+                  )}
+
+                  {conferencia.ignorados.length > 0 && (
+                    <ul className="mt-3 space-y-0.5 border-t border-gray-100 pt-3 text-sm text-graphite-600">
+                      {conferencia.ignorados.slice(0, 10).map((x, i) => (
+                        <li key={i}>
+                          <span className="font-medium text-navy-800">{x.aba}, linha {x.linha}:</span> {x.motivo}
+                        </li>
+                      ))}
+                      {conferencia.ignorados.length > 10 && (
+                        <li className="text-xs text-graphite-500">e mais {conferencia.ignorados.length - 10}...</li>
+                      )}
+                    </ul>
+                  )}
                 </div>
               )}
 
               <div className="mt-5 flex flex-wrap items-center gap-3">
-                <button className="btn-primary" onClick={confirmar} disabled={ocupado || temErro || totalCriar === 0}>
-                  {ocupado ? "Importando..." : `Importar ${totalCriar} registro(s)`}
+                <button
+                  className="btn-primary"
+                  onClick={confirmar}
+                  disabled={ocupado || temErro || (totalCriar === 0 && totalCompletar === 0)}
+                >
+                  {ocupado
+                    ? "Importando..."
+                    : totalCompletar > 0
+                      ? `Importar ${totalCriar} novo(s) e completar ${totalCompletar}`
+                      : `Importar ${totalCriar} registro(s)`}
                 </button>
                 {temErro && <span className="text-sm text-graphite-500">Corrija os erros acima para liberar a importacao.</span>}
-                {!temErro && totalCriar === 0 && <span className="text-sm text-graphite-500">Nao ha nada novo para importar.</span>}
+                {!temErro && totalCriar === 0 && totalCompletar === 0 && (
+                  <span className="text-sm text-graphite-500">Nao ha nada novo para importar.</span>
+                )}
               </div>
             </div>
           )}
@@ -243,6 +322,7 @@ export default function DataImport() {
                 {Object.entries(concluida.resumo).map(([aba, r]) => (
                   <li key={aba}>
                     {aba}: <span className="font-semibold text-navy-900">{r.criados}</span> criado(s)
+                    {r.completados > 0 && <span className="text-navy-700"> - {r.completados} completado(s)</span>}
                     {r.ignorados > 0 && <span className="text-graphite-500"> - {r.ignorados} ja existia(m)</span>}
                   </li>
                 ))}

@@ -79,6 +79,48 @@ const userSelect = {
   client: { select: { id: true, companyName: true, tradeName: true } },
 } as const;
 
+
+/**
+ * Historico de acessos da empresa: quem criou, mudou perfil, desativou, reativou ou gerou
+ * senha, e quando.
+ *
+ * A auditoria ja era gravada; faltava alguem poder ler. Fica aqui e nao no modulo de
+ * auditoria porque aquele e' da OptiProcess (registra a plataforma inteira) - este e'
+ * recortado na empresa de quem pergunta, e so nos eventos de acesso.
+ */
+export const listUserAuditTrail = asyncHandler(async (req: Request, res: Response) => {
+  const pageParams = parsePageParams(req.query as Record<string, unknown>);
+
+  // Quais usuarios entram no recorte: os da propria empresa, para quem e' do cliente.
+  const daEmpresa = await prisma.user.findMany({
+    where: {
+      ...(ehDaEmpresa(req) ? { clientId: req.user?.clientId ?? "" } : {}),
+      ...(req.query.clientId ? { clientId: String(req.query.clientId) } : {}),
+    },
+    select: { id: true, name: true, email: true, role: true },
+  });
+  const porId = new Map(daEmpresa.map((u) => [u.id, u]));
+
+  const where = { entityType: "User", entityId: { in: daEmpresa.map((u) => u.id) } };
+  const [items, total] = await Promise.all([
+    prisma.auditLog.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      ...toSkipTake(pageParams),
+      include: { user: { select: { id: true, name: true, email: true } } },
+    }),
+    prisma.auditLog.count({ where }),
+  ]);
+
+  // O log guarda o id do alvo; a tela precisa do nome de quem sofreu a acao, nao do id.
+  const comAlvo = items.map((registro) => ({
+    ...registro,
+    alvo: porId.get(registro.entityId) ?? null,
+  }));
+
+  res.json(buildPagedResult(comAlvo, total, pageParams));
+});
+
 export const listUsers = asyncHandler(async (req: Request, res: Response) => {
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
   const { role, active, search } = req.query as { role?: Role; active?: string; search?: string };
@@ -158,6 +200,9 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
       passwordHash,
       role: data.role,
       clientId: PERFIS_DE_CLIENTE.includes(data.role) ? data.clientId : null,
+      // Senha escolhida por outra pessoa e passada por e-mail, WhatsApp ou papel: vale
+      // para o primeiro acesso e nada mais.
+      mustChangePassword: true,
     },
     select: userSelect,
   });
@@ -252,7 +297,7 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
 
   const temporaryPassword = generateTemporaryPassword();
   const passwordHash = await hashPassword(temporaryPassword);
-  await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash } });
+  await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash, mustChangePassword: true } });
 
   await writeAuditLog({
     userId: req.user?.sub,
@@ -280,7 +325,8 @@ export const setUserPassword = asyncHandler(async (req: Request, res: Response) 
 
   await prisma.user.update({
     where: { id: existing.id },
-    data: { passwordHash: await hashPassword(password) },
+    // Definida por outra pessoa: vale so ate o primeiro acesso, como a redefinida.
+    data: { passwordHash: await hashPassword(password), mustChangePassword: true },
   });
 
   await writeAuditLog({

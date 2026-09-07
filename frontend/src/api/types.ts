@@ -16,6 +16,8 @@ export interface AuthUser {
   email: string;
   role: Role;
   clientId: string | null;
+  /** Senha provisoria ainda nao trocada: a aplicacao so abre a tela de troca. */
+  mustChangePassword?: boolean;
   client: { id: string; companyName: string; tradeName: string | null; contractedServices: ServiceCategory[] } | null;
 }
 
@@ -27,6 +29,8 @@ export interface PortalUserRef {
   role?: Role;
   active: boolean;
   lastLoginAt: string | null;
+  /** Quando o acesso foi liberado - a lista mostra ao lado do ultimo acesso. */
+  createdAt?: string;
 }
 
 export type ClientStatus = "ACTIVE" | "INACTIVE" | "PROSPECT";

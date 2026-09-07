@@ -41,6 +41,25 @@ export async function updateUser(
   return data;
 }
 
+/** Um evento do historico de acessos da empresa. */
+export interface EventoDeAcesso {
+  id: string;
+  action: string;
+  description: string | null;
+  createdAt: string;
+  /** Quem fez. */
+  user: { id: string; name: string; email: string } | null;
+  /** Quem sofreu a acao. */
+  alvo: { id: string; name: string; email: string; role: Role } | null;
+}
+
+export async function listarHistoricoDeAcessos(
+  params: { clientId?: string; page?: number; pageSize?: number } = {},
+): Promise<PagedResult<EventoDeAcesso>> {
+  const { data } = await api.get<PagedResult<EventoDeAcesso>>("/users/historico", { params });
+  return data;
+}
+
 export async function deleteUser(id: string): Promise<void> {
   await api.delete(`/users/${id}`);
 }

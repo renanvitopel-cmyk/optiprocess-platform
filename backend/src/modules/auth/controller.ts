@@ -27,6 +27,7 @@ function serializeUser(user: {
   email: string;
   role: string;
   clientId: string | null;
+  mustChangePassword?: boolean;
   client: { id: string; companyName: string; tradeName: string | null; contractedServices: string[] } | null;
 }) {
   return {
@@ -35,6 +36,8 @@ function serializeUser(user: {
     email: user.email,
     role: user.role,
     clientId: user.clientId,
+    // A tela leva para a troca antes de qualquer outra coisa quando isto e' true.
+    mustChangePassword: !!user.mustChangePassword,
     client: user.client,
   };
 }
@@ -56,7 +59,12 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     throw new UnauthorizedError("E-mail ou senha invalidos.");
   }
 
-  const token = signAuthToken({ sub: user.id, role: user.role, clientId: user.clientId });
+  const token = signAuthToken({
+    sub: user.id,
+    role: user.role,
+    clientId: user.clientId,
+    mustChangePassword: user.mustChangePassword,
+  });
   res.cookie(AUTH_COOKIE_NAME, token, cookieOptions);
 
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
@@ -94,8 +102,16 @@ export const changeOwnPassword = asyncHandler(async (req: Request, res: Response
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { passwordHash: await hashPassword(newPassword) },
+    data: { passwordHash: await hashPassword(newPassword), mustChangePassword: false },
   });
+
+  // O token carrega a marca da senha provisoria: sem reemitir, a pessoa trocaria a senha e
+  // continuaria bloqueada ate a sessao expirar.
+  res.cookie(
+    AUTH_COOKIE_NAME,
+    signAuthToken({ sub: user.id, role: user.role, clientId: user.clientId, mustChangePassword: false }),
+    cookieOptions,
+  );
 
   await writeAuditLog({
     userId: user.id,

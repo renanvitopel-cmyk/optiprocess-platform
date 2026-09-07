@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users, Gauge, BadgeCheck, CircleSlash, Plus, KeyRound, UserX, AlertTriangle } from "lucide-react";
-import { createUser, updateUser, resetUserPassword } from "../../api/users";
+import { Users, Gauge, BadgeCheck, CircleSlash, Plus, KeyRound, UserX, AlertTriangle, History } from "lucide-react";
+import { createUser, updateUser, resetUserPassword, listarHistoricoDeAcessos } from "../../api/users";
 import { Modal } from "../../components/Modal";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { TextInput, SelectInput } from "../../components/form/Field";
@@ -19,7 +19,7 @@ import { getOwnClient } from "../../api/clients";
 import { PageHeader } from "../../components/PageHeader";
 import { FullPageSpinner } from "../../components/Spinner";
 import { EmptyState } from "../../components/EmptyState";
-import { formatCurrency, formatDate } from "../../lib/format";
+import { formatCurrency, formatDate, formatDateTime } from "../../lib/format";
 
 /** Barra de uso de um limite do contrato. Sem limite definido nao existe percentual - e'
  * "ilimitado", nao 0% nem 100%. */
@@ -28,12 +28,14 @@ function Uso({
   atual,
   limite,
   unidade,
+  semPlano,
   icone: Icone,
 }: {
   rotulo: string;
   atual: number;
   limite: number | null;
   unidade: string;
+  semPlano: boolean;
   icone: typeof Users;
 }) {
   const semLimite = limite == null;
@@ -70,7 +72,9 @@ function Uso({
       </p>
 
       {semLimite ? (
-        <p className="mt-1 text-xs text-graphite-500">Sem limite no seu contrato.</p>
+        // "Ilimitado no plano" e "sem plano definido" parecem a mesma coisa na tela e sao
+        // opostos: um e' escolha contratada, o outro e' ausencia de contrato.
+        <p className="mt-1 text-xs text-graphite-500">{semPlano ? "Sem plano definido - nenhum limite aplicado." : "Ilimitado no seu plano."}</p>
       ) : (
         <>
           <div className="mt-2 h-2 rounded-full bg-gray-100">
@@ -106,6 +110,17 @@ export default function PortalContract() {
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "REQUESTER" as Role });
   const [desativando, setDesativando] = useState<{ id: string; name: string } | null>(null);
   const [senhaGerada, setSenhaGerada] = useState<{ email: string; senha: string } | null>(null);
+  const [filtroPerfil, setFiltroPerfil] = useState<"" | Role>("");
+  const [filtroStatus, setFiltroStatus] = useState<"" | "ativos" | "inativos">("");
+  const [historicoAberto, setHistoricoAberto] = useState(false);
+
+  // O historico so e' buscado quando alguem abre: numa empresa antiga sao milhares de
+  // linhas que ninguem pediu para ver ao entrar na tela.
+  const { data: historico } = useQuery({
+    queryKey: ["historico-de-acessos"],
+    queryFn: () => listarHistoricoDeAcessos({ pageSize: 50 }),
+    enabled: historicoAberto,
+  });
 
   function recarregar() {
     queryClient.invalidateQueries({ queryKey: ["own-client"] });
@@ -170,6 +185,12 @@ export default function PortalContract() {
   // o formulario inteiro.
   const semVaga = uso?.users.limit != null && uso.users.current >= uso.users.limit;
 
+  const usuariosFiltrados = usuarios.filter(
+    (u) =>
+      (!filtroPerfil || u.role === filtroPerfil) &&
+      (!filtroStatus || (filtroStatus === "ativos" ? u.active : !u.active)),
+  );
+
   return (
     <div>
       <PageHeader
@@ -225,8 +246,8 @@ export default function PortalContract() {
 
       {uso && (
         <div className="mb-8 grid gap-4 sm:grid-cols-2">
-          <Uso rotulo="Acessos (usuarios)" atual={uso.users.current} limite={uso.users.limit} unidade="acessos" icone={Users} />
-          <Uso rotulo="Ativos cadastrados" atual={uso.instruments.current} limite={uso.instruments.limit} unidade="ativos" icone={Gauge} />
+          <Uso rotulo="Acessos (usuarios)" atual={uso.users.current} limite={uso.users.limit} unidade="acessos" semPlano={!plano} icone={Users} />
+          <Uso rotulo="Ativos cadastrados" atual={uso.instruments.current} limite={uso.instruments.limit} unidade="ativos" semPlano={!plano} icone={Gauge} />
         </div>
       )}
 
@@ -254,11 +275,51 @@ export default function PortalContract() {
           </button>
         </div>
 
-        {usuarios.length === 0 ? (
-          <EmptyState title="Nenhum usuario cadastrado" description="Nenhum acesso ao portal foi liberado ainda." />
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <select
+            className="input sm:w-56"
+            value={filtroPerfil}
+            onChange={(e) => setFiltroPerfil(e.target.value as "" | Role)}
+          >
+            <option value="">Todos os perfis</option>
+            {(["CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN", "REQUESTER"] as Role[]).map((r) => (
+              <option key={r} value={r}>{ROTULO_DO_PERFIL[r]}</option>
+            ))}
+          </select>
+          <select
+            className="input sm:w-44"
+            value={filtroStatus}
+            onChange={(e) => setFiltroStatus(e.target.value as "" | "ativos" | "inativos")}
+          >
+            <option value="">Ativos e inativos</option>
+            <option value="ativos">Somente ativos</option>
+            <option value="inativos">Somente inativos</option>
+          </select>
+          {(filtroPerfil || filtroStatus) && (
+            <span className="text-xs text-graphite-500">
+              {usuariosFiltrados.length} de {usuarios.length} acesso(s)
+            </span>
+          )}
+          <button
+            className="btn-ghost ml-auto text-sm"
+            onClick={() => setHistoricoAberto((v) => !v)}
+          >
+            <History className="h-4 w-4" /> {historicoAberto ? "Ocultar historico" : "Ver historico"}
+          </button>
+        </div>
+
+        {usuariosFiltrados.length === 0 ? (
+          <EmptyState
+            title={usuarios.length === 0 ? "Nenhum acesso cadastrado" : "Nenhum acesso com esses filtros"}
+            description={
+              usuarios.length === 0
+                ? "Nenhum acesso ao portal foi liberado ainda."
+                : "Mude o perfil ou o status acima para ver os demais."
+            }
+          />
         ) : (
           <div className="card divide-y divide-gray-100">
-            {usuarios.map((u) => (
+            {usuariosFiltrados.map((u) => (
               <div key={u.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <div className="min-w-0">
                   <p className="font-medium text-navy-900">
@@ -309,6 +370,9 @@ export default function PortalContract() {
                         ocupa uma vaga do contrato sem entregar nada. */}
                     {u.lastLoginAt ? `Ultimo acesso: ${formatDate(u.lastLoginAt)}` : "Nunca acessou"}
                   </p>
+                  {u.createdAt && (
+                    <p className="text-xs text-graphite-400">Criado em {formatDate(u.createdAt)}</p>
+                  )}
                 </div>
                 </div>
               </div>
@@ -316,6 +380,35 @@ export default function PortalContract() {
           </div>
         )}
       </div>
+
+      {historicoAberto && (
+        <div className="card mt-4 p-5">
+          <h3 className="flex items-center gap-2 font-semibold text-navy-900">
+            <History className="h-4 w-4 text-navy-600" /> Historico de acessos
+          </h3>
+          <p className="mt-0.5 text-xs text-graphite-500">
+            Quem criou, mudou perfil, desativou, reativou ou gerou senha - e quando.
+          </p>
+
+          {!historico || historico.items.length === 0 ? (
+            <p className="mt-3 text-sm text-graphite-500">Nenhum evento registrado ainda.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-gray-100 text-sm">
+              {historico.items.map((e) => (
+                <li key={e.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2">
+                  <span className="text-graphite-700">
+                    {e.description ?? e.action}
+                    {e.alvo && <span className="text-graphite-500"> - {e.alvo.name}</span>}
+                  </span>
+                  <span className="text-xs text-graphite-400">
+                    {e.user?.name ?? "sistema"} - {formatDateTime(e.createdAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <Modal
         open={novoAberto}

@@ -427,6 +427,10 @@ model User {
   name         String
   email        String    @unique
   passwordHash String
+  // Senha provisoria: definida por outra pessoa e ainda nao trocada por quem usa. Enquanto
+  // for true, o login abre so a tela de troca de senha - a senha passou por e-mail ou
+  // papel ate chegar aqui, e continuar valendo indefinidamente e' o que a torna insegura.
+  mustChangePassword         Boolean   @default(false)
   role         Role
   clientId     String?
   client       Client?   @relation(fields: [clientId], references: [id])

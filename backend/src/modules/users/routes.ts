@@ -10,6 +10,7 @@ import {
   resetPassword,
   setUserPassword,
   listRoleDefinitions,
+  listUserAuditTrail,
 } from "./controller";
 
 export const usersRouter = Router();
@@ -23,6 +24,8 @@ export const usersRouter = Router();
 usersRouter.use(requireAuth, requireRole("ADMIN", "CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN"));
 
 usersRouter.get("/roles", listRoleDefinitions);
+// Antes de "/:id", senao "historico" seria lido como um id de usuario.
+usersRouter.get("/historico", listUserAuditTrail);
 usersRouter.get("/", listUsers);
 usersRouter.get("/:id", getUser);
 usersRouter.post("/", createUser);

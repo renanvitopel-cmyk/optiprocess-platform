@@ -16,8 +16,10 @@ export class NotFoundError extends AppError {
 }
 
 export class ForbiddenError extends AppError {
-  constructor(message = "Voce nao tem permissao para executar esta acao.") {
-    super(403, message, "FORBIDDEN");
+  /** O codigo e' opcional: a tela precisa distinguir "sem permissao" de "troque a senha
+   * provisoria", que exigem reacoes diferentes. */
+  constructor(message = "Voce nao tem permissao para executar esta acao.", code = "FORBIDDEN") {
+    super(403, message, code);
   }
 }
 

@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 import type { Role } from "../api/types";
 import { FullPageSpinner } from "../components/Spinner";
+import { TrocaDeSenhaObrigatoria } from "./TrocaDeSenhaObrigatoria";
 
 interface ProtectedRouteProps {
   roles?: Role[];
@@ -16,6 +17,10 @@ export function ProtectedRoute({ roles }: ProtectedRouteProps) {
   if (!user) {
     return <Navigate to="/entrar" state={{ from: location.pathname }} replace />;
   }
+
+  // Antes de qualquer permissao: senha provisoria nao entra em lugar nenhum. A API tambem
+  // recusa, entao isto e' o caminho para frente, e nao so uma cortina sobre a tela.
+  if (user.mustChangePassword) return <TrocaDeSenhaObrigatoria />;
 
   if (roles && !roles.includes(user.role)) {
     return <Navigate to={homeForRole(user.role)} replace />;

@@ -3,7 +3,8 @@ import { areaComCentroDeCusto, centroDeCustoComDescricao } from "../../../lib/ce
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronDown, ChevronRight, Camera, X } from "lucide-react";
+import { Camera, X } from "lucide-react";
+import { SecaoRecolhivel } from "../../../components/SecaoRecolhivel";
 import { Modal } from "../../../components/Modal";
 import { TextInput, SelectInput, CheckboxInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
@@ -61,25 +62,6 @@ interface Props {
   initialTagPrefix?: string;
   /** Tipo sugerido para o filho (ex.: pai e' Linha -> sugere Maquina). */
   initialType?: string;
-}
-
-/** Secao recolhivel - o que nao e' essencial no cadastro fica fora do caminho. */
-function Section({ title, hint, children, defaultOpen = false }: { title: string; hint?: string; children: React.ReactNode; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="rounded-lg border border-gray-200">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-graphite-700 hover:bg-gray-50"
-      >
-        {open ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
-        {title}
-        {hint && <span className="ml-auto text-xs font-normal text-graphite-400">{hint}</span>}
-      </button>
-      {open && <div className="space-y-4 border-t border-gray-100 p-4">{children}</div>}
-    </div>
-  );
 }
 
 export function InstrumentFormModal({ open, onClose, onSaved, instrument, initialParentId, initialClientId, initialTagPrefix, initialType }: Props) {
@@ -321,16 +303,16 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
             {...register("operationalStatus")}
           />
         </div>
-        <Section title="Ficha do fabricante" hint="opcional">
+        <SecaoRecolhivel titulo="Ficha do fabricante" dica="opcional">
           <div className="grid gap-4 sm:grid-cols-3">
             <TextInput label="Fabricante" {...register("manufacturer")} />
             <TextInput label="Modelo" {...register("model")} />
             <TextInput label="Numero de serie" {...register("serialNumber")} />
           </div>
           <TextInput label="Ponto de instalacao" placeholder="Ex.: Casa de maquinas, painel 3" {...register("installationLocation")} />
-        </Section>
+        </SecaoRecolhivel>
 
-        <Section title="Calibracao e lubrificacao" hint="a que este ativo esta sujeito">
+        <SecaoRecolhivel titulo="Calibracao e lubrificacao" dica="a que este ativo esta sujeito">
           <CheckboxInput
             label="Ativo calibravel - aparece na lista de Ativos da OptiProcess"
             {...register("calibratable")}
@@ -368,7 +350,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
             <TextInput label="Resolucao" {...register("resolution")} />
             <TextInput label="Unidade" {...register("unit")} />
           </div>
-        </Section>
+        </SecaoRecolhivel>
         </>
         )}
 
@@ -392,13 +374,13 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
         )}
 
         {user?.role === "ADMIN" && !modoRapido && (
-          <Section title="Excecao de centro de custo" hint="somente administrador">
+          <SecaoRecolhivel titulo="Excecao de centro de custo" dica="somente administrador">
             <p className="text-xs text-graphite-500">
               Por padrao o centro de custo vem da area. Preencha aqui apenas se este ativo especifico precisa
               ser rateado em outro centro de custo - a heranca deixa de sobrescrever este ativo.
             </p>
             <LocationPicker clientId={clientId} register={register} watch={watch} setValue={setValue} onlyCostCenter />
-          </Section>
+          </SecaoRecolhivel>
         )}
         {/* A unica coisa que o cadastro rapido pergunta alem do essencial, e so para a
             equipe interna: e' o que decide se o ativo entra na lista de calibracao da

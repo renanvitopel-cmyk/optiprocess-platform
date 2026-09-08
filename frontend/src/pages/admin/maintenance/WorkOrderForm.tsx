@@ -10,6 +10,7 @@ import { TextInput, TextareaInput, SelectInput } from "../../../components/form/
 import { ClientPicker } from "../../../components/ClientPicker";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
+import { SecaoRecolhivel } from "../../../components/SecaoRecolhivel";
 import { listFailureCodes } from "../../../api/failureCodes";
 import { listLaborResources } from "../../../api/laborResources";
 import { getInstrument } from "../../../api/instruments";
@@ -269,6 +270,7 @@ export default function WorkOrderForm() {
               Perguntar isso antes evita o pior caso: inventar um horario de termino com a
               maquina ainda parada, que faria o MTTR medir um numero que nunca existiu. */}
           {mostrar(temTipo) && ehQuebra && (
+            <div className="rounded-lg border-2 border-safety-red/40 bg-red-50/40 p-4">
             <SelectInput
               label="Situacao da quebra"
               required
@@ -287,6 +289,7 @@ export default function WorkOrderForm() {
               error={errors.breakdownSituation?.message}
               {...register("breakdownSituation")}
             />
+            </div>
           )}
 
           {mostrar(temTipo) && (
@@ -303,7 +306,9 @@ export default function WorkOrderForm() {
           {/* Quem e com que urgencia - depois de o servico estar descrito, que e' quando a
               resposta existe. */}
           {mostrar(temOQueFazer) && (
-          <div className={`grid gap-4 ${isClient ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* Prioridade continua a vista: ela ja nasce preenchida (Media) e decide a
+                ordem da fila - nao e' um campo em branco que se possa esconder. */}
             <SelectInput
               label="Prioridade"
               options={[
@@ -314,22 +319,6 @@ export default function WorkOrderForm() {
               ]}
               {...register("priority")}
             />
-            {!isClient && (
-              <UserPicker label="Tecnico responsavel" roles={["ADMIN", "TECHNICIAN"]} error={errors.technicianId?.message} {...register("technicianId")} />
-            )}
-            <SelectInput
-              label="Quem vai executar"
-              placeholder={clientId ? "A definir na programacao" : "Selecione o cliente primeiro"}
-              disabled={!clientId}
-              hint="Equipe da empresa - tambem da para definir arrastando no quadro de programacao."
-              options={(laborResources?.items ?? []).map((r) => ({ value: r.id, label: `${r.name} (${r.type})` }))}
-              error={errors.assignedResourceId?.message}
-              {...register("assignedResourceId")}
-            />
-          </div>
-          )}
-          {mostrar(temOQueFazer) && (
-          <div className="grid gap-4 sm:grid-cols-3">
             {ehCorretiva && (
               <SelectInput
                 label="Categoria da falha"
@@ -341,8 +330,32 @@ export default function WorkOrderForm() {
             )}
           </div>
           )}
+
+          {/* Daqui para baixo tudo e' opcional: fica recolhido para o formulario mostrar
+              primeiro o que ele exige. */}
           {mostrar(temOQueFazer) && (
-            <TextareaInput label="Observacoes (opcional)" rows={2} {...register("observations")} />
+            <SecaoRecolhivel titulo="Responsavel" dica="opcional">
+              <div className={`grid gap-4 ${isClient ? "" : "sm:grid-cols-2"}`}>
+                {!isClient && (
+                  <UserPicker label="Tecnico responsavel" roles={["ADMIN", "TECHNICIAN"]} error={errors.technicianId?.message} {...register("technicianId")} />
+                )}
+                <SelectInput
+                  label="Quem vai executar"
+                  placeholder={clientId ? "A definir na programacao" : "Selecione o cliente primeiro"}
+                  disabled={!clientId}
+                  hint="Tambem da para definir arrastando no quadro de programacao ou no planejamento."
+                  options={(laborResources?.items ?? []).map((r) => ({ value: r.id, label: `${r.name} (${r.type})` }))}
+                  error={errors.assignedResourceId?.message}
+                  {...register("assignedResourceId")}
+                />
+              </div>
+            </SecaoRecolhivel>
+          )}
+
+          {mostrar(temOQueFazer) && (
+            <SecaoRecolhivel titulo="Observacoes" dica="opcional">
+              <TextareaInput label="Observacoes" rows={2} {...register("observations")} />
+            </SecaoRecolhivel>
           )}
 
           {/* Diz o que vem a seguir, para o formulario curto nao parecer quebrado. */}
@@ -403,14 +416,6 @@ export default function WorkOrderForm() {
                 options={GRAVIDADES_DE_FALHA.map((g) => ({ value: g.valor, label: g.rotulo }))}
                 {...register("failureSeverity")}
               />
-              <TextInput
-                label="Perda de producao"
-                type="number"
-                step="any"
-                min="0"
-                hint="Estimativa, na unidade da empresa."
-                {...register("productionLoss")}
-              />
             </div>
 
             <TextareaInput
@@ -420,22 +425,33 @@ export default function WorkOrderForm() {
               hint="O laudo de quem foi ver - diferente do pedido que abriu a OS."
               {...register("failureDescription")}
             />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <TextareaInput label="Causa identificada" rows={2} hint="A causa raiz de verdade sai da RCA." {...register("failureRootCause")} />
-              <TextareaInput label="Acao corretiva tomada" rows={2} {...register("failureCorrectiveAction")} />
-            </div>
+
+            {/* O que so se sabe depois de investigar - fica recolhido para nao competir
+                com o que a OS exige agora. */}
+            <SecaoRecolhivel titulo="Mais sobre a falha" dica="opcional">
+              <TextInput
+                label="Perda de producao"
+                type="number"
+                step="any"
+                min="0"
+                hint="Estimativa, na unidade da empresa."
+                {...register("productionLoss")}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextareaInput label="Causa identificada" rows={2} hint="A causa raiz de verdade sai da RCA." {...register("failureRootCause")} />
+                <TextareaInput label="Acao corretiva tomada" rows={2} {...register("failureCorrectiveAction")} />
+              </div>
+            </SecaoRecolhivel>
           </div>
         )}
 
         {mostrar(temOQueFazer) && (
-        <div className="card space-y-4 p-5">
-          <div>
-            <h2 className="font-semibold text-navy-900">Planejamento</h2>
-            <p className="text-xs text-graphite-500">
-              A data agendada e' o dia em que a OS aparece na programacao. A janela e as horas estimadas
-              sao a previsao - o que foi realmente gasto e' apontado na aba Equipe e horas da OS.
-            </p>
-          </div>
+        <div className="card p-5">
+          <SecaoRecolhivel titulo="Planejamento" dica="opcional - data, janela e horas previstas">
+          <p className="text-xs text-graphite-500">
+            A data agendada e' o dia em que a OS aparece na programacao. A janela e as horas estimadas
+            sao a previsao - o que foi realmente gasto e' apontado na aba Equipe e horas da OS.
+          </p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <TextInput label="Data agendada" type="date" {...register("scheduledDate")} />
             <TextInput label="Inicio planejado" type="datetime-local" {...register("plannedStart")} />
@@ -447,14 +463,15 @@ export default function WorkOrderForm() {
             />
             <TextInput label="Horas estimadas" type="number" step="0.5" min="0" {...register("estimatedHours")} />
           </div>
+          </SecaoRecolhivel>
         </div>
         )}
 
         {mostrar(temOQueFazer) && (
-        <div className="card space-y-4 p-5">
+        <div className="card p-5">
+          <SecaoRecolhivel titulo="Operacoes do servico" dica="opcional - o passo a passo">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="font-semibold text-navy-900">Operacoes do servico</h2>
               <p className="text-xs text-graphite-500">O que fazer, em ordem, e o tempo esperado de cada uma (em minutos).</p>
             </div>
             <button type="button" className="btn-ghost btn-sm" onClick={() => append({ description: "", estimatedMinutes: "" })}>
@@ -485,6 +502,7 @@ export default function WorkOrderForm() {
               </div>
             ))}
           </div>
+          </SecaoRecolhivel>
         </div>
         )}
 

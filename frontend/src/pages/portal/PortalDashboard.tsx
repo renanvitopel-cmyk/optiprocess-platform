@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { BadgeCheck, AlertTriangle, ShieldX, FileWarning, FileSignature, ShoppingCart, Gauge, TimerReset, Activity, Wrench, Boxes, ShieldCheck, ClipboardList, ListChecks, GitBranch, Radar, HardHat } from "lucide-react";
 import { getClientDashboard } from "../../api/dashboard";
 import { listMaintenanceWorkOrders, getMaintenanceDashboard } from "../../api/maintenanceWorkOrders";
@@ -15,6 +15,11 @@ import { TIPOS_DE_OS as TYPE_LABELS } from "../../lib/maintenanceLabels";
 export default function PortalDashboard() {
   const { user } = useAuth();
   const hasCmms = !!user?.client?.contractedServices?.includes("CMMS_MAINTENANCE");
+
+  // Quem tem o CMMS tem uma casa so: o painel do CMMS. Este painel continua existindo para
+  // quem contratou apenas calibracao ou laudos - la ele mostra certificados e ordens de
+  // servico externas, que o painel do CMMS nao cobre.
+  if (hasCmms) return <Navigate to="/portal/manutencao" replace />;
 
   const { data, isLoading } = useQuery({ queryKey: ["client-dashboard"], queryFn: getClientDashboard });
   const { data: cmmsDashboard, isLoading: cmmsLoading } = useQuery({

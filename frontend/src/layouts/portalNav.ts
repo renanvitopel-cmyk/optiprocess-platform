@@ -39,6 +39,9 @@ export interface PortalNavItem {
   requires?: ServiceCategory[];
   /** So marca como ativo na rota exata - usado nos itens que sao "pai" de sub-rotas. */
   exact?: boolean;
+  /** So aparece para quem NAO contratou o CMMS - usado no painel inicial, que muda de
+   * dono conforme o que a empresa tem. */
+  semCmms?: boolean;
   /** Perfis que veem o item. Omitido = toda a equipe de manutencao (nao o Solicitante,
    * que tem menu proprio). O menu acompanha as rotas: item que leva a uma tela bloqueada
    * so faz a pessoa bater na porta fechada. */
@@ -76,7 +79,14 @@ const ALL_SERVICES: ServiceCategory[] = [
  */
 const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
   {
-    items: [{ to: "/portal", label: "Dashboard", icon: LayoutDashboard }],
+    // Uma casa so. Para quem tem o CMMS, o painel do CMMS E' a pagina inicial - eram duas
+    // entradas para a mesma tela, uma no topo e outra dentro de "Operacional". Quem
+    // contratou so calibracao/laudos continua com o painel do portal, que mostra
+    // certificados e ordens de servico externas.
+    items: [
+      { to: "/portal/manutencao", label: "Painel do CMMS", icon: Wrench, requires: ["CMMS_MAINTENANCE"], exact: true },
+      { to: "/portal", label: "Dashboard", icon: LayoutDashboard, semCmms: true },
+    ],
   },
   {
     // O dia a dia: o que se abre, programa e executa. Separado da "Gestao" (o parque, o
@@ -85,7 +95,6 @@ const PORTAL_NAV_SECTIONS: PortalNavSection[] = [
     title: "Operacional",
     icon: HardHat,
     items: [
-      { to: "/portal/manutencao", label: "Painel do CMMS", icon: Wrench, requires: ["CMMS_MAINTENANCE"], exact: true },
       { to: "/portal/manutencao/solicitacoes", label: "Solicitacoes", icon: ClipboardPlus, requires: ["CMMS_MAINTENANCE"] },
       { to: "/portal/manutencao/ordens", label: "Ordens de manutencao", icon: ClipboardList, requires: ["CMMS_MAINTENANCE"] },
       { perfis: ["CLIENT", "CLIENT_PLANNER"], to: "/portal/manutencao/programacao", label: "Programacao", icon: CalendarDays, requires: ["CMMS_MAINTENANCE"] },
@@ -170,6 +179,7 @@ export function getPortalNav(contractedServices: ServiceCategory[], role?: strin
     items: section.items.filter(
       (item) =>
         (!item.requires || item.requires.some((c) => contractedServices.includes(c))) &&
+        (!item.semCmms || !contractedServices.includes("CMMS_MAINTENANCE")) &&
         // O ADMIN da OptiProcess entra por acesso master de suporte: ve tudo.
         (!item.perfis || !role || role === "ADMIN" || item.perfis.includes(role as Role)),
     ),

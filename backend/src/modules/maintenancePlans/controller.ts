@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { dataOpcional } from "../../utils/zod";
 import { MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority, MaintenanceFrequencyUnit, OperationalCalendar, MeterResetRule, MaintenanceTriggerMode, MaintenanceOrderStatus, MaterialPolicy, ChecklistResponseType, LubricationMethod } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -160,7 +161,7 @@ const planSchema = z.object({
   // Agendamento
   frequencyUnit: z.nativeEnum(MaintenanceFrequencyUnit).optional(),
   frequencyEvery: z.coerce.number().int().positive().nullish(),
-  baseDate: z.coerce.date().nullish(),
+  baseDate: dataOpcional,
   dayOfWeek: z.coerce.number().int().min(0).max(6).nullish(),
   dayOfMonth: z.coerce.number().int().min(1).max(31).nullish(),
   monthOfYear: z.coerce.number().int().min(1).max(12).nullish(),

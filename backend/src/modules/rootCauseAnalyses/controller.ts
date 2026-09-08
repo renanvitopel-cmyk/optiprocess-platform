@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { dataOpcional } from "../../utils/zod";
 import { RcaStatus, type AttachmentCategory } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -61,8 +62,8 @@ const rcaSchema = z.object({
   correctiveActions: z.string().nullish(),
   preventiveActions: z.string().nullish(),
   responsibleId: z.string().uuid().nullish(),
-  dueDate: z.coerce.date().nullish(),
-  effectivenessVerifiedAt: z.coerce.date().nullish(),
+  dueDate: dataOpcional,
+  effectivenessVerifiedAt: dataOpcional,
   effectivenessNotes: z.string().nullish(),
   status: z.nativeEnum(RcaStatus).optional(),
 });

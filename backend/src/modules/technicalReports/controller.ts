@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { dataOpcional } from "../../utils/zod";
 import { TechnicalReportCategory } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -69,7 +70,7 @@ const reportSchema = z.object({
   location: z.string().min(1),
   responsibleId: z.string().uuid(),
   reportDate: z.coerce.date(),
-  validUntil: z.coerce.date().nullish(),
+  validUntil: dataOpcional,
   observations: z.string().nullish(),
 });
 

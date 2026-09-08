@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { dataOpcional } from "../../utils/zod";
 import { OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -48,7 +49,7 @@ export const getOrder = asyncHandler(async (req: Request, res: Response) => {
 });
 
 const updateOrderSchema = z.object({
-  deadline: z.coerce.date().nullish(),
+  deadline: dataOpcional,
   paymentMethod: z.nativeEnum(PaymentMethod).nullish(),
   paymentStatus: z.nativeEnum(PaymentStatus).optional(),
   paymentNotes: z.string().nullish(),

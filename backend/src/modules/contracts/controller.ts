@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { dataOpcional } from "../../utils/zod";
 import { ContractPeriodicity, ContractStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -67,7 +68,7 @@ const contractSchema = z.object({
   clientId: z.string().uuid(),
   serviceName: z.string().min(2),
   startDate: z.coerce.date(),
-  endDate: z.coerce.date().nullish(),
+  endDate: dataOpcional,
   value: z.coerce.number().nullish(),
   periodicity: z.nativeEnum(ContractPeriodicity),
   responsibleId: z.string().uuid().nullish(),

@@ -32,6 +32,7 @@ const schema = z.object({
   description: z.string().min(2, "Descreva o servico."),
   technicianId: z.string().uuid().optional().or(z.literal("")),
   assignedResourceId: z.string().uuid().optional().or(z.literal("")),
+  breakdownSituation: z.enum(["ALREADY_HAPPENED", "HAPPENING_NOW", "TO_PLAN"]).optional().or(z.literal("")),
   scheduledDate: z.string().optional(),
   plannedStart: z.string().optional(),
   plannedEnd: z.string().optional(),
@@ -88,6 +89,7 @@ export default function WorkOrderForm() {
   const ehCorretiva = opcaoDeTipo?.type === "CORRECTIVE";
   const ehQuebra = opcaoDeTipo?.correctiveType === "BREAKDOWN";
   const instrumentId = watch("instrumentId");
+  const situacaoDaQuebra = watch("breakdownSituation");
   const descricao = watch("description");
   const titulo = watch("title");
 
@@ -137,6 +139,7 @@ export default function WorkOrderForm() {
         description: existing.description,
         technicianId: existing.technicianId ?? "",
         assignedResourceId: existing.assignedResourceId ?? "",
+        breakdownSituation: existing.breakdownSituation ?? "",
         scheduledDate: existing.scheduledDate?.slice(0, 10) ?? "",
         plannedStart: existing.plannedStart?.slice(0, 16) ?? "",
         plannedEnd: existing.plannedEnd?.slice(0, 16) ?? "",
@@ -195,8 +198,12 @@ export default function WorkOrderForm() {
         technicianId: values.technicianId || null,
         assignedResourceId: values.assignedResourceId || null,
         failureCodeId: values.failureCodeId || null,
+        // Campo de data em branco vai como null, e nao como "" - foi o que quebrava a
+        // criacao com "scheduledDate: Invalid date" quando ninguem agendava a OS.
+        scheduledDate: values.scheduledDate || null,
         plannedStart: values.plannedStart || null,
         plannedEnd: values.plannedEnd || null,
+        breakdownSituation: opcao?.correctiveType === "BREAKDOWN" ? values.breakdownSituation || null : null,
         checklist: values.checklist
           .filter((c) => c.description.trim())
           .map((c) => ({ description: c.description, estimatedMinutes: c.estimatedMinutes === "" ? null : Number(c.estimatedMinutes) })),
@@ -256,6 +263,30 @@ export default function WorkOrderForm() {
               {...register("tipoSelecionado")}
             />
           </div>
+          )}
+
+          {/* Uma quebra chega em tres momentos, e o que da para preencher muda em cada um.
+              Perguntar isso antes evita o pior caso: inventar um horario de termino com a
+              maquina ainda parada, que faria o MTTR medir um numero que nunca existiu. */}
+          {mostrar(temTipo) && ehQuebra && (
+            <SelectInput
+              label="Situacao da quebra"
+              required
+              hint={
+                situacaoDaQuebra === "HAPPENING_NOW"
+                  ? "A maquina esta parada: informe so quando ela parou - o termino entra quando ela voltar."
+                  : situacaoDaQuebra === "TO_PLAN"
+                    ? "Sem janela de falha por enquanto; ela e' preenchida quando o atendimento acontecer."
+                    : "Maquina ja voltou: informe quando parou e quando voltou."
+              }
+              options={[
+                { value: "ALREADY_HAPPENED", label: "Ja aconteceu - a maquina ja voltou" },
+                { value: "HAPPENING_NOW", label: "Esta acontecendo agora - maquina parada" },
+                { value: "TO_PLAN", label: "Vou planejar - sera atendida depois" },
+              ]}
+              error={errors.breakdownSituation?.message}
+              {...register("breakdownSituation")}
+            />
           )}
 
           {mostrar(temTipo) && (
@@ -348,8 +379,23 @@ export default function WorkOrderForm() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <TextInput label="Inicio da falha" type="datetime-local" required={ehQuebra} {...register("failureStartedAt")} />
-              <TextInput label="Termino da falha" type="datetime-local" required={ehQuebra} {...register("failureEndedAt")} />
+              <TextInput
+                label="Inicio da falha"
+                type="datetime-local"
+                required={ehQuebra && situacaoDaQuebra !== "TO_PLAN"}
+                hint={situacaoDaQuebra === "TO_PLAN" ? "Preencha quando o atendimento acontecer." : undefined}
+                {...register("failureStartedAt")}
+              />
+              {/* Com a maquina parada agora, nao existe termino: preencher aqui seria
+                  chutar a hora em que ela vai voltar. */}
+              {situacaoDaQuebra !== "HAPPENING_NOW" && (
+                <TextInput
+                  label="Termino da falha"
+                  type="datetime-local"
+                  required={ehQuebra && situacaoDaQuebra === "ALREADY_HAPPENED"}
+                  {...register("failureEndedAt")}
+                />
+              )}
               <SelectInput
                 label="Gravidade"
                 placeholder="Nao informada"

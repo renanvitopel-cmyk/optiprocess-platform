@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { dataOpcional } from "../../utils/zod";
 import { LubricantBase, LubricantType, LubricationCondition, LubricationMethod, MachineStateForLubrication } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -120,7 +121,7 @@ const pointSchema = z.object({
   machineState: z.nativeEnum(MachineStateForLubrication).optional(),
   accessNotes: z.string().nullish(),
   safetyNotes: z.string().nullish(),
-  lastLubricatedAt: z.coerce.date().nullish(),
+  lastLubricatedAt: dataOpcional,
   active: z.boolean().optional(),
 });
 

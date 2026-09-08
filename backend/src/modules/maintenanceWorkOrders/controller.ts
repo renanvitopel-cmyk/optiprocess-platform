@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { MaintenanceOrderType, MaintenancePriority, MaintenanceOrderStatus, ChecklistItemResult, AttachmentCategory, LaborHourType, FailureSeverity, CorrectiveType } from "@prisma/client";
+import { dataOpcional } from "../../utils/zod";
+import { BreakdownSituation, MaintenanceOrderType, MaintenancePriority, MaintenanceOrderStatus, ChecklistItemResult, AttachmentCategory, LaborHourType, FailureSeverity, CorrectiveType } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -202,15 +203,18 @@ const workOrderSchema = z.object({
   type: z.nativeEnum(MaintenanceOrderType),
   // So para corretiva: em operacao (maquina rodando) ou de quebra (maquina parada).
   correctiveType: z.nativeEnum(CorrectiveType).nullish(),
+  // So em corretiva de quebra: se ja aconteceu, se esta acontecendo agora ou se sera
+  // tratada depois. E' o que decide o que o cadastro pode exigir da janela da falha.
+  breakdownSituation: z.nativeEnum(BreakdownSituation).nullish(),
   priority: z.nativeEnum(MaintenancePriority).optional(),
   title: z.string().max(200).nullish(),
   description: z.string().min(2, "Descreva o servico."),
   costCenterId: z.string().uuid().nullish(),
   technicianId: z.string().uuid().nullish(),
   assignedResourceId: z.string().uuid().nullish(),
-  scheduledDate: z.coerce.date().nullish(),
-  plannedStart: z.coerce.date().nullish(),
-  plannedEnd: z.coerce.date().nullish(),
+  scheduledDate: dataOpcional,
+  plannedStart: dataOpcional,
+  plannedEnd: dataOpcional,
   estimatedHours: z.coerce.number().nonnegative().nullish(),
   failureCodeId: z.string().uuid().nullish(),
   laborHours: z.coerce.number().nullish(),
@@ -218,8 +222,8 @@ const workOrderSchema = z.object({
   executionNotes: z.string().nullish(),
   closureNotes: z.string().nullish(),
   // Registro de falha - so tem sentido em OS corretiva (validado abaixo).
-  failureStartedAt: z.coerce.date().nullish(),
-  failureEndedAt: z.coerce.date().nullish(),
+  failureStartedAt: dataOpcional,
+  failureEndedAt: dataOpcional,
   failureSeverity: z.nativeEnum(FailureSeverity).nullish(),
   failureDescription: z.string().nullish(),
   failureRootCause: z.string().nullish(),
@@ -260,6 +264,39 @@ function faltaNoRegistroDeFalha(os: {
   if (!os.failureSeverity) falta.push("gravidade");
   if (!os.failureDescription?.trim()) falta.push("descricao da falha");
   return falta;
+}
+
+/**
+ * O que a quebra permite exigir agora, conforme o momento em que ela chegou.
+ *
+ * Cobrar inicio E termino em toda quebra obrigava a inventar um horario de termino com a
+ * maquina ainda parada - e um MTTR construido sobre chute e' pior do que MTTR nenhum.
+ */
+function assertSituacaoDaQuebraCoerente(
+  correctiveType: CorrectiveType | null | undefined,
+  situacao: BreakdownSituation | null | undefined,
+  dados: { failureStartedAt?: Date | null; failureEndedAt?: Date | null },
+) {
+  if (!situacao) return;
+  if (correctiveType !== "BREAKDOWN") {
+    throw new ValidationError('"Situacao da quebra" so existe em corretiva de quebra.');
+  }
+
+  if (situacao === "ALREADY_HAPPENED") {
+    if (!dados.failureStartedAt || !dados.failureEndedAt) {
+      throw new ValidationError("A quebra ja aconteceu: informe quando a maquina parou e quando voltou.");
+    }
+  }
+  if (situacao === "HAPPENING_NOW") {
+    if (!dados.failureStartedAt) {
+      throw new ValidationError("A maquina esta parada agora: informe quando ela parou.");
+    }
+    if (dados.failureEndedAt) {
+      throw new ValidationError(
+        "A maquina ainda esta parada - o termino da falha e' preenchido quando ela voltar, na conclusao da OS.",
+      );
+    }
+  }
 }
 
 /** O registro de falha pertence a corretiva: numa preventiva/preditiva ele nao descreve
@@ -335,6 +372,7 @@ export const createMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
   assertJanelaCoerente(data.plannedStart, data.plannedEnd);
   assertRegistroDeFalhaCoerente(data.type, data);
   assertTipoDeCorretivaCoerente(data.type, data.correctiveType);
+  assertSituacaoDaQuebraCoerente(data.correctiveType, data.breakdownSituation, data);
   if (data.type === "CORRECTIVE" && !data.correctiveType) {
     throw new ValidationError("Informe se a corretiva e' em operacao ou de quebra.");
   }
@@ -826,8 +864,8 @@ const laborEntrySchema = z.object({
   laborResourceId: z.string().uuid(),
   hours: z.coerce.number().positive(),
   hourType: z.nativeEnum(LaborHourType).nullish(),
-  startedAt: z.coerce.date().nullish(),
-  endedAt: z.coerce.date().nullish(),
+  startedAt: dataOpcional,
+  endedAt: dataOpcional,
   notes: z.string().nullish(),
 });
 
@@ -1058,7 +1096,7 @@ export const consumeWorkOrderReservation = asyncHandler(async (req: Request, res
 const stoppageSchema = z.object({
   reasonId: z.string().uuid().nullish(),
   startedAt: z.coerce.date(),
-  endedAt: z.coerce.date().nullish(),
+  endedAt: dataOpcional,
   notes: z.string().nullish(),
 });
 
@@ -1087,7 +1125,7 @@ export const addWorkOrderStoppage = asyncHandler(async (req: Request, res: Respo
   res.status(201).json(stoppage);
 });
 
-const stoppageUpdateSchema = z.object({ endedAt: z.coerce.date().nullish(), notes: z.string().nullish() });
+const stoppageUpdateSchema = z.object({ endedAt: dataOpcional, notes: z.string().nullish() });
 
 /** Encerra uma parada em aberto (registra o fim da janela) - a maioria das paradas
  * comeca sem saber quando vai terminar. */
@@ -1698,7 +1736,7 @@ export const getMaintenanceSchedule = asyncHandler(async (req: Request, res: Res
 
 const scheduleSchema = z.object({
   // null nos dois campos = devolve a OS para a lista de pendentes.
-  scheduledDate: z.coerce.date().nullish(),
+  scheduledDate: dataOpcional,
   assignedResourceId: z.string().uuid().nullish(),
 });
 

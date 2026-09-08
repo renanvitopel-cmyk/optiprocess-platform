@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { dataOpcional } from "../../utils/zod";
 import { ServiceCategory, ServiceOrderStatus, ServiceOrderItemType } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -81,8 +82,8 @@ const serviceOrderSchema = z.object({
   category: z.nativeEnum(ServiceCategory),
   description: z.string().min(2),
   technicianId: z.string().uuid().nullish(),
-  scheduledDate: z.coerce.date().nullish(),
-  deadline: z.coerce.date().nullish(),
+  scheduledDate: dataOpcional,
+  deadline: dataOpcional,
   laborHours: z.coerce.number().nullish(),
   status: z.nativeEnum(ServiceOrderStatus).optional(),
 });

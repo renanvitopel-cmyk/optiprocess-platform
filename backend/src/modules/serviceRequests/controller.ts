@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { dataOpcional } from "../../utils/zod";
 import { MaintenancePriority, ServiceRequestStatus, MaintenanceOrderType, CorrectiveType, WorkOrderExecutionCondition, type AttachmentCategory } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -270,7 +271,7 @@ const conversionSchema = z.object({
   executionCondition: z.nativeEnum(WorkOrderExecutionCondition).nullish(),
   needsPurchase: z.boolean().optional(),
   purchaseNotes: z.string().nullish(),
-  scheduledDate: z.coerce.date().nullish(),
+  scheduledDate: dataOpcional,
 });
 
 /** Converte uma solicitacao Planejada numa Ordem de Manutencao de verdade - fecha o

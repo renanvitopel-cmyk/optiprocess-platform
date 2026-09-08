@@ -224,6 +224,15 @@ enum WorkOrderExecutionCondition {
   PLANNED_SHUTDOWN  // so na parada programada
 }
 
+// Em que momento a quebra chegou ao sistema. Muda o que o cadastro pede: a maquina que ja
+// voltou tem janela fechada; a que esta parada agora so tem inicio; a que sera tratada
+// depois ainda nao tem janela nenhuma.
+enum BreakdownSituation {
+  ALREADY_HAPPENED
+  HAPPENING_NOW
+  TO_PLAN
+}
+
 enum MaintenanceOrderStatus {
   OPEN
   IN_TRIAGE
@@ -1868,6 +1877,8 @@ model MaintenanceWorkOrder {
   // O que foi de fato executado, escrito por quem executou. Numa OS corretiva, e' tambem
   // a acao corretiva tomada sobre a falha - por isso nao existe um campo separado para ela.
   executionNotes String?
+  // Em que momento a quebra chegou ao sistema - so em corretiva de quebra.
+  breakdownSituation BreakdownSituation?
   // --- Registro de falha (so faz sentido em OS corretiva) ---------------------------
   // Preenchido pelo tecnico que atendeu a quebra. Fica na propria OS, e nao numa tabela
   // separada, porque a OS corretiva ja e' o registro do evento: duplicar viraria duas

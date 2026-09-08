@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { dataOpcional } from "../../utils/zod";
 import { AssetHierarchyLevel, InstrumentStatus, MaintenancePriority, OperationalStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -270,7 +271,7 @@ const instrumentSchema = z.object({
   unit: z.string().nullish(),
   installationLocation: z.string().nullish(),
   calibrationFrequencyMonths: z.coerce.number().int().min(1).nullish(),
-  lastCalibrationDate: z.coerce.date().nullish(),
+  lastCalibrationDate: dataOpcional,
   status: z.nativeEnum(InstrumentStatus).optional(),
   // Quanto uma parada deste ativo pesa pra empresa - guia prioridade de OS e estoque.
   criticality: z.nativeEnum(MaintenancePriority).optional(),

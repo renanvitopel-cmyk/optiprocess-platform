@@ -1079,6 +1079,8 @@ export interface FailureRecord {
 }
 
 export interface MaintenanceWorkOrder {
+  /** Em que momento a quebra chegou: ja aconteceu, esta acontecendo ou sera planejada. */
+  breakdownSituation?: "ALREADY_HAPPENED" | "HAPPENING_NOW" | "TO_PLAN" | null;
   /** Como o servico sera executado - decidido na conversao da solicitacao. */
   executionCondition?: WorkOrderExecutionCondition | null;
   /** Precisa comprar material antes de executar (a OS nasce aguardando material). */

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { dataOpcional } from "../../utils/zod";
 import { CalibrationResult, PointResult, DocumentStatus, AttachmentCategory } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -167,7 +168,7 @@ const standardSchema = z.object({
   model: z.string().nullish(),
   serialNumber: z.string().nullish(),
   certificateNumber: z.string().nullish(),
-  certificateValidUntil: z.coerce.date().nullish(),
+  certificateValidUntil: dataOpcional,
   laboratory: z.string().nullish(),
 });
 

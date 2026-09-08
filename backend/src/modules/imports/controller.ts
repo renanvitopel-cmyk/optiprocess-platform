@@ -452,12 +452,18 @@ async function processar(
     // O tipo, quando informado, tem que existir no catalogo e no nivel escolhido - senao
     // a lista de tipos volta a virar texto livre pela porta da planilha.
     if (valores.tipo) {
-      const doCatalogo = tiposDeAtivo.get(valores.tipo.trim().toLowerCase());
-      if (!doCatalogo) {
+      const chaveTipo = valores.tipo.trim().toLowerCase();
+      // .has() e nao !valor: um tipo sem nivel definido (ex.: "Outro", deixado assim de
+      // proposito) esta no catalogo com o valor null - "!null" e' true, e a checagem
+      // antiga rejeitava esse tipo como se nao existisse. Foi o que derrubou uma
+      // importacao inteira: o tipo da raiz falhou, e cada descendente que apontava para
+      // ela em cascata falhou atras com "ativo pai nao encontrado".
+      if (!tiposDeAtivo.has(chaveTipo)) {
         erro("Ativos", n, `Tipo "${valores.tipo}" nao existe em Cadastros > Tipos de ativo.`);
         continue;
       }
-      if (nivel && doCatalogo !== nivel) {
+      const doCatalogo = tiposDeAtivo.get(chaveTipo);
+      if (nivel && doCatalogo && doCatalogo !== nivel) {
         erro("Ativos", n, `Tipo "${valores.tipo}" nao pertence ao nivel "${valores.nivel}".`);
         continue;
       }

@@ -113,6 +113,10 @@ export const listMaintenanceWorkOrders = asyncHandler(async (req: Request, res: 
         client: { select: { id: true, companyName: true, tradeName: true } },
         instrument: { select: { id: true, type: true, model: true, serialNumber: true, tag: true } },
         technician: { select: { id: true, name: true } },
+        // O planejamento e a programacao mostram quem esta com a OS - sem isso o cartao
+        // dizia "sem responsavel" mesmo com assignedResourceId preenchido, porque so o id
+        // vinha e o nome nao.
+        assignedResource: { select: { id: true, name: true, type: true } },
       },
     }),
     prisma.maintenanceWorkOrder.count({ where }),

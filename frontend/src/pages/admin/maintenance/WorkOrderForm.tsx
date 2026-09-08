@@ -19,8 +19,8 @@ import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { useCmms } from "../../../lib/cmms";
-import { OPCOES_DE_TIPO, GRAVIDADES_DE_FALHA, valorDoTipo } from "../../../lib/maintenanceLabels";
-import type { FailureSeverity } from "../../../api/types";
+import { OPCOES_DE_TIPO, GRAVIDADES_DE_FALHA, valorDoTipo, SITUACOES_DE_ABERTURA } from "../../../lib/maintenanceLabels";
+import type { FailureSeverity, MaintenanceOrderStatus } from "../../../api/types";
 
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
@@ -34,6 +34,7 @@ const schema = z.object({
   technicianId: z.string().uuid().optional().or(z.literal("")),
   assignedResourceId: z.string().uuid().optional().or(z.literal("")),
   breakdownSituation: z.enum(["ALREADY_HAPPENED", "HAPPENING_NOW", "TO_PLAN"]).optional().or(z.literal("")),
+  status: z.string().optional(),
   scheduledDate: z.string().optional(),
   plannedStart: z.string().optional(),
   plannedEnd: z.string().optional(),
@@ -80,6 +81,7 @@ export default function WorkOrderForm() {
       instrumentId: searchParams.get("instrumentId") ?? "",
       tipoSelecionado: "CORRECTIVE_IN_OPERATION",
       priority: "MEDIUM",
+      status: "OPEN",
       checklist: [{ description: "", estimatedMinutes: "" }],
     },
   });
@@ -91,6 +93,7 @@ export default function WorkOrderForm() {
   const ehQuebra = opcaoDeTipo?.correctiveType === "BREAKDOWN";
   const instrumentId = watch("instrumentId");
   const situacaoDaQuebra = watch("breakdownSituation");
+  const situacaoDaOs = watch("status");
   const descricao = watch("description");
   const titulo = watch("title");
 
@@ -141,6 +144,7 @@ export default function WorkOrderForm() {
         technicianId: existing.technicianId ?? "",
         assignedResourceId: existing.assignedResourceId ?? "",
         breakdownSituation: existing.breakdownSituation ?? "",
+        status: existing.status ?? "OPEN",
         scheduledDate: existing.scheduledDate?.slice(0, 10) ?? "",
         plannedStart: existing.plannedStart?.slice(0, 16) ?? "",
         plannedEnd: existing.plannedEnd?.slice(0, 16) ?? "",
@@ -205,6 +209,7 @@ export default function WorkOrderForm() {
         plannedStart: values.plannedStart || null,
         plannedEnd: values.plannedEnd || null,
         breakdownSituation: opcao?.correctiveType === "BREAKDOWN" ? values.breakdownSituation || null : null,
+        status: (values.status || undefined) as MaintenanceOrderStatus | undefined,
         checklist: values.checklist
           .filter((c) => c.description.trim())
           .map((c) => ({ description: c.description, estimatedMinutes: c.estimatedMinutes === "" ? null : Number(c.estimatedMinutes) })),
@@ -319,6 +324,17 @@ export default function WorkOrderForm() {
               ]}
               {...register("priority")}
             />
+            {/* Quem abre ja sabe em que pe a OS esta: uma quebra em atendimento nasce
+                Liberada, uma que espera peca nasce Aguardando material. Concluida e
+                Cancelada nao entram aqui - so na ficha da OS, onde tem regra. */}
+            {!isEdit && (
+              <SelectInput
+                label="Situacao da OS"
+                hint={SITUACOES_DE_ABERTURA.find((o) => o.valor === situacaoDaOs)?.ajuda ?? "Como a OS nasce."}
+                options={SITUACOES_DE_ABERTURA.map((o) => ({ value: o.valor, label: o.rotulo }))}
+                {...register("status")}
+              />
+            )}
             {ehCorretiva && (
               <SelectInput
                 label="Categoria da falha"

@@ -206,6 +206,15 @@ const workOrderSchema = z.object({
   // So em corretiva de quebra: se ja aconteceu, se esta acontecendo agora ou se sera
   // tratada depois. E' o que decide o que o cadastro pode exigir da janela da falha.
   breakdownSituation: z.nativeEnum(BreakdownSituation).nullish(),
+  // Situacao com que a OS nasce. Concluida e Cancelada ficam de fora: concluir tem regras
+  // proprias (checklist, registro de falha) e cancelar uma OS no ato de cria-la nao e' um
+  // registro, e' um formulario preenchido a toa.
+  status: z
+    .nativeEnum(MaintenanceOrderStatus)
+    .refine((v) => v !== "COMPLETED" && v !== "CANCELED", {
+      message: "Uma OS nao nasce concluida nem cancelada - abra e depois mude a situacao.",
+    })
+    .optional(),
   priority: z.nativeEnum(MaintenancePriority).optional(),
   title: z.string().max(200).nullish(),
   description: z.string().min(2, "Descreva o servico."),
@@ -388,7 +397,9 @@ export const createMaintenanceWorkOrder = asyncHandler(async (req: Request, res:
       // Sem centro de custo informado, a OS herda o do ativo - e' onde o custo cai por
       // padrao. Fica gravado na OS para nao mudar retroativamente se o ativo for movido.
       costCenterId: orderData.costCenterId ?? instrument.costCenterId,
-      status: "OPEN",
+      // Quem abre ja sabe em que pe a OS esta: uma quebra em atendimento nasce Liberada,
+      // uma que espera peca nasce Aguardando material. "Aberta" continua o padrao.
+      status: orderData.status ?? "OPEN",
       createdById: req.user?.sub,
       checklist: { create: (checklist ?? []).map((c, i) => ({ description: c.description, estimatedMinutes: c.estimatedMinutes ?? null, sortOrder: i })) },
     },

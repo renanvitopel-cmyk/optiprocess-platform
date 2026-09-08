@@ -1,5 +1,6 @@
 import type { CorrectiveType, MaintenanceOrderType, MaintenancePlanType, FailureSeverity, LubricationMethod,
   WorkOrderExecutionCondition,
+  MaintenanceOrderStatus,
 } from "../api/types";
 
 /** Rotulos dos tipos de servico. Ficam num arquivo so porque apareciam repetidos em cada
@@ -79,3 +80,22 @@ export const CONDICOES_DE_EXECUCAO: Record<WorkOrderExecutionCondition, string> 
   OPPORTUNITY_STOP: "Na proxima parada de oportunidade",
   PLANNED_SHUTDOWN: "So na parada programada",
 };
+
+/**
+ * Situacoes que uma OS pode ter ao ser ABERTA.
+ *
+ * Concluida e Cancelada ficam de fora: concluir tem regras proprias (checklist resolvido,
+ * registro de falha na quebra) e cancelar no ato de criar nao e' um registro, e' um
+ * formulario preenchido a toa. As duas continuam disponiveis na ficha da OS.
+ */
+export const SITUACOES_DE_ABERTURA: { valor: MaintenanceOrderStatus; rotulo: string; ajuda: string }[] = [
+  { valor: "OPEN", rotulo: "Aberta", ajuda: "Registrada, ainda sem planejamento" },
+  { valor: "IN_TRIAGE", rotulo: "Em triagem", ajuda: "Alguem ainda vai decidir o que fazer" },
+  { valor: "PLANNED", rotulo: "Planejada", ajuda: "Sabe-se o que fazer; falta programar" },
+  { valor: "PROGRAMMED", rotulo: "Programada", ajuda: "Com data na programacao" },
+  { valor: "RELEASED", rotulo: "Liberada", ajuda: "Pode ser executada agora" },
+  { valor: "IN_PROGRESS", rotulo: "Em execucao", ajuda: "Ja esta sendo feita" },
+  { valor: "AWAITING_MATERIAL", rotulo: "Aguardando material", ajuda: "Parada esperando peca ou compra" },
+  { valor: "AWAITING_RELEASE", rotulo: "Aguardando liberacao", ajuda: "Esperando autorizacao da operacao" },
+  { valor: "AWAITING_STOPPAGE", rotulo: "Aguardando parada", ajuda: "So na proxima parada da maquina" },
+];

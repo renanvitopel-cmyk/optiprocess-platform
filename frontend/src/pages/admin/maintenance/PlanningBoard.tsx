@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus, Clock, PlayCircle, CheckCircle2, Search } from "lucide-react";
 import { listMaintenanceWorkOrders } from "../../../api/maintenanceWorkOrders";
 import { listClients } from "../../../api/clients";
@@ -12,6 +12,8 @@ import { FullPageSpinner } from "../../../components/Spinner";
 import { clientDisplayName, formatDate } from "../../../lib/format";
 import { TIPOS_DE_OS } from "../../../lib/maintenanceLabels";
 import { useCmms } from "../../../lib/cmms";
+import { useToast } from "../../../components/Toast";
+import { MoverOrdemModal } from "./MoverOrdemModal";
 
 /**
  * Painel de planejamento: onde cada ordem esta na fila, em quatro faixas.
@@ -65,11 +67,29 @@ function faixaDaOrdem(os: MaintenanceWorkOrder): FaixaId | null {
   return "pendente";
 }
 
-function Cartao({ os, base }: { os: MaintenanceWorkOrder; base: string }) {
+function Cartao({
+  os,
+  onAbrir,
+  onArrastar,
+}: {
+  os: MaintenanceWorkOrder;
+  onAbrir: () => void;
+  onArrastar: () => void;
+}) {
   return (
-    <Link
-      to={`${base}/ordens/${os.id}`}
-      className="block rounded-lg border border-gray-200 bg-white p-3 hover:border-navy-300 hover:shadow-sm"
+    <div
+      role="button"
+      tabIndex={0}
+      draggable
+      onDragStart={onArrastar}
+      onClick={onAbrir}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onAbrir();
+        }
+      }}
+      className="block cursor-pointer rounded-lg border border-gray-200 bg-white p-3 hover:border-navy-300 hover:shadow-sm active:cursor-grabbing"
     >
       <div className="flex items-start justify-between gap-2">
         <span className="font-medium text-navy-900">{os.number}</span>
@@ -87,14 +107,22 @@ function Cartao({ os, base }: { os: MaintenanceWorkOrder; base: string }) {
           {os.scheduledDate ? formatDate(os.scheduledDate) : os.completedAt ? formatDate(os.completedAt) : "sem data"}
         </span>
       </div>
-    </Link>
+    </div>
   );
 }
 
 export default function PlanningBoard() {
   const { isClient, ownClientId, base } = useCmms();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { notify } = useToast();
   const [clientId, setClientId] = useState(ownClientId ?? "");
   const [busca, setBusca] = useState("");
+  // Arrastar so muda o cartao de lugar depois que a pendencia da coluna de destino for
+  // preenchida - por isso o drop abre um passo, e nao move direto.
+  const [arrastando, setArrastando] = useState<MaintenanceWorkOrder | null>(null);
+  const [sobre, setSobre] = useState<FaixaId | null>(null);
+  const [movendo, setMovendo] = useState<{ ordem: MaintenanceWorkOrder; destino: FaixaId } | null>(null);
 
   const { data: clients } = useQuery({
     queryKey: ["clients-picker-cmms"],
@@ -117,6 +145,22 @@ export default function PlanningBoard() {
       [os.number, os.title, os.description, os.instrument?.tag, os.assignedResource?.name]
         .some((campo) => campo?.toLowerCase().includes(termo)),
   );
+
+  function soltar(destino: FaixaId) {
+    const ordem = arrastando;
+    setArrastando(null);
+    setSobre(null);
+    if (!ordem) return;
+    if (faixaDaOrdem(ordem) === destino) return; // soltou na mesma coluna: nada a fazer
+
+    // OS concluida nao volta arrastando: reabrir e' decisao com motivo, feita na propria
+    // OS - aqui seria um arrasto acidental desfazendo um encerramento.
+    if (ordem.status === "COMPLETED") {
+      notify("error", "Esta OS ja foi concluida. Para reabrir, entre na OS e mude a situacao.");
+      return;
+    }
+    setMovendo({ ordem, destino });
+  }
 
   const porFaixa = new Map<FaixaId, MaintenanceWorkOrder[]>();
   for (const os of ordens) {
@@ -155,6 +199,12 @@ export default function PlanningBoard() {
         )}
       </div>
 
+      {(isClient || clientId) && (
+        <p className="mb-3 text-xs text-graphite-500">
+          Arraste um cartao para a proxima coluna - o sistema abre o que falta para a OS caber la.
+        </p>
+      )}
+
       {!isClient && !clientId ? (
         <EmptyState title="Selecione um cliente" description="O planejamento e' da fila de cada empresa." />
       ) : isLoading ? (
@@ -168,7 +218,19 @@ export default function PlanningBoard() {
             const lista = porFaixa.get(faixa.id) ?? [];
             const Icone = faixa.icone;
             return (
-              <section key={faixa.id} className={`flex flex-col rounded-xl border p-3 ${faixa.tom}`}>
+              <section
+                key={faixa.id}
+                onDragOver={(e) => {
+                  // Sem preventDefault o navegador nao aceita o drop - e o cartao "volta".
+                  e.preventDefault();
+                  if (sobre !== faixa.id) setSobre(faixa.id);
+                }}
+                onDragLeave={() => setSobre((atual) => (atual === faixa.id ? null : atual))}
+                onDrop={() => soltar(faixa.id)}
+                className={`flex flex-col rounded-xl border p-3 transition-colors ${faixa.tom} ${
+                  sobre === faixa.id ? "border-navy-500 ring-2 ring-navy-200" : ""
+                }`}
+              >
                 <h2 className="flex items-center gap-2 font-semibold text-navy-900">
                   <Icone className="h-4 w-4 shrink-0 text-navy-600" />
                   <span className="min-w-0 truncate">{faixa.titulo}</span>
@@ -185,7 +247,12 @@ export default function PlanningBoard() {
                   // outras tres para fora da tela.
                   <div className="mt-3 flex max-h-[calc(100vh-20rem)] flex-col gap-3 overflow-y-auto pr-0.5">
                     {lista.map((os) => (
-                      <Cartao key={os.id} os={os} base={base} />
+                      <Cartao
+                        key={os.id}
+                        os={os}
+                        onAbrir={() => navigate(`${base}/ordens/${os.id}`)}
+                        onArrastar={() => setArrastando(os)}
+                      />
                     ))}
                   </div>
                 )}
@@ -193,6 +260,16 @@ export default function PlanningBoard() {
             );
           })}
         </div>
+      )}
+
+      {movendo && (
+        <MoverOrdemModal
+          ordem={movendo.ordem}
+          destino={movendo.destino}
+          base={base}
+          onClose={() => setMovendo(null)}
+          onMovida={() => queryClient.invalidateQueries({ queryKey: ["planejamento"] })}
+        />
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -128,18 +128,37 @@ export default function LubricationPointsList() {
   // Um motor tem varios pontos, e batizar cada um na mao e' onde nascem os codigos
   // repetidos. Escolhido o ativo, o proximo numero livre ja aparece no campo - editavel,
   // e so quando o campo esta vazio, para nao apagar o que a pessoa digitou.
+  //
+  // A busca fica numa funcao a parte (e nao so dentro do useEffect) porque o instrumentId
+  // NAO MUDA entre um ponto e o proximo no fluxo "Salvar e continuar": o formulario e'
+  // resetado mantendo o mesmo ativo, e um useEffect nao dispara de novo quando nenhuma
+  // dependencia mudou de valor. Sem chamar isto explicitamente apos o reset, o campo
+  // ficava em branco (em vez de avancar sozinho) e a proxima sugestao repetia o numero
+  // ja usado - foi o que forcou a correcao manual.
+  // Contador em vez de um cleanup de useEffect: agora ha dois pontos que pedem a
+  // sugestao (o efeito abaixo e o reset do "salvar e continuar"), e uma resposta atrasada
+  // de um pedido antigo nao pode sobrescrever o que um pedido mais novo ja respondeu.
+  const pedidoDeCodigoRef = useRef(0);
+  const buscarProximoCodigo = useCallback(
+    (ativoId: string) => {
+      if (!ativoId || !clientId) return;
+      const meuPedido = ++pedidoDeCodigoRef.current;
+      proximoCodigoDePonto(ativoId, clientId)
+        .then((codigo) => {
+          if (meuPedido !== pedidoDeCodigoRef.current) return; // superado por um pedido mais novo
+          if (!pointForm.getValues("code")?.trim()) pointForm.setValue("code", codigo);
+        })
+        .catch(() => undefined);
+    },
+    [clientId, pointForm],
+  );
+
   const ativoDoFormulario = pointForm.watch("instrumentId");
   useEffect(() => {
     if (!formOpen || editando || !ativoDoFormulario || !clientId) return;
     if (pointForm.getValues("code")?.trim()) return;
-    let cancelado = false;
-    proximoCodigoDePonto(ativoDoFormulario, clientId)
-      .then((codigo) => {
-        if (!cancelado && !pointForm.getValues("code")?.trim()) pointForm.setValue("code", codigo);
-      })
-      .catch(() => undefined);
-    return () => { cancelado = true; };
-  }, [formOpen, editando, ativoDoFormulario, clientId, pointForm]);
+    buscarProximoCodigo(ativoDoFormulario);
+  }, [formOpen, editando, ativoDoFormulario, clientId, buscarProximoCodigo, pointForm]);
 
   const abrirNovo = useCallback(
     (ativoId = "") => {
@@ -208,6 +227,11 @@ export default function LubricationPointsList() {
           code: "",
           name: "",
         });
+        // O instrumentId nao muda entre um ponto e o proximo aqui - o useEffect que busca
+        // a sugestao so dispara quando uma dependencia muda, entao precisa ser chamado a
+        // mao. O ponto que acabou de ser criado ja esta gravado (o create acima usou
+        // await), entao a busca ja enxerga ele e sugere o proximo numero de verdade.
+        buscarProximoCodigo(ativo);
         return;
       }
       setFormOpen(false);

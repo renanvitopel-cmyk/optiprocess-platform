@@ -226,6 +226,8 @@ export interface Instrument {
   costCenter?: { id: string; name: string; code?: string | null } | null;
   /** ADMIN definiu centro de custo diferente do padrao da area - a heranca nao sobrescreve. */
   costCenterOverride?: boolean;
+  /** Ficha tecnica que depende do tipo (ex.: potencia de um Motor, relacao de um Redutor). */
+  specificAttributes?: Record<string, string> | null;
 }
 
 export type CalibrationResult = "APPROVED" | "APPROVED_WITH_RESTRICTION" | "REJECTED";

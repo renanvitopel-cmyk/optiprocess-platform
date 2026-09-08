@@ -717,6 +717,11 @@ model Instrument {
   // Este ativo define a propria area (em vez de herdar a do pai). Irmao de
   // costCenterOverride: existe para a propagacao vinda de cima nao apagar a escolha.
   areaOverride               Boolean           @default(false)
+  // Campos tecnicos que dependem do tipo (ex.: potencia e rotacao num Motor, relacao de
+  // reducao num Redutor). O catalogo de tipos e' aberto (cada cliente pode criar o proprio),
+  // entao a definicao de "quais campos" mora no frontend por nome de tipo - aqui e' so um
+  // par chave/valor solto, sem uma coluna por atributo.
+  specificAttributes         Json?
   // Opcional: so faz sentido para ativos com calibracao periodica rastreada. Uma empresa
   // que contratou so o CMMS (sem Calibracao) cadastra o ativo sem preencher isso.
   calibrationFrequencyMonths Int?

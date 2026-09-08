@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { dataOpcional } from "../../utils/zod";
-import { AssetHierarchyLevel, InstrumentStatus, MaintenancePriority, OperationalStatus } from "@prisma/client";
+import { AssetHierarchyLevel, InstrumentStatus, MaintenancePriority, OperationalStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -287,6 +287,9 @@ const instrumentSchema = z.object({
   // e duas versoes da mesma informacao acabam divergindo. A arvore e' a verdade tecnica.
   // A coluna continua no banco para nao perder o que ja foi preenchido.
   costCenterId: z.string().uuid().nullish(),
+  // Ficha tecnica que depende do tipo (Motor, Redutor, Extrusora, Rolo...) - o backend nao
+  // conhece os campos de cada tipo, so guarda o que o frontend montou.
+  specificAttributes: z.record(z.string(), z.string()).nullish(),
 });
 
 /** Planta/area/centro de custo escolhidos precisam existir e ser do mesmo cliente do ativo -
@@ -456,6 +459,13 @@ async function assertValidParent(clientId: string, parentId: string, excludeId?:
   }
 }
 
+/** O Prisma nao aceita `null` cru num campo Json - precisa do marcador Prisma.JsonNull para
+ * gravar "sem valor" em vez de deixar a coluna intocada (que e' o que `undefined` faria). */
+function paraJson(valor: Record<string, string> | null | undefined): Prisma.InputJsonValue | typeof Prisma.JsonNull | undefined {
+  if (valor === undefined) return undefined;
+  return valor === null ? Prisma.JsonNull : valor;
+}
+
 /** TAG e o identificador do ativo dentro da empresa cliente - nao pode repetir na mesma
  * empresa, senao duas listas de calibracoes/OS ficariam misturadas sob o mesmo codigo. */
 async function assertTagAvailable(clientId: string, tag: string, excludeId?: string): Promise<void> {
@@ -529,6 +539,7 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
       costCenterOverride,
       areaOverride,
       nextDueDate,
+      specificAttributes: paraJson(data.specificAttributes),
       createdById: req.user?.sub,
     },
   });
@@ -605,6 +616,7 @@ export const updateInstrument = asyncHandler(async (req: Request, res: Response)
       costCenterOverride,
       areaOverride,
       nextDueDate,
+      specificAttributes: paraJson(data.specificAttributes),
     },
   });
 

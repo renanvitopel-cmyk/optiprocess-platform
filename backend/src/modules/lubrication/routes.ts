@@ -21,6 +21,8 @@ import {
   createLubricationRoute,
   updateLubricationRoute,
   deleteLubricationRoute,
+  sugerirPontosDeLubrificacao,
+  gerarOrdensDaRota,
   getLubricationForecast,
   getLubricationDashboard,
 } from "./controller";
@@ -42,6 +44,7 @@ lubricationRouter.patch("/lubrificantes/:id", updateLubricant);
 lubricationRouter.delete("/lubrificantes/:id", deleteLubricant);
 
 lubricationRouter.get("/rotas", listLubricationRoutes);
+lubricationRouter.post("/rotas/:id/ordens", gerarOrdensDaRota);
 lubricationRouter.get("/rotas/:id", getLubricationRoute);
 lubricationRouter.post("/rotas", createLubricationRoute);
 lubricationRouter.patch("/rotas/:id", updateLubricationRoute);
@@ -50,6 +53,7 @@ lubricationRouter.delete("/rotas/:id", deleteLubricationRoute);
 // Antes de "/pontos/:id", senao "pendentes" viraria um id.
 lubricationRouter.get("/pontos/pendentes", listPendingLubricationPoints);
 lubricationRouter.get("/pontos/proximo-codigo", getNextLubricationPointCode);
+lubricationRouter.get("/pontos/sugestao-automatica", sugerirPontosDeLubrificacao);
 // Concluir e' do ativo, nao do ponto: e' o ativo que sai (ou volta) para a fila.
 lubricationRouter.patch("/ativos/:id/pontos-concluidos", setLubricationPointsComplete);
 lubricationRouter.get("/pontos", listLubricationPoints);

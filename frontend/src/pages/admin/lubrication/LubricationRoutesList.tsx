@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, ArrowUp, ArrowDown, X } from "lucide-react";
+import { Plus, ArrowUp, ArrowDown, X, Wand2, ClipboardList } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
 import { EmptyState } from "../../../components/EmptyState";
 import { Modal } from "../../../components/Modal";
@@ -13,16 +13,26 @@ import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { listClients } from "../../../api/clients";
 import { listLaborResources } from "../../../api/laborResources";
+import { listAreas } from "../../../api/areas";
 import {
   listLubricationRoutes,
   createLubricationRoute,
   updateLubricationRoute,
   deleteLubricationRoute,
   listLubricationPoints,
+  sugerirPontosDeLubrificacao,
+  gerarOrdensDaRota,
 } from "../../../api/lubrication";
 import type { LubricationRoute } from "../../../api/types";
 import { clientDisplayName } from "../../../lib/format";
 import { useCmms } from "../../../lib/cmms";
+
+const CRITERIOS_AUTO = [
+  { value: "VENCIMENTO", label: "Vencimento proximo (data +/- 5 dias)" },
+  { value: "AREA", label: "Area" },
+  { value: "PARADO", label: "Equipamento parado" },
+] as const;
+type CriterioAuto = (typeof CRITERIOS_AUTO)[number]["value"];
 
 const schema = z.object({
   name: z.string().min(2, "Informe o nome da rota."),
@@ -44,6 +54,15 @@ export default function LubricationRoutesList() {
   const [formOpen, setFormOpen] = useState(false);
   const [editando, setEditando] = useState<LubricationRoute | null>(null);
   const [pontosDaRota, setPontosDaRota] = useState<string[]>([]);
+  const [gerandoOsDe, setGerandoOsDe] = useState<string | null>(null);
+
+  // Montagem automatica: a segunda opcao, ao lado de escolher ponto a ponto. So sugere -
+  // quem decide o que de fato entra na rota e' a revisao logo abaixo, antes de salvar.
+  const [criterioAuto, setCriterioAuto] = useState<CriterioAuto>("VENCIMENTO");
+  const [dataReferenciaAuto, setDataReferenciaAuto] = useState(() => new Date().toISOString().slice(0, 10));
+  const [areaIdAuto, setAreaIdAuto] = useState("");
+  const [buscandoSugestoes, setBuscandoSugestoes] = useState(false);
+  const [sugestoes, setSugestoes] = useState<string[] | null>(null);
 
   const { data: clients } = useQuery({
     queryKey: ["clients-picker-cmms"],
@@ -65,6 +84,11 @@ export default function LubricationRoutesList() {
     queryFn: () => listLaborResources({ clientId, active: true, pageSize: 200 }),
     enabled: !!clientId && formOpen,
   });
+  const { data: areas } = useQuery({
+    queryKey: ["areas-picker-rota-lubrificacao", clientId],
+    queryFn: () => listAreas({ clientId, active: true }),
+    enabled: !!clientId && formOpen,
+  });
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
@@ -75,6 +99,8 @@ export default function LubricationRoutesList() {
   function abrirNova() {
     setEditando(null);
     setPontosDaRota([]);
+    setSugestoes(null);
+    setAreaIdAuto("");
     reset({ name: "", code: "", responsibleId: "", notes: "" });
     setFormOpen(true);
   }
@@ -82,8 +108,59 @@ export default function LubricationRoutesList() {
   function abrirEdicao(r: LubricationRoute) {
     setEditando(r);
     setPontosDaRota((r.items ?? []).map((i) => i.point.id));
+    setSugestoes(null);
+    setAreaIdAuto(r.areaId ?? "");
     reset({ name: r.name, code: r.code ?? "", responsibleId: r.responsibleId ?? "", notes: r.notes ?? "" });
     setFormOpen(true);
+  }
+
+  async function buscarSugestoes() {
+    if (!clientId) return;
+    if (criterioAuto === "AREA" && !areaIdAuto) {
+      notify("error", "Escolha uma area.");
+      return;
+    }
+    setBuscandoSugestoes(true);
+    try {
+      const pontos = await sugerirPontosDeLubrificacao({
+        clientId,
+        criterio: criterioAuto,
+        ...(criterioAuto === "VENCIMENTO" ? { dataReferencia: dataReferenciaAuto } : {}),
+        ...(criterioAuto === "AREA" ? { areaId: areaIdAuto } : {}),
+      });
+      setSugestoes(pontos.map((p) => p.id));
+      if (pontos.length === 0) notify("error", "Nenhum ponto encontrado para esse criterio.");
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setBuscandoSugestoes(false);
+    }
+  }
+
+  function adicionarSugeridos() {
+    if (!sugestoes) return;
+    setPontosDaRota((atual) => [...atual, ...sugestoes.filter((id) => !atual.includes(id))]);
+    setSugestoes(null);
+  }
+
+  async function handleGerarOs(r: LubricationRoute) {
+    setGerandoOsDe(r.id);
+    try {
+      const resultado = await gerarOrdensDaRota(r.id);
+      if (resultado.geradas.length > 0) {
+        notify("success", `OS geradas: ${resultado.geradas.map((g) => g.number).join(", ")}.`);
+      }
+      if (resultado.puladas.length > 0) {
+        notify("error", resultado.puladas.map((p) => p.motivo).join(" "));
+      }
+      if (resultado.geradas.length === 0 && resultado.puladas.length === 0) {
+        notify("error", "Nao ha pontos na rota para gerar OS.");
+      }
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setGerandoOsDe(null);
+    }
   }
 
   function mover(index: number, delta: number) {
@@ -187,6 +264,14 @@ export default function LubricationRoutesList() {
                     </p>
                   </div>
                   <div className="flex gap-2">
+                    <button
+                      className="btn-ghost btn-sm"
+                      onClick={() => handleGerarOs(r)}
+                      disabled={gerandoOsDe === r.id || (r.items ?? []).length === 0}
+                      title="Gera uma OS de lubrificacao por ativo da rota, para acompanhamento e rastreio"
+                    >
+                      <ClipboardList className="h-4 w-4" /> {gerandoOsDe === r.id ? "Gerando..." : "Gerar OS"}
+                    </button>
                     <button className="btn-ghost btn-sm" onClick={() => abrirEdicao(r)}>Editar</button>
                     <button className="btn-ghost btn-sm text-safety-red" onClick={() => remover(r)}>Remover</button>
                   </div>
@@ -247,6 +332,67 @@ export default function LubricationRoutesList() {
             {...register("responsibleId")}
           />
           <TextareaInput label="Observacoes" rows={2} {...register("notes")} />
+
+          <div className="rounded-lg border border-gray-200 p-4">
+            <p className="flex items-center gap-1.5 text-sm font-medium text-graphite-700">
+              <Wand2 className="h-4 w-4 text-navy-600" /> Montagem automatica
+            </p>
+            <p className="mb-3 mt-0.5 text-xs text-graphite-500">
+              Sugere os pontos por um criterio - so entram na rota depois de confirmados abaixo. A montagem manual
+              (adicionar ponto a ponto) continua disponivel logo depois.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <SelectInput
+                label="Criterio"
+                options={CRITERIOS_AUTO.map((c) => ({ value: c.value, label: c.label }))}
+                value={criterioAuto}
+                onChange={(e) => { setCriterioAuto(e.target.value as CriterioAuto); setSugestoes(null); }}
+              />
+              {criterioAuto === "VENCIMENTO" && (
+                <TextInput
+                  label="Data de referencia"
+                  type="date"
+                  hint="Junta quem vence 5 dias antes ou depois desta data."
+                  value={dataReferenciaAuto}
+                  onChange={(e) => setDataReferenciaAuto(e.target.value)}
+                />
+              )}
+              {criterioAuto === "AREA" && (
+                <SelectInput
+                  label="Area"
+                  placeholder="Selecione a area"
+                  options={(areas ?? []).map((a) => ({ value: a.id, label: a.name }))}
+                  value={areaIdAuto}
+                  onChange={(e) => setAreaIdAuto(e.target.value)}
+                />
+              )}
+              <div className="flex items-end">
+                <button type="button" className="btn-outline w-full" onClick={buscarSugestoes} disabled={buscandoSugestoes}>
+                  {buscandoSugestoes ? "Buscando..." : "Buscar pontos"}
+                </button>
+              </div>
+            </div>
+
+            {sugestoes && sugestoes.length > 0 && (
+              <div className="mt-3 rounded-lg bg-gray-50 p-3">
+                <p className="mb-1 text-xs font-medium text-graphite-600">{sugestoes.length} ponto(s) encontrado(s):</p>
+                <ul className="mb-2 space-y-0.5 text-xs text-graphite-600">
+                  {sugestoes.map((id) => {
+                    const p = porId.get(id);
+                    return (
+                      <li key={id}>
+                        {p ? `${p.code} - ${p.name} (${p.instrument?.tag ?? "sem TAG"})` : id}
+                        {p && pontosDaRota.includes(id) ? " - ja esta na rota" : ""}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <button type="button" className="btn-primary btn-sm" onClick={adicionarSugeridos}>
+                  Adicionar {sugestoes.length} ponto(s) a rota
+                </button>
+              </div>
+            )}
+          </div>
 
           <div>
             <p className="mb-1 text-sm font-medium text-graphite-700">Pontos da rota, na ordem de execucao</p>

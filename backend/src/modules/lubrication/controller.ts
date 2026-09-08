@@ -9,6 +9,7 @@ import { assertOwnClient, assertServiceAccess, clientScopeFilter, resolveClientI
 import { buildPagedResult, parsePageParams, toSkipTake } from "../../utils/pagination";
 import { writeAuditLog } from "../../utils/audit";
 import { applySparePartMovement } from "../../lib/inventory";
+import { nextClientMaintenanceOrderNumber } from "../../utils/sequence";
 
 const UM_DIA = 24 * 60 * 60 * 1000;
 
@@ -552,6 +553,157 @@ export const deleteLubricationRoute = asyncHandler(async (req: Request, res: Res
   assertOwnClient(req, existing.clientId);
   await prisma.lubricationRoute.update({ where: { id: existing.id }, data: { deletedAt: new Date(), active: false } });
   res.status(204).send();
+});
+
+// ---------------------------------------------------------------------------
+// Montagem automatica da rota
+//
+// A montagem manual (escolher ponto a ponto) ja existe no cadastro da rota. Esta e' a
+// segunda opcao: sugerir os pontos automaticamente por um criterio, para so revisar e
+// confirmar - sem precisar catar ponto por ponto quando o motivo de agrupar e' obvio
+// (todos vencem na mesma semana, todos ficam na mesma area, ou a maquina esta parada
+// agora, que e' a janela mais barata pra lubrificar sem perder producao).
+// ---------------------------------------------------------------------------
+
+const CRITERIOS_DE_SUGESTAO = ["VENCIMENTO", "AREA", "PARADO"] as const;
+
+/** Client-scoped (nao pende de uma rota ja salva) para funcionar tanto montando uma rota
+ * nova quanto editando uma existente - a rota so existe de verdade depois do primeiro
+ * "Salvar", e a montagem automatica precisa estar disponivel antes disso tambem. */
+export const sugerirPontosDeLubrificacao = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const { clientId, criterio, dataReferencia, areaId } = req.query as {
+    clientId?: string; criterio?: string; dataReferencia?: string; areaId?: string;
+  };
+  const scope = resolveClientScope(req, clientId);
+  if (!("clientId" in scope)) throw new ValidationError("Informe o cliente para sugerir pontos.");
+
+  if (!criterio || !CRITERIOS_DE_SUGESTAO.includes(criterio as (typeof CRITERIOS_DE_SUGESTAO)[number])) {
+    throw new ValidationError(`Criterio invalido. Use um de: ${CRITERIOS_DE_SUGESTAO.join(", ")}.`);
+  }
+
+  const baseWhere = { ...scope, active: true, deletedAt: null } as const;
+
+  let where: Record<string, unknown>;
+  if (criterio === "VENCIMENTO") {
+    // A janela e' fixa em 5 dias pra cada lado: junta quem vence perto o bastante pra
+    // valer uma volta so, sem esperar o restante da fabrica vencer junto.
+    const referencia = dataReferencia ? new Date(dataReferencia) : new Date();
+    if (Number.isNaN(referencia.getTime())) throw new ValidationError("Data de referencia invalida.");
+    const de = somaDias(referencia, -5);
+    const ate = somaDias(referencia, 5);
+    where = { ...baseWhere, nextDueAt: { gte: de, lte: ate } };
+  } else if (criterio === "AREA") {
+    if (!areaId) throw new ValidationError("Informe a area para sugerir por area.");
+    where = { ...baseWhere, instrument: { areaId } };
+  } else {
+    // PARADO: a janela mais barata pra lubrificar e' quando a maquina ja esta sem
+    // produzir - nao e' preciso programar parada so pra isso.
+    where = { ...baseWhere, instrument: { operationalStatus: "STOPPED" } };
+  }
+
+  const pontos = await prisma.lubricationPoint.findMany({
+    where,
+    include: pointInclude,
+    orderBy: { code: "asc" },
+  });
+  res.json(pontos);
+});
+
+// ---------------------------------------------------------------------------
+// OS de lubrificacao gerada a partir da rota
+//
+// Uma OS so sabe apontar para um ativo; uma rota normalmente cobre varios. Por isso
+// "Gerar OS" cria uma OS por ativo coberto pela rota, cada uma com um item de checklist
+// por ponto daquele ativo - e' o que da acompanhamento e rastreio a volta inteira, sem
+// forcar a rota inteira dentro de uma OS so.
+// ---------------------------------------------------------------------------
+
+export const gerarOrdensDaRota = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const route = await prisma.lubricationRoute.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    include: {
+      items: {
+        orderBy: { sortOrder: "asc" },
+        include: {
+          point: {
+            include: {
+              instrument: { select: { id: true, tag: true, description: true, costCenterId: true } },
+              lubricant: { include: { sparePart: { select: { name: true, unit: true } } } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!route) throw new NotFoundError("Rota de lubrificacao");
+  if (route.items.length === 0) throw new ValidationError("Esta rota ainda nao tem pontos - monte a rota antes de gerar a OS.");
+
+  const porAtivo = new Map<string, typeof route.items>();
+  for (const item of route.items) {
+    const lista = porAtivo.get(item.point.instrumentId) ?? [];
+    lista.push(item);
+    porAtivo.set(item.point.instrumentId, lista);
+  }
+
+  const geradas: { instrumentId: string; tag: string | null; number: string; workOrderId: string }[] = [];
+  const puladas: { instrumentId: string; tag: string | null; motivo: string }[] = [];
+
+  for (const [instrumentId, itens] of porAtivo) {
+    const tag = itens[0].point.instrument.tag;
+
+    // Uma OS de lubrificacao aberta por ativo, por rota, de cada vez - clicar "Gerar OS"
+    // de novo antes de terminar a volta anterior nao duplica, so avisa qual ja existe.
+    const aberta = await prisma.maintenanceWorkOrder.findFirst({
+      where: { instrumentId, lubricationRouteId: route.id, deletedAt: null, status: { notIn: ["COMPLETED", "CANCELED"] } },
+      select: { number: true },
+    });
+    if (aberta) {
+      puladas.push({ instrumentId, tag, motivo: `Ja existe a OS ${aberta.number} aberta para este ativo, nesta rota.` });
+      continue;
+    }
+
+    const number = await nextClientMaintenanceOrderNumber(route.clientId);
+    const workOrder = await prisma.maintenanceWorkOrder.create({
+      data: {
+        number,
+        clientId: route.clientId,
+        instrumentId,
+        type: "LUBRICATION",
+        status: "PROGRAMMED",
+        priority: "MEDIUM",
+        lubricationRouteId: route.id,
+        title: `Rota de lubrificacao - ${route.name}`,
+        description: `Pontos da rota "${route.name}" neste ativo.`,
+        costCenterId: itens[0].point.instrument.costCenterId ?? null,
+        technicianId: null,
+        assignedResourceId: route.responsibleId,
+        createdById: req.user?.sub,
+        checklist: {
+          create: itens.map((item, i) => ({
+            description: `${item.point.name} (${item.point.code}) - ${item.point.lubricant.sparePart.name}, ${item.point.quantityPerApplication} ${item.point.lubricant.sparePart.unit}`,
+            sortOrder: i,
+            responseType: "YES_NO_NA",
+            required: true,
+          })),
+        },
+      },
+    });
+    geradas.push({ instrumentId, tag, number: workOrder.number, workOrderId: workOrder.id });
+  }
+
+  if (geradas.length > 0) {
+    await writeAuditLog({
+      userId: req.user?.sub,
+      action: "CREATE",
+      entityType: "LubricationRoute",
+      entityId: route.id,
+      description: `OS geradas a partir da rota ${route.name}: ${geradas.map((g) => g.number).join(", ")}`,
+    });
+  }
+
+  res.status(201).json({ geradas, puladas });
 });
 
 // ---------------------------------------------------------------------------

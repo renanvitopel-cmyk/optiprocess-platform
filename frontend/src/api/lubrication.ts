@@ -144,6 +144,30 @@ export async function deleteLubricationRoute(id: string): Promise<void> {
   await api.delete(`/lubrificacao/rotas/${id}`);
 }
 
+/** Montagem automatica: sugere pontos por criterio, para revisar e confirmar antes de
+ * entrar na rota - a montagem manual continua sendo escolher ponto a ponto. */
+export async function sugerirPontosDeLubrificacao(params: {
+  clientId: string;
+  criterio: "VENCIMENTO" | "AREA" | "PARADO";
+  dataReferencia?: string;
+  areaId?: string;
+}): Promise<LubricationPoint[]> {
+  const { data } = await api.get<LubricationPoint[]>("/lubrificacao/pontos/sugestao-automatica", { params });
+  return data;
+}
+
+export interface GerarOrdensDaRotaResult {
+  geradas: { instrumentId: string; tag: string | null; number: string; workOrderId: string }[];
+  puladas: { instrumentId: string; tag: string | null; motivo: string }[];
+}
+
+/** Gera uma OS de lubrificacao por ativo coberto pela rota, para acompanhamento e rastreio
+ * da volta (o registro de cada ponto aplicado se liga a ela). */
+export async function gerarOrdensDaRota(routeId: string): Promise<GerarOrdensDaRotaResult> {
+  const { data } = await api.post<GerarOrdensDaRotaResult>(`/lubrificacao/rotas/${routeId}/ordens`);
+  return data;
+}
+
 // ── Painel e previsao ────────────────────────────────────────────────────────
 
 export async function getLubricationDashboard(params: { clientId?: string } = {}): Promise<LubricationDashboard> {

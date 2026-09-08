@@ -1835,6 +1835,11 @@ model MaintenanceWorkOrder {
   instrument   Instrument             @relation(fields: [instrumentId], references: [id])
   planId       String?
   plan         MaintenancePlan?       @relation(fields: [planId], references: [id])
+  // Rota de lubrificacao que gerou esta OS - irmao de planId, mas fora do mecanismo de
+  // plano/agendamento: uma rota cobre varios ativos, e o plano so sabe gerar para um so.
+  // "Gerar OS" na rota cria uma por ativo coberto, todas apontando pra mesma rota.
+  lubricationRouteId String?
+  lubricationRoute    LubricationRoute? @relation(fields: [lubricationRouteId], references: [id])
   type         MaintenanceOrderType
   // Preenchido apenas quando type = CORRECTIVE. Nulo nas OS anteriores a essa distincao.
   correctiveType CorrectiveType?
@@ -1949,6 +1954,7 @@ model MaintenanceWorkOrder {
   @@index([clientId])
   @@index([instrumentId])
   @@index([planId])
+  @@index([lubricationRouteId])
   @@index([status])
   @@index([originWorkOrderId])
   @@index([assignedResourceId])
@@ -2287,6 +2293,7 @@ model LubricationRoute {
 
   items LubricationRouteItem[]
   plans MaintenancePlan[]
+  workOrders MaintenanceWorkOrder[]
 
   @@index([clientId])
   @@map("lubrication_routes")

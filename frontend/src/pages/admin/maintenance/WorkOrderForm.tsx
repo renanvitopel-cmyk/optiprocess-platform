@@ -88,6 +88,23 @@ export default function WorkOrderForm() {
   const ehCorretiva = opcaoDeTipo?.type === "CORRECTIVE";
   const ehQuebra = opcaoDeTipo?.correctiveType === "BREAKDOWN";
   const instrumentId = watch("instrumentId");
+  const descricao = watch("description");
+  const titulo = watch("title");
+
+  /**
+   * Na CRIACAO os campos aparecem por partes, na ordem em que a pergunta faz sentido:
+   * ativo -> tipo de servico -> o que e' -> quem e quando.
+   *
+   * Um formulario com trinta campos de uma vez faz quem esta com o celular na mao, ao lado
+   * da maquina, desistir no meio - e o que ele mais erra e' preencher fora de ordem
+   * (escrever a descricao antes de escolher o ativo, e depois trocar o ativo). Na EDICAO
+   * tudo continua a vista: quem edita quer chegar direto no campo que veio corrigir.
+   */
+  const porPartes = !isEdit;
+  const temAtivo = !!instrumentId;
+  const temTipo = temAtivo && !!tipoSelecionado;
+  const temOQueFazer = temTipo && (titulo ?? "").trim().length > 1 && (descricao ?? "").trim().length > 1;
+  const mostrar = (etapa: boolean) => !porPartes || etapa;
 
   // Equipe da propria empresa - e' quem de fato executa a OS no CMMS do cliente.
   const { data: laborResources } = useQuery({
@@ -218,6 +235,7 @@ export default function WorkOrderForm() {
           </div>
           {/* Titulo curto: e' o que aparece na lista de OS e no quadro de programacao. A
               descricao abaixo continua sendo o relato completo do sintoma/servico. */}
+          {mostrar(temTipo) && (
           <TextInput
             label="Titulo"
             required
@@ -226,6 +244,8 @@ export default function WorkOrderForm() {
             error={errors.title?.message}
             {...register("title")}
           />
+          )}
+          {mostrar(temAtivo) && (
           <div className={`grid gap-4 ${isClient ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
             <SelectInput
               label="Tipo de servico"
@@ -235,6 +255,24 @@ export default function WorkOrderForm() {
               error={errors.tipoSelecionado?.message}
               {...register("tipoSelecionado")}
             />
+          </div>
+          )}
+
+          {mostrar(temTipo) && (
+          <TextareaInput
+            label="Descricao / sintoma"
+            required
+            rows={3}
+            hint="O relato completo: o que foi observado ou o que precisa ser feito."
+            error={errors.description?.message}
+            {...register("description")}
+          />
+          )}
+
+          {/* Quem e com que urgencia - depois de o servico estar descrito, que e' quando a
+              resposta existe. */}
+          {mostrar(temOQueFazer) && (
+          <div className={`grid gap-4 ${isClient ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
             <SelectInput
               label="Prioridade"
               options={[
@@ -258,14 +296,8 @@ export default function WorkOrderForm() {
               {...register("assignedResourceId")}
             />
           </div>
-          <TextareaInput
-            label="Descricao / sintoma"
-            required
-            rows={3}
-            hint="O relato completo: o que foi observado ou o que precisa ser feito."
-            error={errors.description?.message}
-            {...register("description")}
-          />
+          )}
+          {mostrar(temOQueFazer) && (
           <div className="grid gap-4 sm:grid-cols-3">
             {ehCorretiva && (
               <SelectInput
@@ -277,13 +309,27 @@ export default function WorkOrderForm() {
               />
             )}
           </div>
-          <TextareaInput label="Observacoes (opcional)" rows={2} {...register("observations")} />
+          )}
+          {mostrar(temOQueFazer) && (
+            <TextareaInput label="Observacoes (opcional)" rows={2} {...register("observations")} />
+          )}
+
+          {/* Diz o que vem a seguir, para o formulario curto nao parecer quebrado. */}
+          {porPartes && !temOQueFazer && (
+            <p className="text-xs text-graphite-500">
+              {!temAtivo
+                ? "Escolha o ativo para continuar."
+                : !temTipo
+                  ? "Escolha o tipo de servico para continuar."
+                  : "Preencha o titulo e a descricao - o resto aparece em seguida."}
+            </p>
+          )}
         </div>
 
         {/* Registro de falha: aparece na corretiva, com destaque quando e' quebra - e' o que
             o backend vai cobrar para deixar concluir. Fica no proprio formulario (e nao
             escondido numa aba) porque e' preenchido junto com o atendimento. */}
-        {ehCorretiva && (
+        {ehCorretiva && mostrar(temOQueFazer) && (
           <div className={`card space-y-4 p-5 ${ehQuebra ? "border-2 border-safety-red/40" : ""}`}>
             <div>
               <h2 className="flex flex-wrap items-center gap-2 font-semibold text-navy-900">
@@ -335,6 +381,7 @@ export default function WorkOrderForm() {
           </div>
         )}
 
+        {mostrar(temOQueFazer) && (
         <div className="card space-y-4 p-5">
           <div>
             <h2 className="font-semibold text-navy-900">Planejamento</h2>
@@ -355,7 +402,9 @@ export default function WorkOrderForm() {
             <TextInput label="Horas estimadas" type="number" step="0.5" min="0" {...register("estimatedHours")} />
           </div>
         </div>
+        )}
 
+        {mostrar(temOQueFazer) && (
         <div className="card space-y-4 p-5">
           <div className="flex items-center justify-between">
             <div>
@@ -391,6 +440,7 @@ export default function WorkOrderForm() {
             ))}
           </div>
         </div>
+        )}
 
         <div className="flex justify-end gap-3">
           <button type="button" className="btn-outline" onClick={() => navigate(-1)}>Cancelar</button>

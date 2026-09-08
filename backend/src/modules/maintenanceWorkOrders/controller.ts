@@ -1695,7 +1695,9 @@ const scheduleCardSelect = {
   scheduledDate: true,
   laborHours: true,
   assignedResourceId: true,
-  instrument: { select: { id: true, tag: true, type: true } },
+  // Area entra so pra filtrar o quadro (varias linhas/areas na mesma semana) - o card em
+  // si continua mostrando so o TAG, que e' o que basta pra reconhecer o ativo.
+  instrument: { select: { id: true, tag: true, type: true, area: { select: { id: true, name: true } } } },
 } as const;
 
 export const getMaintenanceSchedule = asyncHandler(async (req: Request, res: Response) => {

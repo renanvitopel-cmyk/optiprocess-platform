@@ -1185,7 +1185,7 @@ export interface ScheduleCard {
   scheduledDate: string | null;
   laborHours: number | null;
   assignedResourceId: string | null;
-  instrument?: { id: string; tag: string | null; type: string } | null;
+  instrument?: { id: string; tag: string | null; type: string; area?: { id: string; name: string } | null } | null;
 }
 
 export interface MaintenanceScheduleData {

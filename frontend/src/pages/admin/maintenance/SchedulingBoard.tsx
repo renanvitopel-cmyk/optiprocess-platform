@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, CalendarDays, HardHat, Inbox, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, HardHat, Inbox, AlertTriangle, Search, X } from "lucide-react";
 import { getMaintenanceSchedule, scheduleMaintenanceWorkOrder } from "../../../api/maintenanceWorkOrders";
 import { listClients } from "../../../api/clients";
 import type { MaintenanceScheduleData, ScheduleCard } from "../../../api/types";
@@ -26,6 +26,10 @@ const PRIORITY_DOT: Record<string, string> = {
   HIGH: "bg-safety-yellow",
   CRITICAL: "bg-safety-red",
 };
+
+// Mesmo rotulo usado no resto do modulo (WorkOrderForm, WorkOrderDetail...) - aqui vira
+// opcao de filtro, e nao so legenda do cartao.
+const PRIORITY_LABELS: Record<string, string> = { LOW: "Baixa", MEDIUM: "Media", HIGH: "Alta", CRITICAL: "Critica" };
 
 const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"];
 
@@ -74,6 +78,14 @@ export default function SchedulingBoard() {
   // "" = todos. Filtrar por uma pessoa mostra so a semana dela, sem perder a fila de OS
   // a programar (que continua servindo de origem para o arrasta-e-solta).
   const [resourceId, setResourceId] = useState("");
+  // Os quatro campos abaixo filtram os CARTOES (fila + celulas), diferente de resourceId
+  // acima, que filtra as LINHAS mostradas. So havia filtro de pessoa - tipo, prioridade,
+  // area e busca livre cobrem o que da pra ver no proprio cartao (cor da borda, bolinha,
+  // TAG do ativo) sem ter que abrir cada OS pra confirmar.
+  const [filtroTipo, setFiltroTipo] = useState("");
+  const [filtroPrioridade, setFiltroPrioridade] = useState("");
+  const [filtroArea, setFiltroArea] = useState("");
+  const [busca, setBusca] = useState("");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [dragging, setDragging] = useState<ScheduleCard | null>(null);
   const [hoverKey, setHoverKey] = useState<string | null>(null);
@@ -137,8 +149,33 @@ export default function SchedulingBoard() {
     mutation.mutate({ id: card.id, scheduledDate, assignedResourceId: day ? resourceId : null });
   }
 
+  const buscaNormalizada = busca.trim().toLowerCase();
+  const passaNoFiltro = (c: ScheduleCard) =>
+    (!filtroTipo || c.type === filtroTipo) &&
+    (!filtroPrioridade || c.priority === filtroPrioridade) &&
+    (!filtroArea || c.instrument?.area?.id === filtroArea) &&
+    (!buscaNormalizada ||
+      [c.number, c.description, c.instrument?.tag].some((v) => v?.toLowerCase().includes(buscaNormalizada)));
+
   const cardsFor = (day: Date, resourceId: string | null) =>
-    (data?.scheduled ?? []).filter((c) => isSameLocalDay(c.scheduledDate, day) && (c.assignedResourceId ?? null) === resourceId);
+    (data?.scheduled ?? [])
+      .filter((c) => isSameLocalDay(c.scheduledDate, day) && (c.assignedResourceId ?? null) === resourceId)
+      .filter(passaNoFiltro);
+
+  const filaFiltrada = (data?.unscheduled ?? []).filter(passaNoFiltro);
+
+  // So oferece area que de fato aparece nas OS carregadas (fila + semana atual) - uma
+  // lista vazia ou com area sem nenhuma OS so confundiria.
+  const areasDisponiveis = Array.from(
+    new Map(
+      [...(data?.scheduled ?? []), ...(data?.unscheduled ?? [])]
+        .map((c) => c.instrument?.area)
+        .filter((a): a is { id: string; name: string } => !!a)
+        .map((a) => [a.id, a] as const),
+    ).values(),
+  ).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+
+  const filtrosAtivos = !!(filtroTipo || filtroPrioridade || filtroArea || busca.trim());
 
   const needsClient = !isClient && !clientId;
 
@@ -188,9 +225,52 @@ export default function SchedulingBoard() {
             <option value="unassigned">Sem responsavel definido</option>
           </select>
         )}
-        {resourceId && (
-          <button type="button" className="btn-ghost btn-sm" onClick={() => setResourceId("")}>
-            Limpar filtro
+        {!needsClient && (
+          <>
+            <select className="input sm:w-44" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+              <option value="">Todos os tipos</option>
+              {Object.entries(TYPE_STYLE).map(([valor, estilo]) => (
+                <option key={valor} value={valor}>{estilo.label}</option>
+              ))}
+            </select>
+            <select className="input sm:w-44" value={filtroPrioridade} onChange={(e) => setFiltroPrioridade(e.target.value)}>
+              <option value="">Toda prioridade</option>
+              {Object.entries(PRIORITY_LABELS).map(([valor, rotulo]) => (
+                <option key={valor} value={valor}>{rotulo}</option>
+              ))}
+            </select>
+            {areasDisponiveis.length > 0 && (
+              <select className="input sm:w-48" value={filtroArea} onChange={(e) => setFiltroArea(e.target.value)}>
+                <option value="">Toda area</option>
+                {areasDisponiveis.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            )}
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-graphite-400" />
+              <input
+                className="input w-56 pl-8"
+                placeholder="Buscar OS, ativo ou servico..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+              />
+            </div>
+          </>
+        )}
+        {(resourceId || filtrosAtivos) && (
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            onClick={() => {
+              setResourceId("");
+              setFiltroTipo("");
+              setFiltroPrioridade("");
+              setFiltroArea("");
+              setBusca("");
+            }}
+          >
+            <X className="h-3.5 w-3.5" /> Limpar filtros
           </button>
         )}
       </div>
@@ -213,14 +293,21 @@ export default function SchedulingBoard() {
           >
             <h2 className="mb-1 flex items-center gap-2 font-semibold text-navy-900">
               <Inbox className="h-4 w-4" /> A programar
-              <span className="ml-auto rounded-full bg-navy-50 px-2 py-0.5 text-xs font-medium text-navy-700">{data.unscheduled.length}</span>
+              <span className="ml-auto rounded-full bg-navy-50 px-2 py-0.5 text-xs font-medium text-navy-700">
+                {filtrosAtivos ? `${filaFiltrada.length} de ${data.unscheduled.length}` : data.unscheduled.length}
+              </span>
             </h2>
-            <p className="mb-3 text-xs text-graphite-500">Arraste para um dia no quadro. Solte aqui para desprogramar.</p>
+            <p className="mb-3 text-xs text-graphite-500">
+              Arraste para um dia no quadro. Solte aqui para desprogramar.
+              {filtrosAtivos && " Os filtros tambem se aplicam as OS ja programadas no quadro."}
+            </p>
             <div className="max-h-[70vh] space-y-2 overflow-y-auto pr-1">
-              {data.unscheduled.length === 0 ? (
-                <p className="py-6 text-center text-sm text-graphite-400">Nada na fila.</p>
+              {filaFiltrada.length === 0 ? (
+                <p className="py-6 text-center text-sm text-graphite-400">
+                  {filtrosAtivos ? "Nenhuma OS na fila com esses filtros." : "Nada na fila."}
+                </p>
               ) : (
-                data.unscheduled.map((card) => (
+                filaFiltrada.map((card) => (
                   <Card key={card.id} card={card} onDragStart={() => setDragging(card)} onOpen={() => navigate(`${base}/ordens/${card.id}`)} />
                 ))
               )}

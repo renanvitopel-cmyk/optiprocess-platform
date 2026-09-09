@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2, PlayCircle, Copy, PauseCircle, CheckCircle2 } from "lucide-react";
+import { Pencil, Trash2, PlayCircle, Copy, PauseCircle, CheckCircle2, Wrench, X } from "lucide-react";
 import {
   getMaintenancePlan,
   deleteMaintenancePlan,
@@ -9,12 +9,17 @@ import {
   getMaintenancePlanIndicators,
   duplicateMaintenancePlan,
   updateMaintenancePlan,
+  atribuirAtivosAoPlano,
 } from "../../../api/maintenancePlans";
+import { getInstrument } from "../../../api/instruments";
+import type { MaintenancePlan } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { EmptyState } from "../../../components/EmptyState";
+import { Modal } from "../../../components/Modal";
+import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { useCmms } from "../../../lib/cmms";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
@@ -31,6 +36,7 @@ export default function MaintenancePlanDetail() {
   const [deleting, setDeleting] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [atribuirOpen, setAtribuirOpen] = useState(false);
 
   const { data: plan, isLoading } = useQuery({ queryKey: ["maintenance-plan", id], queryFn: () => getMaintenancePlan(id) });
   const { data: indicators } = useQuery({
@@ -157,10 +163,10 @@ Gerar a OS agora mesmo assim?`)) {
       {!plan.instrumentId && canManage && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-safety-yellow/40 bg-safety-yellow/10 px-4 py-3">
           <p className="text-sm text-graphite-700">
-            Este plano ainda nao tem um ativo vinculado - a OS so pode ser gerada depois de escolher um.
+            Este plano ainda nao tem ativo - a OS so pode ser gerada depois de atribuir um ou mais.
           </p>
-          <button className="btn-outline text-sm" onClick={() => navigate(`${base}/planos/${id}/editar`)}>
-            Escolher ativo
+          <button className="btn-outline text-sm" onClick={() => setAtribuirOpen(true)}>
+            <Wrench className="h-4 w-4" /> Atribuir ativos
           </button>
         </div>
       )}
@@ -354,6 +360,24 @@ Gerar a OS agora mesmo assim?`)) {
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}
       />
+
+      {atribuirOpen && (
+        <AtribuirAtivosModal
+          plan={plan}
+          onClose={() => setAtribuirOpen(false)}
+          onAtribuido={(total) => {
+            setAtribuirOpen(false);
+            notify(
+              "success",
+              total > 1
+                ? `Atribuido a ${total} ativos - ${total - 1} plano(s) a mais criado(s) com a mesma configuracao.`
+                : "Ativo atribuido ao plano.",
+            );
+            queryClient.invalidateQueries({ queryKey: ["maintenance-plan", id] });
+            queryClient.invalidateQueries({ queryKey: ["maintenance-plans"] });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -384,5 +408,97 @@ function Info({ label, value }: { label: string; value: string }) {
       <dt className="text-xs uppercase tracking-wide text-graphite-400">{label}</dt>
       <dd className="mt-0.5 text-sm font-medium text-graphite-800">{value}</dd>
     </div>
+  );
+}
+
+/** Escolher um ou mais ativos para um plano que nasceu sem nenhum. O primeiro vira o
+ * ativo deste plano; cada ativo a mais gera uma copia completa (mesma configuracao,
+ * checklist e pecas) - e' "atribuir a varios ativos" sem inventar uma linha "plano da
+ * familia" no banco: continuam sendo N planos de verdade, um por ativo. */
+function AtribuirAtivosModal({
+  plan,
+  onClose,
+  onAtribuido,
+}: {
+  plan: MaintenancePlan;
+  onClose: () => void;
+  onAtribuido: (totalDeAtivos: number) => void;
+}) {
+  const { notify } = useToast();
+  const [ativos, setAtivos] = useState<string[]>([]);
+  const [salvando, setSalvando] = useState(false);
+
+  async function confirmar() {
+    if (ativos.length === 0) {
+      notify("error", "Adicione pelo menos um ativo.");
+      return;
+    }
+    setSalvando(true);
+    try {
+      await atribuirAtivosAoPlano(plan.id, ativos);
+      onAtribuido(ativos.length);
+    } catch (error) {
+      notify("error", getApiErrorMessage(error));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Atribuir ativos ao plano ${plan.code ?? plan.name}`}
+      footer={
+        <>
+          <button type="button" className="btn-outline" onClick={onClose} disabled={salvando}>Cancelar</button>
+          <button type="button" className="btn-primary" onClick={confirmar} disabled={salvando || ativos.length === 0}>
+            {salvando ? "Atribuindo..." : "Confirmar"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-graphite-500">
+          Escolha um ativo, ou varios - cada ativo a mais cria uma copia deste plano (mesma configuracao, checklist e
+          pecas) so para ele.
+        </p>
+
+        {ativos.length > 0 && (
+          <ul className="space-y-1">
+            {ativos.map((instId) => (
+              <AtivoEscolhidoChip key={instId} instrumentId={instId} onRemover={() => setAtivos((atual) => atual.filter((x) => x !== instId))} />
+            ))}
+          </ul>
+        )}
+
+        <InstrumentPicker
+          key={ativos.length}
+          name="ativoParaAtribuir"
+          clientId={plan.clientId}
+          onChange={(e) => {
+            const idEscolhido = e.target.value;
+            if (idEscolhido && !ativos.includes(idEscolhido)) setAtivos((atual) => [...atual, idEscolhido]);
+          }}
+        />
+      </div>
+    </Modal>
+  );
+}
+
+function AtivoEscolhidoChip({ instrumentId, onRemover }: { instrumentId: string; onRemover: () => void }) {
+  const { data: instrumento } = useQuery({
+    queryKey: ["instrument-resumo-atribuir", instrumentId],
+    queryFn: () => getInstrument(instrumentId),
+  });
+  return (
+    <li className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm">
+      <span className="min-w-0 truncate text-graphite-800">
+        {instrumento ? `${instrumento.tag ?? instrumento.type} - ${instrumento.description || instrumento.model || ""}` : "Carregando..."}
+      </span>
+      <button type="button" className="shrink-0 text-graphite-400 hover:text-safety-red" onClick={onRemover} aria-label="Remover ativo">
+        <X className="h-4 w-4" />
+      </button>
+    </li>
   );
 }

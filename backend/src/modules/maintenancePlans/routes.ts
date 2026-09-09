@@ -11,6 +11,7 @@ import {
   runPlanGeneration,
   getMaintenancePlanIndicators,
   duplicateMaintenancePlan,
+  atribuirAtivosAoPlano,
 } from "./controller";
 
 export const maintenancePlansRouter = Router();
@@ -26,3 +27,4 @@ maintenancePlansRouter.patch("/:id", requireRole(...CMMS_PLANNING_ROLES), update
 maintenancePlansRouter.delete("/:id", requireRole(...CMMS_PLANNING_ROLES), deleteMaintenancePlan);
 maintenancePlansRouter.post("/:id/generate", requireRole(...CMMS_PLANNING_ROLES), generateWorkOrderFromPlan);
 maintenancePlansRouter.post("/:id/duplicate", requireRole(...CMMS_PLANNING_ROLES), duplicateMaintenancePlan);
+maintenancePlansRouter.post("/:id/ativos", requireRole(...CMMS_PLANNING_ROLES), atribuirAtivosAoPlano);

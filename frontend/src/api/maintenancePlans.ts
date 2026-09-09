@@ -134,6 +134,13 @@ export async function duplicateMaintenancePlan(id: string): Promise<MaintenanceP
   return data;
 }
 
+/** Atribui o plano (criado sem ativo) a um ou mais ativos - o primeiro vira o ativo deste
+ * plano, cada ativo a mais gera uma copia completa (mesma configuracao) so que para ele. */
+export async function atribuirAtivosAoPlano(id: string, instrumentIds: string[]): Promise<{ planos: MaintenancePlan[] }> {
+  const { data } = await api.post<{ planos: MaintenancePlan[] }>(`/maintenance-plans/${id}/ativos`, { instrumentIds });
+  return data;
+}
+
 /** Roda a geracao automatica agora, em vez de esperar a proxima passada horaria. */
 export async function runPlanGeneration(): Promise<{
   avaliados: number;

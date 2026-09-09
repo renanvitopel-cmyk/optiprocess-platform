@@ -4,15 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Trash2, Check, X } from "lucide-react";
+import { Plus, Trash2, Check } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
 import { TextInput, TextareaInput, SelectInput, CheckboxInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
 import { listMeters } from "../../../api/meters";
-import { createMaintenancePlan, getMaintenancePlan, updateMaintenancePlan } from "../../../api/maintenancePlans";
-import { getInstrument } from "../../../api/instruments";
+import { createMaintenancePlan, getMaintenancePlan, updateMaintenancePlan, atribuirAtivosAoPlano } from "../../../api/maintenancePlans";
 import { listSpareParts } from "../../../api/spareParts";
 import { listLaborTypes } from "../../../api/laborTypes";
 import { useToast } from "../../../components/Toast";
@@ -28,8 +27,8 @@ const PRIORITY_LABELS: Record<string, string> = { LOW: "Baixa", MEDIUM: "Media",
 
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
-  // Obrigatorio so no ativo individual - a familia de ativos valida a propria lista
-  // (instrumentosFamilia, fora do react-hook-form) na hora de avancar/salvar.
+  // Nao existe no cadastro - so aparece na edicao, para o plano que ja tem um ativo. A
+  // atribuicao (um ou varios ativos) e' feita depois de salvar, na ficha do plano.
   instrumentId: z.string().uuid().optional().or(z.literal("")),
   name: z.string().min(2, "Informe o nome do plano."),
   description: z.string().optional(),
@@ -141,14 +140,7 @@ export default function MaintenancePlanForm() {
   const instrumentId = watch("instrumentId");
   const triggerType = watch("triggerType");
   const planType = watch("planType");
-  const scope = watch("scope");
   const lubricationRouteId = watch("lubricationRouteId");
-
-  // Familia de ativos, so no cadastro (editar continua sendo a ficha de um plano so, ja
-  // preso a um ativo no banco): um plano por ativo escolhido, todos com a mesma
-  // configuracao - "aplicado a varios ativos" sem inventar uma tabela nova so pra isso.
-  const [instrumentosFamilia, setInstrumentosFamilia] = useState<string[]>([]);
-  const [erroFamilia, setErroFamilia] = useState<string | null>(null);
 
   const { data: rotasDeLubrificacao } = useQuery({
     queryKey: ["rotas-lubrificacao-plano", clientId],
@@ -196,16 +188,6 @@ export default function MaintenancePlanForm() {
     if (next > step) {
       const ok = await trigger(STEP_FIELDS[step]);
       if (!ok) return;
-      if (step === 0) {
-        // Ativo e' opcional (pode ser atribuido depois, na edicao) - so a familia exige
-        // pelo menos um, porque "familia de ativos" sem ativo nenhum nao significa nada.
-        const usaFamilia = !isEdit && scope === "ASSET_FAMILY";
-        if (usaFamilia && instrumentosFamilia.length === 0) {
-          setErroFamilia("Adicione pelo menos um ativo.");
-          return;
-        }
-        setErroFamilia(null);
-      }
     }
     setStep(next);
   }
@@ -281,12 +263,6 @@ export default function MaintenancePlanForm() {
   }, [existing, reset]);
 
   async function onSubmit(values: FormValues) {
-    const usaFamilia = !isEdit && values.scope === "ASSET_FAMILY";
-    if (usaFamilia && instrumentosFamilia.length === 0) {
-      setErroFamilia("Adicione pelo menos um ativo.");
-      setStep(0);
-      return;
-    }
     try {
       const payload = {
         ...values,
@@ -322,20 +298,21 @@ export default function MaintenancePlanForm() {
           .filter((p) => p.sparePartId)
           .map((p) => ({ ...p, alternativeSparePartId: p.alternativeSparePartId || null, suggestedSupplier: p.suggestedSupplier || null })),
       };
-      if (usaFamilia) {
-        // Mesma configuracao, um plano por ativo - e' o que "aplicado a varios ativos"
-        // significa aqui: nao existe uma linha "plano da familia" no banco, sao N planos
-        // de verdade, cada um gerando a propria OS no proprio ciclo.
-        const planos = [];
-        for (const instId of instrumentosFamilia) {
-          planos.push(await createMaintenancePlan({ ...payload, instrumentId: instId }));
-        }
-        notify("success", `${planos.length} planos criados, um por ativo.`);
-        navigate(`${base}/planos`);
-        return;
+      // No cadastro nao ha campo de ativo - o plano nasce sem, e "instrumentId" nem viaja no
+      // corpo (uma string vazia nao passaria na validacao de uuid). Na edicao a ficha ainda
+      // mostra o campo (se o plano ja tiver um ativo), entao o valor e' preservado.
+      const { instrumentId: instrumentIdDoFormulario, ...payloadSemAtivo } = payload;
+      const payloadFinal = isEdit ? { ...payloadSemAtivo, instrumentId: instrumentIdDoFormulario || null } : payloadSemAtivo;
+      const saved = isEdit ? await updateMaintenancePlan(id!, payloadFinal) : await createMaintenancePlan(payloadFinal);
+
+      // Veio do atalho "Novo plano" na ficha de um ativo: o formulario nao pergunta o
+      // ativo, mas a intencao de "e' para este ativo" nao pode se perder - atribui na
+      // hora, como se fosse o primeiro passo da atribuicao feita logo em seguida.
+      const ativoDoAtalho = !isEdit ? searchParams.get("instrumentId") : null;
+      if (ativoDoAtalho) {
+        await atribuirAtivosAoPlano(saved.id, [ativoDoAtalho]);
       }
-      const payloadUnico = { ...payload, instrumentId: values.instrumentId || null };
-      const saved = isEdit ? await updateMaintenancePlan(id!, payloadUnico) : await createMaintenancePlan(payloadUnico);
+
       notify("success", isEdit ? "Plano atualizado." : "Plano criado.");
       navigate(`${base}/planos/${saved.id}`);
     } catch (error) {
@@ -394,15 +371,13 @@ export default function MaintenancePlanForm() {
             ) : (
               <ClientPicker required error={errors.clientId?.message} {...register("clientId")} />
             )}
-            {isEdit || scope !== "ASSET_FAMILY" ? (
+            {isEdit && (
               <InstrumentPicker
                 clientId={clientId}
-                hint="Opcional - pode ficar em branco agora e ser escolhido depois, na edicao. Sem ativo, o codigo abaixo e' o que identifica o plano."
+                hint="Pode trocar ou limpar aqui - a atribuicao em massa continua na ficha do plano."
                 error={errors.instrumentId?.message}
                 {...register("instrumentId")}
               />
-            ) : (
-              <input type="hidden" {...register("instrumentId")} />
             )}
           </div>
           <TextInput label="Nome do plano" required placeholder="Ex.: Manutencao preventiva mensal" hint="Descreva do que se trata - e' o que identifica o plano no dia a dia." error={errors.name?.message} {...register("name")} />
@@ -426,13 +401,15 @@ export default function MaintenancePlanForm() {
                 </dd>
               </div>
               <div>
-                <dt className="text-xs text-graphite-400">Criticidade do ativo</dt>
+                <dt className="text-xs text-graphite-400">Ativo</dt>
                 <dd className="font-medium text-graphite-800">
-                  {!instrumentId
-                    ? "Sem ativo vinculado"
-                    : existing?.instrument?.criticality
-                      ? PRIORITY_LABELS[existing.instrument.criticality]
-                      : "Definida no cadastro do ativo"}
+                  {!isEdit
+                    ? "Escolhido depois de salvar, na ficha do plano"
+                    : !instrumentId
+                      ? "Sem ativo vinculado"
+                      : existing?.instrument?.criticality
+                        ? `Criticidade ${PRIORITY_LABELS[existing.instrument.criticality]}`
+                        : "Definida no cadastro do ativo"}
                 </dd>
               </div>
             </dl>
@@ -490,40 +467,11 @@ export default function MaintenancePlanForm() {
             />
           </div>
 
-          {!isEdit && scope === "ASSET_FAMILY" && (
-            <div className="rounded-lg border border-gray-200 p-4">
-              <p className="text-sm font-medium text-graphite-700">Ativos desta familia</p>
-              <p className="mt-0.5 text-xs text-graphite-500">
-                Um plano igual (mesma configuracao, checklist e pecas) para cada ativo adicionado - salvar cria um
-                plano por ativo.
-              </p>
-              {instrumentosFamilia.length > 0 && (
-                <ul className="mt-3 space-y-1">
-                  {instrumentosFamilia.map((instId) => (
-                    <FamiliaChip
-                      key={instId}
-                      instrumentId={instId}
-                      onRemover={() => setInstrumentosFamilia((atual) => atual.filter((x) => x !== instId))}
-                    />
-                  ))}
-                </ul>
-              )}
-              <div className="mt-3">
-                <InstrumentPicker
-                  key={instrumentosFamilia.length}
-                  name="instrumentoFamiliaAdicionar"
-                  clientId={clientId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    if (id && !instrumentosFamilia.includes(id)) {
-                      setInstrumentosFamilia((atual) => [...atual, id]);
-                      setErroFamilia(null);
-                    }
-                  }}
-                />
-              </div>
-              {erroFamilia && <p className="mt-1 text-xs text-safety-red">{erroFamilia}</p>}
-            </div>
+          {!isEdit && (
+            <p className="rounded-lg bg-gray-50 px-4 py-3 text-xs text-graphite-500">
+              O ativo (um ou varios) e' escolhido depois de salvar, na ficha do plano - "Familia de ativos" so
+              sinaliza que este plano serve varios ativos do mesmo tipo.
+            </p>
           )}
 
           {!isClient && (
@@ -963,24 +911,5 @@ export default function MaintenancePlanForm() {
         </div>
       </form>
     </div>
-  );
-}
-
-/** Uma linha da lista de ativos da familia - busca so o necessario pra identificar o
- * ativo (TAG/descricao), a ficha completa nao interessa aqui. */
-function FamiliaChip({ instrumentId, onRemover }: { instrumentId: string; onRemover: () => void }) {
-  const { data: instrumento } = useQuery({
-    queryKey: ["instrument-resumo-familia", instrumentId],
-    queryFn: () => getInstrument(instrumentId),
-  });
-  return (
-    <li className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm">
-      <span className="min-w-0 truncate text-graphite-800">
-        {instrumento ? `${instrumento.tag ?? instrumento.type} - ${instrumento.description || instrumento.model || ""}` : "Carregando..."}
-      </span>
-      <button type="button" className="shrink-0 text-graphite-400 hover:text-safety-red" onClick={onRemover} aria-label="Remover da familia">
-        <X className="h-4 w-4" />
-      </button>
-    </li>
   );
 }

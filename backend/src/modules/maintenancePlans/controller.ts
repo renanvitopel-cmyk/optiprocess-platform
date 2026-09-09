@@ -998,3 +998,93 @@ export const duplicateMaintenancePlan = asyncHandler(async (req: Request, res: R
 
   res.status(201).json(copia);
 });
+
+const atribuirAtivosSchema = z.object({
+  instrumentIds: z.array(z.string().uuid()).min(1, "Escolha pelo menos um ativo."),
+});
+
+/**
+ * Atribui o plano a um ou mais ativos, depois de criado sem nenhum.
+ *
+ * O primeiro ativo vira o instrumentId deste plano; cada ativo a mais gera uma copia
+ * completa (mesma configuracao, checklist e pecas) - e' o mesmo "um plano de verdade por
+ * ativo" que ja vale na criacao com familia, so que como um passo separado, depois que o
+ * plano ja existe.
+ */
+export const atribuirAtivosAoPlano = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const { instrumentIds } = atribuirAtivosSchema.parse(req.body);
+
+  const origem = await prisma.maintenancePlan.findFirst({
+    where: { id: req.params.id, deletedAt: null },
+    include: { checklistTemplate: { orderBy: { sortOrder: "asc" } }, parts: true },
+  });
+  if (!origem) throw new NotFoundError("Plano de manutencao");
+  assertOwnClient(req, origem.clientId);
+
+  const instrumentos = await prisma.instrument.findMany({
+    where: { id: { in: instrumentIds }, deletedAt: null },
+    select: { id: true, clientId: true },
+  });
+  if (instrumentos.length !== new Set(instrumentIds).size) throw new NotFoundError("Ativo");
+  if (instrumentos.some((i) => i.clientId !== origem.clientId)) {
+    throw new ValidationError("Um dos ativos escolhidos pertence a outra empresa.");
+  }
+
+  const [primeiro, ...resto] = instrumentIds;
+
+  const planoAtualizado = await prisma.maintenancePlan.update({
+    where: { id: origem.id },
+    data: { instrumentId: primeiro },
+    include: detailInclude,
+  });
+  await sincronizarPeriodicidadeDeCalibracao(planoAtualizado.id);
+  await writeAuditLog({
+    userId: req.user?.sub,
+    action: "UPDATE",
+    entityType: "MaintenancePlan",
+    entityId: planoAtualizado.id,
+    description: `Plano ${planoAtualizado.code ?? planoAtualizado.name} atribuido a um ativo`,
+  });
+
+  const planos = [planoAtualizado];
+  for (const instrumentId of resto) {
+    const {
+      id: _id,
+      code: _code,
+      instrumentId: _instrumentId,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      deletedAt: _deletedAt,
+      lastGeneratedAt: _lastGeneratedAt,
+      lastExecutionAt: _lastExecutionAt,
+      lastMeterAtGeneration: _lastMeter,
+      checklistTemplate,
+      parts,
+      ...dados
+    } = origem;
+    const novoCodigo = await nextClientMaintenancePlanCode(origem.clientId);
+    const copia = await prisma.maintenancePlan.create({
+      data: {
+        ...dados,
+        code: novoCodigo,
+        instrumentId,
+        createdById: req.user?.sub,
+        checklistTemplate: { create: checklistTemplate.map(({ id: _i, planId: _p, ...c }) => c) },
+        parts: { create: parts.map(({ id: _i, planId: _p, ...x }) => x) },
+      },
+      include: detailInclude,
+    });
+    await sincronizarPeriodicidadeDeCalibracao(copia.id);
+    await writeAuditLog({
+      userId: req.user?.sub,
+      action: "CREATE",
+      entityType: "MaintenancePlan",
+      entityId: copia.id,
+      description: `Plano ${copia.code} criado a partir de ${origem.code ?? origem.name} para outro ativo da atribuicao`,
+    });
+    planos.push(copia);
+  }
+
+  res.status(201).json({ planos: planos.map(withDerivedStatus) });
+});

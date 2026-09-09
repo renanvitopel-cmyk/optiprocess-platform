@@ -182,3 +182,26 @@ export async function getMaintenancePlanAttachmentUrl(planId: string, attachment
   const { data } = await api.get<{ url: string }>(`/maintenance-plans/${planId}/attachments/${attachmentId}/url`);
   return data.url;
 }
+
+// --------------------------------------------------------------------------
+// Interruptor geral da geracao automatica de OS (so ADMIN) - a rodada por hora que ja
+// existia, agora com controle e prova de que rodou.
+// --------------------------------------------------------------------------
+
+export interface AutomationStatus {
+  planGenerationEnabled: boolean;
+  lastRunAt: string | null;
+  lastRunGeneratedCount: number | null;
+  lastRunIgnoredCount: number | null;
+  lastRunErrorCount: number | null;
+}
+
+export async function getAutomationStatus(): Promise<AutomationStatus> {
+  const { data } = await api.get<AutomationStatus>("/maintenance-plans/automacao");
+  return data;
+}
+
+export async function updateAutomationStatus(enabled: boolean): Promise<AutomationStatus> {
+  const { data } = await api.patch<AutomationStatus>("/maintenance-plans/automacao", { enabled });
+  return data;
+}

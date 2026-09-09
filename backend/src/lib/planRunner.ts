@@ -21,6 +21,48 @@ export interface ResultadoDaRodada {
   erros: { planId: string; code: string | null; erro: string }[];
 }
 
+const SINGLETON_ID = "singleton";
+
+/** Le o interruptor geral (cria a linha unica na primeira leitura, ligado por padrao). */
+export async function getAutomationSettings() {
+  return prisma.automationSettings.upsert({
+    where: { id: SINGLETON_ID },
+    create: { id: SINGLETON_ID },
+    update: {},
+  });
+}
+
+/** So o botao de pausa/retomar mexe aqui - "rodar agora" e a geracao propriamente dita
+ * nao passam por esta funcao. */
+export async function setAutomationEnabled(enabled: boolean, userId?: string) {
+  return prisma.automationSettings.upsert({
+    where: { id: SINGLETON_ID },
+    create: { id: SINGLETON_ID, planGenerationEnabled: enabled, updatedById: userId },
+    update: { planGenerationEnabled: enabled, updatedById: userId },
+  });
+}
+
+/** O que aconteceu na ultima rodada, disparada por cron ou a mao - mesma tabela, para o
+ * botao "geracao automatica" na tela nao ficar cego sobre rodadas manuais. */
+async function registrarUltimaRodada(resultado: ResultadoDaRodada): Promise<void> {
+  await prisma.automationSettings.upsert({
+    where: { id: SINGLETON_ID },
+    create: {
+      id: SINGLETON_ID,
+      lastRunAt: new Date(),
+      lastRunGeneratedCount: resultado.gerados.length,
+      lastRunIgnoredCount: resultado.ignorados.length,
+      lastRunErrorCount: resultado.erros.length,
+    },
+    update: {
+      lastRunAt: new Date(),
+      lastRunGeneratedCount: resultado.gerados.length,
+      lastRunIgnoredCount: resultado.ignorados.length,
+      lastRunErrorCount: resultado.erros.length,
+    },
+  });
+}
+
 /** Um plano por tempo esta na janela de geracao quando a data de geracao ja chegou. */
 function chegouAAntecedenciaPorTempo(nextDueDate: Date | null, generateAdvanceDays: number | null, agora: Date): boolean {
   if (!nextDueDate) return false;
@@ -88,6 +130,7 @@ export async function gerarOsVencidas(opcoes: { clientId?: string; userId?: stri
     }
   }
 
+  await registrarUltimaRodada(resultado);
   return resultado;
 }
 
@@ -108,6 +151,14 @@ export function iniciarGeracaoAutomatica(intervaloMinutos = 60): void {
 
   const rodar = async () => {
     try {
+      // So a rodada sozinha (cron) respeita a pausa - "Rodar agora" e "Gerar OS" num plano
+      // especifico continuam sendo uma decisao explicita de quem clicou, e essa nunca e'
+      // bloqueada pelo interruptor geral.
+      const settings = await getAutomationSettings();
+      if (!settings.planGenerationEnabled) {
+        console.log("[planos] geracao automatica pausada - rodada pulada.");
+        return;
+      }
       const r = await gerarOsVencidas();
       if (r.gerados.length > 0) {
         console.log(`[planos] ${r.gerados.length} OS gerada(s) automaticamente: ${r.gerados.map((g) => g.workOrderNumber).join(", ")}`);

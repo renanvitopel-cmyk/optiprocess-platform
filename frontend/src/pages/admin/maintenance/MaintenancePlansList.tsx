@@ -1,21 +1,25 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { listMaintenancePlans } from "../../../api/maintenancePlans";
 import type { MaintenancePlan } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { DataTable } from "../../../components/DataTable";
 import { StatusBadge } from "../../../components/StatusBadge";
+import { AutomationPanel } from "./AutomationPanel";
 import { clientDisplayName, formatDate } from "../../../lib/format";
 import { useCmms } from "../../../lib/cmms";
+import { useAuth } from "../../../auth/AuthContext";
 
 export default function MaintenancePlansList() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const clientId = searchParams.get("clientId") ?? undefined;
   const instrumentId = searchParams.get("instrumentId") ?? undefined;
   const { canManage, isClient, base } = useCmms();
+  const { user } = useAuth();
 
   const [page, setPage] = useState(1);
   const { data, isLoading } = useQuery({
@@ -37,6 +41,12 @@ export default function MaintenancePlansList() {
           )
         }
       />
+
+      {/* So a OptiProcess mexe no piloto automatico - a rodada varre todos os clientes de
+          uma vez, nao e' um ajuste por empresa. */}
+      {user?.role === "ADMIN" && (
+        <AutomationPanel onRodou={() => queryClient.invalidateQueries({ queryKey: ["maintenance-plans"] })} />
+      )}
 
       <DataTable
         loading={isLoading}

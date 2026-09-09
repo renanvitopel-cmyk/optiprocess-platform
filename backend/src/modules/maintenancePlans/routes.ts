@@ -17,6 +17,8 @@ import {
   uploadMaintenancePlanAttachment,
   deleteMaintenancePlanAttachment,
   getMaintenancePlanAttachmentUrl,
+  getAutomationStatus,
+  updateAutomationStatus,
 } from "./controller";
 
 export const maintenancePlansRouter = Router();
@@ -24,6 +26,9 @@ export const maintenancePlansRouter = Router();
 maintenancePlansRouter.use(requireAuth, requireRole(...CMMS_PLANNING_ROLES));
 
 maintenancePlansRouter.post("/gerar-vencidos", requireRole(...CMMS_PLANNING_ROLES), runPlanGeneration);
+// Antes de "/:id", senao "automacao" seria lido como um id de plano.
+maintenancePlansRouter.get("/automacao", requireRole("ADMIN"), getAutomationStatus);
+maintenancePlansRouter.patch("/automacao", requireRole("ADMIN"), updateAutomationStatus);
 maintenancePlansRouter.get("/", listMaintenancePlans);
 maintenancePlansRouter.get("/:id", getMaintenancePlan);
 maintenancePlansRouter.get("/:id/indicators", getMaintenancePlanIndicators);

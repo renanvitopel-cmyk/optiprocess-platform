@@ -2156,6 +2156,23 @@ model Counter {
   @@map("counters")
 }
 
+// Linha unica (id fixo "singleton") com o interruptor geral da geracao automatica de OS a
+// partir dos planos preventivos, mais o que aconteceu na ultima rodada - sem isso o motor
+// (que ja rodava sozinho a cada hora) ficava invisivel, sem controle e sem prova de que
+// estava funcionando.
+model AutomationSettings {
+  id                    String    @id
+  planGenerationEnabled Boolean   @default(true)
+  lastRunAt             DateTime?
+  lastRunGeneratedCount Int?
+  lastRunIgnoredCount   Int?
+  lastRunErrorCount     Int?
+  updatedById           String?
+  updatedAt             DateTime  @updatedAt
+
+  @@map("automation_settings")
+}
+
 model Notification {
   id        String   @id @default(uuid())
   userId    String

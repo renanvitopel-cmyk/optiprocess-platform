@@ -414,6 +414,7 @@ enum AttachmentEntityType {
   INSTRUMENT
   SERVICE_REQUEST
   ROOT_CAUSE_ANALYSIS
+  MAINTENANCE_PLAN
 }
 
 // Classifica o registro fotografico feito pelo tecnico em campo. As fotos entram

@@ -1,6 +1,6 @@
 import { api } from "./client";
 import type { PagedResult } from "./client";
-import type { MaintenanceOrderStatus, MaintenancePlan, MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority } from "./types";
+import type { MaintenanceOrderStatus, MaintenancePlan, MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority, AttachmentCategory, CalibrationAttachment } from "./types";
 
 export interface ListMaintenancePlansParams {
   page?: number;
@@ -149,4 +149,36 @@ export async function runPlanGeneration(): Promise<{
 }> {
   const { data } = await api.post("/maintenance-plans/gerar-vencidos");
   return data;
+}
+
+// --------------------------------------------------------------------------
+// Anexo do plano: procedimento, ficha tecnica, foto de referencia - opcional.
+// --------------------------------------------------------------------------
+
+export async function listMaintenancePlanAttachments(planId: string): Promise<CalibrationAttachment[]> {
+  const { data } = await api.get<CalibrationAttachment[]>(`/maintenance-plans/${planId}/attachments`);
+  return data;
+}
+
+export async function uploadMaintenancePlanAttachment(
+  planId: string,
+  file: File,
+  category: AttachmentCategory,
+  caption?: string,
+): Promise<CalibrationAttachment> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("category", category);
+  if (caption) formData.append("caption", caption);
+  const { data } = await api.post<CalibrationAttachment>(`/maintenance-plans/${planId}/attachments`, formData);
+  return data;
+}
+
+export async function deleteMaintenancePlanAttachment(planId: string, attachmentId: string): Promise<void> {
+  await api.delete(`/maintenance-plans/${planId}/attachments/${attachmentId}`);
+}
+
+export async function getMaintenancePlanAttachmentUrl(planId: string, attachmentId: string): Promise<string> {
+  const { data } = await api.get<{ url: string }>(`/maintenance-plans/${planId}/attachments/${attachmentId}/url`);
+  return data.url;
 }

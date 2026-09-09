@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { dataOpcional } from "../../utils/zod";
-import { MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority, MaintenanceFrequencyUnit, OperationalCalendar, MeterResetRule, MaintenanceTriggerMode, MaintenanceOrderStatus, MaterialPolicy, ChecklistResponseType, LubricationMethod } from "@prisma/client";
+import { MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, MaintenancePlanScope, MaintenancePriority, MaintenanceFrequencyUnit, OperationalCalendar, MeterResetRule, MaintenanceTriggerMode, MaintenanceOrderStatus, MaterialPolicy, ChecklistResponseType, LubricationMethod, type AttachmentCategory } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -12,6 +12,7 @@ import { deriveDueStatus, computeNextDueDate } from "../../utils/status";
 import { computeNextDue, computeGenerationDate, frequencyToDays, forecastMeterDue, type TimeScheduleConfig } from "../../lib/planSchedule";
 import { nextClientMaintenanceOrderNumber, nextClientMaintenancePlanCode } from "../../utils/sequence";
 import { reserveSparePart } from "../../lib/inventory";
+import { getStorageProvider } from "../../lib/storage";
 
 const detailInclude = {
   client: { select: { id: true, companyName: true, tradeName: true } },
@@ -1087,4 +1088,82 @@ export const atribuirAtivosAoPlano = asyncHandler(async (req: Request, res: Resp
   }
 
   res.status(201).json({ planos: planos.map(withDerivedStatus) });
+});
+
+// ---------------------------------------------------------------------------
+// Anexos do plano: procedimento, ficha tecnica, foto de referencia - opcional, e' o que
+// acompanha o passo 3 do cadastro (mesma tabela generica de anexos usada no ativo e na OS).
+// ---------------------------------------------------------------------------
+
+async function assertPlanAcessivel(req: Request, planId: string) {
+  const plan = await prisma.maintenancePlan.findFirst({ where: { id: planId, deletedAt: null }, select: { id: true, clientId: true } });
+  if (!plan) throw new NotFoundError("Plano de manutencao");
+  assertOwnClient(req, plan.clientId);
+  return plan;
+}
+
+export const listMaintenancePlanAttachments = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const plan = await assertPlanAcessivel(req, req.params.id);
+  const attachments = await prisma.attachment.findMany({
+    where: { entityType: "MAINTENANCE_PLAN", entityId: plan.id },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+  res.json(attachments);
+});
+
+export const uploadMaintenancePlanAttachment = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const plan = await assertPlanAcessivel(req, req.params.id);
+
+  const file = req.file;
+  if (!file) throw new ValidationError("Selecione um arquivo.");
+  const { category, caption } = req.body as { category?: AttachmentCategory; caption?: string };
+
+  const key = `maintenance-plans/${plan.id}/${Date.now()}-${file.originalname}`;
+  await getStorageProvider().upload(key, file.buffer, file.mimetype);
+
+  const attachment = await prisma.attachment.create({
+    data: {
+      entityType: "MAINTENANCE_PLAN",
+      entityId: plan.id,
+      category: category && ["LOCATION", "INSTRUMENT", "STANDARD", "MEASUREMENT", "DOCUMENT", "OTHER"].includes(category) ? category : "OTHER",
+      caption: caption || null,
+      fileKey: key,
+      fileName: file.originalname,
+      mimeType: file.mimetype,
+      sizeBytes: file.size,
+      uploadedById: req.user?.sub,
+    },
+  });
+
+  res.status(201).json(attachment);
+});
+
+export const deleteMaintenancePlanAttachment = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const plan = await assertPlanAcessivel(req, req.params.id);
+
+  const attachment = await prisma.attachment.findFirst({
+    where: { id: req.params.attachmentId, entityType: "MAINTENANCE_PLAN", entityId: plan.id },
+  });
+  if (!attachment) throw new NotFoundError("Anexo");
+
+  await getStorageProvider().delete(attachment.fileKey);
+  await prisma.attachment.delete({ where: { id: attachment.id } });
+
+  res.status(204).send();
+});
+
+export const getMaintenancePlanAttachmentUrl = asyncHandler(async (req: Request, res: Response) => {
+  await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
+  const plan = await assertPlanAcessivel(req, req.params.id);
+
+  const attachment = await prisma.attachment.findFirst({
+    where: { id: req.params.attachmentId, entityType: "MAINTENANCE_PLAN", entityId: plan.id },
+  });
+  if (!attachment) throw new NotFoundError("Anexo");
+
+  const url = await getStorageProvider().getSignedDownloadUrl(attachment.fileKey, attachment.fileName);
+  res.json({ url });
 });

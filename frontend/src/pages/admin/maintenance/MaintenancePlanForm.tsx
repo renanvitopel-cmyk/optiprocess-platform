@@ -4,14 +4,24 @@ import { useQuery } from "@tanstack/react-query";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Trash2, Check } from "lucide-react";
+import { Plus, Trash2, Check, X } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
 import { TextInput, TextareaInput, SelectInput, CheckboxInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
+import { EntityAttachments } from "../../../components/EntityAttachments";
 import { listMeters } from "../../../api/meters";
-import { createMaintenancePlan, getMaintenancePlan, updateMaintenancePlan, atribuirAtivosAoPlano } from "../../../api/maintenancePlans";
+import {
+  createMaintenancePlan,
+  getMaintenancePlan,
+  updateMaintenancePlan,
+  atribuirAtivosAoPlano,
+  listMaintenancePlanAttachments,
+  uploadMaintenancePlanAttachment,
+  deleteMaintenancePlanAttachment,
+  getMaintenancePlanAttachmentUrl,
+} from "../../../api/maintenancePlans";
 import { listSpareParts } from "../../../api/spareParts";
 import { listLaborTypes } from "../../../api/laborTypes";
 import { useToast } from "../../../components/Toast";
@@ -179,6 +189,10 @@ export default function MaintenancePlanForm() {
   // Assistente em 3 etapas: cada etapa so libera a proxima quando os campos dela estao
   // validos, para o usuario nao descobrir erro da etapa 1 ao clicar em salvar na 3.
   const [step, setStep] = useState(0);
+  // So no cadastro: o plano ainda nao existe, entao o arquivo fica em memoria ate o
+  // "Salvar plano" criar o id que o upload precisa. Na edicao a ficha ja gerencia varios
+  // anexos direto (EntityAttachments), sem essa etapa intermediaria.
+  const [anexoNovo, setAnexoNovo] = useState<File | null>(null);
   const STEP_FIELDS: (keyof FormValues)[][] = [
     ["clientId", "name", "planType", "scope", "defaultPriority", "status"],
     ["triggerType", "frequencyEvery", "frequencyUnit", "meterId", "meterInterval", "conditionMeterId", "toleranceDaysBefore", "toleranceDaysAfter"],
@@ -311,6 +325,11 @@ export default function MaintenancePlanForm() {
       const ativoDoAtalho = !isEdit ? searchParams.get("instrumentId") : null;
       if (ativoDoAtalho) {
         await atribuirAtivosAoPlano(saved.id, [ativoDoAtalho]);
+      }
+
+      // Mesmo raciocinio do ativo: o arquivo so podia subir depois que o plano ganhou id.
+      if (!isEdit && anexoNovo) {
+        await uploadMaintenancePlanAttachment(saved.id, anexoNovo, anexoNovo.type.startsWith("image/") ? "OTHER" : "DOCUMENT");
       }
 
       notify("success", isEdit ? "Plano atualizado." : "Plano criado.");
@@ -892,6 +911,44 @@ export default function MaintenancePlanForm() {
             ))}
           </div>
         </div>
+
+        {isEdit ? (
+          <EntityAttachments
+            title="Anexo (opcional)"
+            queryKey={["maintenance-plan-attachments", id]}
+            canEdit
+            list={() => listMaintenancePlanAttachments(id!)}
+            upload={(file, category) => uploadMaintenancePlanAttachment(id!, file, category)}
+            remove={(attachmentId) => deleteMaintenancePlanAttachment(id!, attachmentId)}
+            getUrl={(attachmentId) => getMaintenancePlanAttachmentUrl(id!, attachmentId)}
+          />
+        ) : (
+          <div className="card space-y-3 p-5">
+            <h2 className="font-semibold text-navy-900">Anexo (opcional)</h2>
+            <p className="text-xs text-graphite-500">
+              Procedimento, ficha tecnica ou foto de referencia - so um arquivo aqui; depois de salvo, a ficha do
+              plano permite anexar mais.
+            </p>
+            <div className="flex items-center gap-3">
+              <label className="btn-outline cursor-pointer text-sm">
+                {anexoNovo ? "Trocar arquivo" : "Escolher arquivo"}
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => setAnexoNovo(e.target.files?.[0] ?? null)}
+                />
+              </label>
+              {anexoNovo && (
+                <span className="flex items-center gap-1.5 text-sm text-graphite-600">
+                  {anexoNovo.name}
+                  <button type="button" className="text-graphite-400 hover:text-safety-red" onClick={() => setAnexoNovo(null)} aria-label="Remover arquivo escolhido">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         </div>
 

@@ -25,13 +25,14 @@ export function ClientPortalLayout() {
   });
   const { user, logout } = useAuth();
 
-  // O contrato do proprio cliente - so para o rotulo do cabecalho. Em cache longo: nao e'
-  // informacao que muda no meio da navegacao. So quem gerencia (e tem empresa) consulta:
-  // o ADMIN em acesso master nao tem contrato proprio, e o Solicitante nao administra nada.
+  // O contrato do proprio cliente - so para o rotulo do cabecalho, e o logo da empresa na
+  // barra lateral. Em cache longo: nao e' informacao que muda no meio da navegacao. Toda a
+  // equipe do cliente ve (o logo e' da empresa, nao so de quem administra); o ADMIN em
+  // acesso master nao tem contrato proprio, e o Solicitante nao entra aqui.
   const { data: contrato } = useQuery({
     queryKey: ["own-client"],
     queryFn: getOwnClient,
-    enabled: user?.role === "CLIENT" && !!user?.clientId,
+    enabled: ["CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN"].includes(user?.role ?? "") && !!user?.clientId,
     staleTime: 300_000,
   });
 
@@ -64,8 +65,24 @@ export function ClientPortalLayout() {
   // produto. Cliente que so tem servicos da OptiProcess (calibracao, laudos) continua
   // vendo a marca da OptiProcess, que e' quem presta o servico.
   const usesCmms = contractedServices.includes("CMMS_MAINTENANCE");
-  const brand = (size: "sm" | "md") =>
-    usesCmms ? <CmmsLogo variant="light" size={size} /> : <Logo variant="light" size={size} />;
+  // O logo do produto continua sempre presente - o da empresa entra do lado, nao no lugar
+  // dele, com um traco separando os dois. Sem logo cadastrado, fica so o do produto, como
+  // sempre foi.
+  const brand = (size: "sm" | "md") => (
+    <span className="flex min-w-0 items-center gap-2.5">
+      {usesCmms ? <CmmsLogo variant="light" size={size} /> : <Logo variant="light" size={size} />}
+      {contrato?.logoUrl && (
+        <>
+          <span className="h-6 w-px shrink-0 bg-navy-700" aria-hidden="true" />
+          <img
+            src={contrato.logoUrl}
+            alt={clientDisplayName(user?.client)}
+            className={`w-auto shrink-0 object-contain ${size === "sm" ? "h-6 max-w-[3.5rem]" : "h-8 max-w-[5rem]"}`}
+          />
+        </>
+      )}
+    </span>
+  );
 
   useEffect(() => {
     try {

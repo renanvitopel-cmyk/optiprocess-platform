@@ -5,7 +5,7 @@ import { Wrench, Gauge, ClipboardList, ClipboardPlus, ShieldCheck, Activity, Tim
 import { getMaintenanceDashboard, getMaintenanceBacklog } from "../../../api/maintenanceWorkOrders";
 import type { BacklogGroupBy } from "../../../api/types";
 import { EmptyState } from "../../../components/EmptyState";
-import { listClients } from "../../../api/clients";
+import { listClients, getOwnClient } from "../../../api/clients";
 
 import { CmmsLogo } from "../../../components/CmmsLogo";
 import { StatCard } from "../../../components/StatCard";
@@ -31,6 +31,16 @@ export default function MaintenanceDashboard() {
     queryFn: () => listClients({ pageSize: 200, service: "CMMS_MAINTENANCE" }),
     enabled: !isClient,
   });
+  // Marca do topo do painel: a da propria empresa, quando ela tem uma cadastrada - o logo
+  // pequeno da barra lateral do portal continua sendo sempre o do produto, so este aqui
+  // (o grande, de boas-vindas) e' que vira a marca do cliente.
+  const { data: ownClient } = useQuery({
+    queryKey: ["own-client-logo"],
+    queryFn: getOwnClient,
+    enabled: isClient,
+    staleTime: 300_000,
+  });
+  const logoDoCliente = isClient ? ownClient?.logoUrl : (clients?.items ?? []).find((c) => c.id === clientId)?.logoUrl;
   const { data, isLoading } = useQuery({
     queryKey: ["maintenance-dashboard", clientId],
     queryFn: () => getMaintenanceDashboard({ clientId: clientId || undefined }),
@@ -46,7 +56,11 @@ export default function MaintenanceDashboard() {
       {/* O CMMS e' produto proprio: o painel dele abre com a marca do produto, nao com a
           da OptiProcess (que segue como marca principal do site e da gestao). */}
       <div className="mb-6">
-        <CmmsLogo size="lg" />
+        {logoDoCliente ? (
+          <img src={logoDoCliente} alt="Logo da empresa" className="h-16 w-auto max-w-[14rem] object-contain" />
+        ) : (
+          <CmmsLogo size="lg" />
+        )}
         <p className="mt-2 text-sm text-graphite-500">
           Ciclo completo de manutencao - planos preventivos, ordens, pecas e indicadores (ultimos 90 dias)
         </p>

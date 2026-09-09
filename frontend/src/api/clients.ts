@@ -42,6 +42,17 @@ export async function deleteClient(id: string): Promise<void> {
   await api.delete(`/clients/${id}`);
 }
 
+export async function uploadClientLogo(id: string, file: File): Promise<Client> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post<Client>(`/clients/${id}/logo`, form);
+  return data;
+}
+
+export async function deleteClientLogo(id: string): Promise<void> {
+  await api.delete(`/clients/${id}/logo`);
+}
+
 export type ClientContactInput = Partial<Omit<ClientContact, "id" | "clientId">>;
 
 export async function addClientContact(clientId: string, input: ClientContactInput): Promise<ClientContact> {

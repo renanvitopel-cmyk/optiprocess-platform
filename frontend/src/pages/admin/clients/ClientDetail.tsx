@@ -7,6 +7,7 @@ import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { ClientFormModal } from "./ClientFormModal";
+import { ClientLogo } from "../../../components/ClientLogo";
 import { ClientContactsCard } from "./ClientContactsCard";
 import { ClientPortalAccessModal } from "./ClientPortalAccessModal";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
@@ -28,7 +29,7 @@ export default function ClientDetail() {
   const [deleting, setDeleting] = useState(false);
   const [portalAccessOpen, setPortalAccessOpen] = useState(false);
 
-  const { data: client, isLoading } = useQuery({ queryKey: ["client", id], queryFn: () => getClient(id) });
+  const { data: client, isLoading, refetch } = useQuery({ queryKey: ["client", id], queryFn: () => getClient(id) });
 
   async function handleDelete() {
     setDeleting(true);
@@ -67,10 +68,25 @@ export default function ClientDetail() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="card space-y-4 p-5 lg:col-span-2">
-          <div className="flex items-center gap-2">
-            <StatusBadge status={client.status} />
-            {client.cnpj && <span className="text-sm text-graphite-500">CNPJ {client.cnpj}</span>}
+          <div className="flex flex-wrap items-center gap-4">
+            <ClientLogo
+              clientId={client.id}
+              companyName={client.tradeName || client.companyName}
+              logoUrl={client.logoUrl}
+              podeEditar={canManage}
+              aoMudar={() => refetch()}
+            />
+            <div className="flex items-center gap-2">
+              <StatusBadge status={client.status} />
+              {client.cnpj && <span className="text-sm text-graphite-500">CNPJ {client.cnpj}</span>}
+            </div>
           </div>
+          {canManage && (
+            <p className="text-xs text-graphite-500">
+              Este logo substitui a marca do RLP Maintenance no topo do painel do CMMS deste cliente. A marca da
+              barra lateral continua sendo sempre a do produto.
+            </p>
+          )}
           <dl className="grid gap-4 sm:grid-cols-2">
             <Info label="Endereco" value={[client.addressStreet, client.addressNumber, client.addressDistrict].filter(Boolean).join(", ") || "-"} />
             <Info label="Cidade/UF" value={[client.addressCity, client.addressState].filter(Boolean).join("/") || "-"} />

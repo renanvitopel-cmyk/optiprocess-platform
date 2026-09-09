@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
 import { requireRole, STAFF_ROLES } from "../../middleware/rbac";
+import { uploadImage } from "../../middleware/upload";
 import {
   listClients,
   getClient,
@@ -8,6 +9,8 @@ import {
   createClient,
   updateClient,
   deleteClient,
+  uploadClientLogo,
+  deleteClientLogo,
   addClientContact,
   updateClientContact,
   deleteClientContact,
@@ -29,6 +32,8 @@ clientsRouter.get("/:id", getClient);
 clientsRouter.post("/", requireRole("ADMIN", "COMMERCIAL"), createClient);
 clientsRouter.patch("/:id", requireRole("ADMIN", "COMMERCIAL"), updateClient);
 clientsRouter.delete("/:id", requireRole("ADMIN", "COMMERCIAL"), deleteClient);
+clientsRouter.post("/:id/logo", requireRole("ADMIN", "COMMERCIAL"), uploadImage.single("file"), uploadClientLogo);
+clientsRouter.delete("/:id/logo", requireRole("ADMIN", "COMMERCIAL"), deleteClientLogo);
 
 clientsRouter.post("/:id/contacts", requireRole("ADMIN", "COMMERCIAL"), addClientContact);
 clientsRouter.patch("/:id/contacts/:contactId", requireRole("ADMIN", "COMMERCIAL"), updateClientContact);

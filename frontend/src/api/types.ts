@@ -106,6 +106,8 @@ export interface Client {
   /** Usuarios de portal (role CLIENT) ja vinculados a esta empresa. */
   users?: PortalUserRef[];
   _count?: { instruments: number; serviceOrders: number; contracts: number; calibrations?: number; orders?: number };
+  /** Marca da propria empresa - substitui a marca do RLP Maintenance no painel do CMMS dela. */
+  logoUrl?: string | null;
 }
 
 export type ServiceCategory =

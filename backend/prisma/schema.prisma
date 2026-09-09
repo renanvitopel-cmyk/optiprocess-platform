@@ -527,6 +527,11 @@ model Client {
   technicalContactName   String?
   commercialContactName  String?
   status                 ClientStatus @default(PROSPECT)
+  // Logo do cliente: substitui a marca do RLP Maintenance no painel do CMMS dele (o
+  // grande, no topo da tela) - o logo pequeno da barra lateral continua sendo o do
+  // produto sempre, so o painel principal ganha a marca da propria empresa.
+  logoKey                String?
+  logoFileName           String?
   // Situacao do contrato do CMMS (teste, ativo, suspenso, cancelado).
   contractStatus         CmmsContractStatus @default(TRIAL)
   // Areas de servico que o cliente contratou (marcacao rapida na ficha, usada

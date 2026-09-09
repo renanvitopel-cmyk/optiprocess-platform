@@ -4,9 +4,24 @@ import { ClientStatus, CmmsContractStatus, ServiceCategory } from "@prisma/clien
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
-import { ForbiddenError, NotFoundError } from "../../utils/errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { getClientPlanUsage } from "../../lib/planLimits";
+import { getStorageProvider } from "../../lib/storage";
+
+/** Troca a chave de armazenamento por um link temporario, igual a foto do ativo e da
+ * mao de obra - mesmo padrao, so que para a marca da empresa. */
+async function attachLogoUrl<T extends { logoKey: string | null; logoFileName: string | null }>(
+  clients: T[],
+): Promise<(T & { logoUrl: string | null })[]> {
+  const storage = getStorageProvider();
+  return Promise.all(
+    clients.map(async (c) => ({
+      ...c,
+      logoUrl: c.logoKey ? await storage.getSignedDownloadUrl(c.logoKey, c.logoFileName ?? "logo", 3600) : null,
+    })),
+  );
+}
 
 export const listClients = asyncHandler(async (req: Request, res: Response) => {
   const pageParams = parsePageParams(req.query as Record<string, unknown>);
@@ -31,7 +46,7 @@ export const listClients = asyncHandler(async (req: Request, res: Response) => {
       : {}),
   };
 
-  const [items, total] = await Promise.all([
+  const [itemsSemLogo, total] = await Promise.all([
     prisma.client.findMany({
       where,
       orderBy: { companyName: "asc" },
@@ -40,6 +55,9 @@ export const listClients = asyncHandler(async (req: Request, res: Response) => {
     }),
     prisma.client.count({ where }),
   ]);
+  // O seletor de cliente do painel do CMMS usa esta mesma lista pra saber a marca de quem
+  // esta selecionado - sem o link aqui, precisaria de uma segunda chamada so pra isso.
+  const items = await attachLogoUrl(itemsSemLogo);
 
   res.json(buildPagedResult(items, total, pageParams));
 });
@@ -72,7 +90,8 @@ export const getOwnClient = asyncHandler(async (req: Request, res: Response) => 
   if (!client) throw new NotFoundError("Cliente");
 
   const usage = await getClientPlanUsage(client.id);
-  res.json({ ...client, planUsage: { users: usage.users, instruments: usage.instruments, requesters: usage.requesters } });
+  const [comLogo] = await attachLogoUrl([client]);
+  res.json({ ...comLogo, planUsage: { users: usage.users, instruments: usage.instruments, requesters: usage.requesters } });
 });
 
 export const getClient = asyncHandler(async (req: Request, res: Response) => {
@@ -95,7 +114,8 @@ export const getClient = asyncHandler(async (req: Request, res: Response) => {
   });
   if (!client) throw new NotFoundError("Cliente");
   const usage = await getClientPlanUsage(client.id);
-  res.json({ ...client, planUsage: { users: usage.users, instruments: usage.instruments, requesters: usage.requesters } });
+  const [comLogo] = await attachLogoUrl([client]);
+  res.json({ ...comLogo, planUsage: { users: usage.users, instruments: usage.instruments, requesters: usage.requesters } });
 });
 
 const clientSchema = z.object({
@@ -182,6 +202,48 @@ export const deleteClient = asyncHandler(async (req: Request, res: Response) => 
     description: `Cliente ${existing.companyName} removido`,
   });
 
+  res.status(204).send();
+});
+
+/** Logo do cliente: substitui a marca do RLP Maintenance no painel do CMMS dele. Uma so -
+ * trocar apaga a anterior do armazenamento, mesmo padrao da foto do ativo. */
+export const uploadClientLogo = asyncHandler(async (req: Request, res: Response) => {
+  const existing = await prisma.client.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  if (!existing) throw new NotFoundError("Cliente");
+
+  const file = req.file;
+  if (!file) throw new ValidationError("Selecione uma imagem.");
+  if (!file.mimetype.startsWith("image/")) throw new ValidationError("O logo precisa ser uma imagem.");
+
+  const storage = getStorageProvider();
+  const key = `clients/${existing.id}/logo-${Date.now()}-${file.originalname}`;
+  await storage.upload(key, file.buffer, file.mimetype);
+
+  const anterior = existing.logoKey;
+  const client = await prisma.client.update({
+    where: { id: existing.id },
+    data: { logoKey: key, logoFileName: file.originalname },
+  });
+  if (anterior) await storage.delete(anterior).catch(() => undefined);
+
+  await writeAuditLog({
+    userId: req.user?.sub,
+    action: "UPDATE",
+    entityType: "Client",
+    entityId: client.id,
+    description: `Logo de ${client.companyName} atualizado`,
+  });
+
+  const [comLogo] = await attachLogoUrl([client]);
+  res.status(201).json(comLogo);
+});
+
+export const deleteClientLogo = asyncHandler(async (req: Request, res: Response) => {
+  const existing = await prisma.client.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  if (!existing) throw new NotFoundError("Cliente");
+
+  if (existing.logoKey) await getStorageProvider().delete(existing.logoKey).catch(() => undefined);
+  await prisma.client.update({ where: { id: existing.id }, data: { logoKey: null, logoFileName: null } });
   res.status(204).send();
 });
 

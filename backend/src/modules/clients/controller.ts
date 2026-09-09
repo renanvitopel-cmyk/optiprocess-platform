@@ -206,12 +206,15 @@ export const deleteClient = asyncHandler(async (req: Request, res: Response) => 
 });
 
 /** Logo do cliente: substitui a marca do RLP Maintenance no painel do CMMS dele. Uma so -
- * trocar apaga a anterior do armazenamento, mesmo padrao da foto do ativo. */
-export const uploadClientLogo = asyncHandler(async (req: Request, res: Response) => {
-  const existing = await prisma.client.findFirst({ where: { id: req.params.id, deletedAt: null } });
+ * trocar apaga a anterior do armazenamento, mesmo padrao da foto do ativo.
+ *
+ * E' o proprio cliente quem cuida disso (Configuracao > Meu perfil no portal) - nao a
+ * OptiProcess: a marca e' da empresa dele, e a equipe interna nao teria como saber qual
+ * versao do logo esta valendo. */
+async function salvarLogoDoCliente(clientId: string, file: Express.Multer.File | undefined, userId: string | undefined) {
+  const existing = await prisma.client.findFirst({ where: { id: clientId, deletedAt: null } });
   if (!existing) throw new NotFoundError("Cliente");
 
-  const file = req.file;
   if (!file) throw new ValidationError("Selecione uma imagem.");
   if (!file.mimetype.startsWith("image/")) throw new ValidationError("O logo precisa ser uma imagem.");
 
@@ -227,7 +230,7 @@ export const uploadClientLogo = asyncHandler(async (req: Request, res: Response)
   if (anterior) await storage.delete(anterior).catch(() => undefined);
 
   await writeAuditLog({
-    userId: req.user?.sub,
+    userId,
     action: "UPDATE",
     entityType: "Client",
     entityId: client.id,
@@ -235,15 +238,26 @@ export const uploadClientLogo = asyncHandler(async (req: Request, res: Response)
   });
 
   const [comLogo] = await attachLogoUrl([client]);
-  res.status(201).json(comLogo);
-});
+  return comLogo;
+}
 
-export const deleteClientLogo = asyncHandler(async (req: Request, res: Response) => {
-  const existing = await prisma.client.findFirst({ where: { id: req.params.id, deletedAt: null } });
+async function removerLogoDoCliente(clientId: string) {
+  const existing = await prisma.client.findFirst({ where: { id: clientId, deletedAt: null } });
   if (!existing) throw new NotFoundError("Cliente");
 
   if (existing.logoKey) await getStorageProvider().delete(existing.logoKey).catch(() => undefined);
   await prisma.client.update({ where: { id: existing.id }, data: { logoKey: null, logoFileName: null } });
+}
+
+export const uploadOwnClientLogo = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user?.clientId) throw new ForbiddenError();
+  const client = await salvarLogoDoCliente(req.user.clientId, req.file, req.user.sub);
+  res.status(201).json(client);
+});
+
+export const deleteOwnClientLogo = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user?.clientId) throw new ForbiddenError();
+  await removerLogoDoCliente(req.user.clientId);
   res.status(204).send();
 });
 

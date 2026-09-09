@@ -35,7 +35,7 @@ export default function MaintenanceDashboard() {
   // pequeno da barra lateral do portal continua sendo sempre o do produto, so este aqui
   // (o grande, de boas-vindas) e' que vira a marca do cliente.
   const { data: ownClient } = useQuery({
-    queryKey: ["own-client-logo"],
+    queryKey: ["own-client"],
     queryFn: getOwnClient,
     enabled: isClient,
     staleTime: 300_000,

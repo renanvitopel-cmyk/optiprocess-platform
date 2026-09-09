@@ -1,12 +1,11 @@
 import { useRef, useState } from "react";
 import { Image as ImageIcon, X } from "lucide-react";
-import { uploadClientLogo, deleteClientLogo } from "../api/clients";
+import { uploadOwnClientLogo, deleteOwnClientLogo } from "../api/clients";
 import { useToast } from "./Toast";
 import { getApiErrorMessage } from "../api/client";
 import { FORMATOS_DE_IMAGEM, problemaNaImagem } from "../lib/imagens";
 
 interface Props {
-  clientId: string;
   companyName: string;
   logoUrl?: string | null;
   podeEditar: boolean;
@@ -14,12 +13,12 @@ interface Props {
 }
 
 /**
- * Logo da empresa cliente, gerenciado por quem administra o cadastro (ADMIN/COMMERCIAL) -
- * e' o que substitui a marca do RLP Maintenance no topo do painel do CMMS dessa empresa.
- * O logo pequeno da barra lateral do portal continua sendo sempre a marca do produto;
- * este e' so o do painel principal, mesmo padrao de AssetPhoto.
+ * Logo da propria empresa, gerenciado pelo cliente em Configuracao > Meu perfil - e' o
+ * que substitui a marca do RLP Maintenance no topo do painel do CMMS dela. O logo pequeno
+ * da barra lateral do portal continua sendo sempre a marca do produto; este e' so o do
+ * painel principal, mesmo padrao de AssetPhoto.
  */
-export function ClientLogo({ clientId, companyName, logoUrl, podeEditar, aoMudar }: Props) {
+export function ClientLogo({ companyName, logoUrl, podeEditar, aoMudar }: Props) {
   const { notify } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [enviando, setEnviando] = useState(false);
@@ -29,7 +28,7 @@ export function ClientLogo({ clientId, companyName, logoUrl, podeEditar, aoMudar
     if (problema) return notify("error", problema);
     setEnviando(true);
     try {
-      await uploadClientLogo(clientId, arquivo);
+      await uploadOwnClientLogo(arquivo);
       notify("success", "Logo atualizado.");
       aoMudar();
     } catch (error) {
@@ -42,7 +41,7 @@ export function ClientLogo({ clientId, companyName, logoUrl, podeEditar, aoMudar
   async function remover() {
     setEnviando(true);
     try {
-      await deleteClientLogo(clientId);
+      await deleteOwnClientLogo();
       notify("success", "Logo removido.");
       aoMudar();
     } catch (error) {

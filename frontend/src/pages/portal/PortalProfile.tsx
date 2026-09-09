@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
 import { getOwnClient } from "../../api/clients";
@@ -7,11 +7,16 @@ import { PageHeader } from "../../components/PageHeader";
 import { FullPageSpinner } from "../../components/Spinner";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ChangePasswordModal } from "../../components/ChangePasswordModal";
+import { ClientLogo } from "../../components/ClientLogo";
 
 export default function PortalProfile() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [passwordOpen, setPasswordOpen] = useState(false);
   const { data: client, isLoading } = useQuery({ queryKey: ["own-client"], queryFn: getOwnClient });
+  // So o "Administrador" (perfil CLIENT) mexe na marca da empresa - Planejador e Tecnico
+  // veem a ficha, mas nao trocam o logo, mesma linha do "Meu contrato" ao lado.
+  const podeEditarLogo = user?.role === "CLIENT";
 
   if (isLoading || !client) return <FullPageSpinner />;
 
@@ -36,6 +41,21 @@ export default function PortalProfile() {
             <h2 className="font-semibold text-navy-900">{client.tradeName || client.companyName}</h2>
             <StatusBadge status={client.status} />
           </div>
+
+          <div>
+            <ClientLogo
+              companyName={client.tradeName || client.companyName}
+              logoUrl={client.logoUrl}
+              podeEditar={podeEditarLogo}
+              aoMudar={() => queryClient.invalidateQueries({ queryKey: ["own-client"] })}
+            />
+            {podeEditarLogo && (
+              <p className="mt-2 text-xs text-graphite-500">
+                Substitui a marca do RLP Maintenance no topo do Painel do CMMS da sua empresa.
+              </p>
+            )}
+          </div>
+
           <Info label="Razao social" value={client.companyName} />
           <Info label="CNPJ" value={client.cnpj ?? "-"} />
           <Info label="Endereco" value={[client.addressStreet, client.addressNumber, client.addressCity, client.addressState].filter(Boolean).join(", ") || "-"} />

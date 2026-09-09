@@ -27,8 +27,8 @@ maintenancePlansRouter.use(requireAuth, requireRole(...CMMS_PLANNING_ROLES));
 
 maintenancePlansRouter.post("/gerar-vencidos", requireRole(...CMMS_PLANNING_ROLES), runPlanGeneration);
 // Antes de "/:id", senao "automacao" seria lido como um id de plano.
-maintenancePlansRouter.get("/automacao", requireRole("ADMIN"), getAutomationStatus);
-maintenancePlansRouter.patch("/automacao", requireRole("ADMIN"), updateAutomationStatus);
+maintenancePlansRouter.get("/automacao", getAutomationStatus);
+maintenancePlansRouter.patch("/automacao", requireRole(...CMMS_PLANNING_ROLES), updateAutomationStatus);
 maintenancePlansRouter.get("/", listMaintenancePlans);
 maintenancePlansRouter.get("/:id", getMaintenancePlan);
 maintenancePlansRouter.get("/:id/indicators", getMaintenancePlanIndicators);

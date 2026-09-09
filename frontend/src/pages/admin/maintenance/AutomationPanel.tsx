@@ -7,9 +7,10 @@ import { getApiErrorMessage } from "../../../api/client";
 import { formatDateTime } from "../../../lib/format";
 
 /**
- * O "start geral" da geracao automatica de OS: ate aqui a rodada por hora ja existia no
- * servidor, mas era invisivel - ninguem via se estava rodando, nem tinha como pausar sem
- * mexer no codigo. Aqui da pra ver a ultima rodada e ligar/desligar o piloto automatico.
+ * O "start" da geracao automatica de OS da propria empresa: ate aqui a rodada por hora ja
+ * existia no servidor, mas era invisivel - ninguem via se estava rodando, nem tinha como
+ * pausar sem mexer em codigo. Aqui da pra ver a ultima rodada e ligar/pausar o piloto
+ * automatico - decisao de cada cliente, sobre os proprios planos, nao da OptiProcess.
  *
  * Pausar isto NAO desliga a geracao inteira: "Rodar agora" (aqui) e "Gerar OS" (dentro de
  * cada plano) continuam funcionando - o que pausa e' so a varredura horaria sozinha.
@@ -91,9 +92,8 @@ export function AutomationPanel({ onRodou }: { onRodou: () => void }) {
         </div>
       </div>
       <p className="mt-2 text-xs text-graphite-400">
-        Varre todos os clientes uma vez por hora e gera a OS de cada plano que chegou na antecedencia configurada.
-        Pausar aqui so afeta essa varredura - "Rodar agora" e o botao "Gerar OS" de cada plano continuam
-        funcionando normalmente.
+        Uma vez por hora, gera a OS de cada plano seu que chegou na antecedencia configurada. Pausar aqui so afeta
+        essa varredura - "Rodar agora" e o botao "Gerar OS" de cada plano continuam funcionando normalmente.
       </p>
     </div>
   );

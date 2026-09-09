@@ -21,34 +21,33 @@ export interface ResultadoDaRodada {
   erros: { planId: string; code: string | null; erro: string }[];
 }
 
-const SINGLETON_ID = "singleton";
-
-/** Le o interruptor geral (cria a linha unica na primeira leitura, ligado por padrao). */
-export async function getAutomationSettings() {
+/** Le o interruptor do cliente (cria a linha dele na primeira leitura, ligado por padrao) -
+ * quem decide se quer a propria rodada automatica ligada e' o cliente, nao a OptiProcess. */
+export async function getAutomationSettings(clientId: string) {
   return prisma.automationSettings.upsert({
-    where: { id: SINGLETON_ID },
-    create: { id: SINGLETON_ID },
+    where: { clientId },
+    create: { clientId },
     update: {},
   });
 }
 
-/** So o botao de pausa/retomar mexe aqui - "rodar agora" e a geracao propriamente dita
- * nao passam por esta funcao. */
-export async function setAutomationEnabled(enabled: boolean, userId?: string) {
+/** So o botao de pausa/retomar do cliente mexe aqui - "rodar agora" e a geracao
+ * propriamente dita nao passam por esta funcao. */
+export async function setAutomationEnabled(clientId: string, enabled: boolean, userId?: string) {
   return prisma.automationSettings.upsert({
-    where: { id: SINGLETON_ID },
-    create: { id: SINGLETON_ID, planGenerationEnabled: enabled, updatedById: userId },
+    where: { clientId },
+    create: { clientId, planGenerationEnabled: enabled, updatedById: userId },
     update: { planGenerationEnabled: enabled, updatedById: userId },
   });
 }
 
-/** O que aconteceu na ultima rodada, disparada por cron ou a mao - mesma tabela, para o
- * botao "geracao automatica" na tela nao ficar cego sobre rodadas manuais. */
-async function registrarUltimaRodada(resultado: ResultadoDaRodada): Promise<void> {
+/** O que aconteceu na ultima rodada DESTE cliente, disparada por cron ou a mao - mesma
+ * tabela, para o painel dele em Planos preventivos nao ficar cego sobre rodadas manuais. */
+async function registrarUltimaRodada(clientId: string, resultado: ResultadoDaRodada): Promise<void> {
   await prisma.automationSettings.upsert({
-    where: { id: SINGLETON_ID },
+    where: { clientId },
     create: {
-      id: SINGLETON_ID,
+      clientId,
       lastRunAt: new Date(),
       lastRunGeneratedCount: resultado.gerados.length,
       lastRunIgnoredCount: resultado.ignorados.length,
@@ -70,6 +69,12 @@ function chegouAAntecedenciaPorTempo(nextDueDate: Date | null, generateAdvanceDa
   return geracao != null && geracao <= agora;
 }
 
+/**
+ * Gera as OS vencidas. Sem `clientId`, varre todos os clientes de uma vez (uso interno,
+ * pela rodada automatica - que agora chama isto uma vez por cliente, ver mais abaixo);
+ * com `clientId`, e' o "Rodar agora" de uma empresa so - e so' nesse caso a ultima rodada
+ * fica registrada, porque so' ai' esta claro de quem e' a rodada.
+ */
 export async function gerarOsVencidas(opcoes: { clientId?: string; userId?: string } = {}): Promise<ResultadoDaRodada> {
   const agora = new Date();
 
@@ -130,7 +135,7 @@ export async function gerarOsVencidas(opcoes: { clientId?: string; userId?: stri
     }
   }
 
-  await registrarUltimaRodada(resultado);
+  if (opcoes.clientId) await registrarUltimaRodada(opcoes.clientId, resultado);
   return resultado;
 }
 
@@ -142,26 +147,42 @@ export function previsaoPorMedidor(...args: Parameters<typeof forecastMeterDue>)
 let intervalo: NodeJS.Timeout | null = null;
 
 /**
- * Roda a geracao periodicamente dentro do proprio processo. E' o suficiente para esta
- * escala e nao exige worker separado; como a rodada e' idempotente, nada quebra se o
- * servico reiniciar no meio ou se alguem disparar a rodada manualmente ao mesmo tempo.
+ * Roda a geracao periodicamente dentro do proprio processo, uma empresa de cada vez -
+ * pulando quem pausou a propria rodada. E' o suficiente para esta escala e nao exige
+ * worker separado; como cada rodada e' idempotente, nada quebra se o servico reiniciar no
+ * meio ou se alguem disparar "Rodar agora" ao mesmo tempo.
  */
 export function iniciarGeracaoAutomatica(intervaloMinutos = 60): void {
   if (intervalo) return;
 
   const rodar = async () => {
     try {
-      // So a rodada sozinha (cron) respeita a pausa - "Rodar agora" e "Gerar OS" num plano
-      // especifico continuam sendo uma decisao explicita de quem clicou, e essa nunca e'
-      // bloqueada pelo interruptor geral.
-      const settings = await getAutomationSettings();
-      if (!settings.planGenerationEnabled) {
-        console.log("[planos] geracao automatica pausada - rodada pulada.");
-        return;
+      const clientes = await prisma.client.findMany({
+        where: { deletedAt: null, contractedServices: { has: "CMMS_MAINTENANCE" } },
+        select: { id: true },
+      });
+      if (clientes.length === 0) return;
+
+      const configs = await prisma.automationSettings.findMany({
+        where: { clientId: { in: clientes.map((c) => c.id) } },
+        select: { clientId: true, planGenerationEnabled: true },
+      });
+      // Sem linha ainda = nunca pausou = ligado por padrao (mesma regra de getAutomationSettings).
+      const pausados = new Set(configs.filter((c) => !c.planGenerationEnabled).map((c) => c.clientId));
+
+      let totalGerados = 0;
+      const numeros: string[] = [];
+      for (const cliente of clientes) {
+        // A pausa e' so da rodada sozinha (esta aqui). "Rodar agora" e "Gerar OS" de um
+        // plano especifico continuam sendo uma decisao explicita de quem clicou, e essa
+        // nunca e' bloqueada pelo interruptor do cliente.
+        if (pausados.has(cliente.id)) continue;
+        const r = await gerarOsVencidas({ clientId: cliente.id });
+        totalGerados += r.gerados.length;
+        numeros.push(...r.gerados.map((g) => g.workOrderNumber));
       }
-      const r = await gerarOsVencidas();
-      if (r.gerados.length > 0) {
-        console.log(`[planos] ${r.gerados.length} OS gerada(s) automaticamente: ${r.gerados.map((g) => g.workOrderNumber).join(", ")}`);
+      if (totalGerados > 0) {
+        console.log(`[planos] ${totalGerados} OS gerada(s) automaticamente: ${numeros.join(", ")}`);
       }
     } catch (erro) {
       console.error("[planos] falha na rodada de geracao automatica:", erro);

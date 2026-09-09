@@ -574,6 +574,7 @@ model Client {
   stoppageReasons           StoppageReason[]
   rootCauseAnalyses         RootCauseAnalysis[]
   maintenancePlanTemplates  MaintenancePlanTemplate[]
+  automationSettings        AutomationSettings?
 
   @@index([status])
   @@index([planId])
@@ -2156,12 +2157,13 @@ model Counter {
   @@map("counters")
 }
 
-// Linha unica (id fixo "singleton") com o interruptor geral da geracao automatica de OS a
-// partir dos planos preventivos, mais o que aconteceu na ultima rodada - sem isso o motor
-// (que ja rodava sozinho a cada hora) ficava invisivel, sem controle e sem prova de que
-// estava funcionando.
+// Interruptor da geracao automatica de OS a partir dos planos preventivos, um por cliente
+// - e' o cliente quem decide se quer a propria rodada ligada ou pausada, nao a OptiProcess
+// (que nao mexe nisso pela Gestao). Guarda tambem o que aconteceu na ultima rodada dele.
 model AutomationSettings {
-  id                    String    @id
+  id                    String    @id @default(uuid())
+  clientId              String    @unique
+  client                Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   planGenerationEnabled Boolean   @default(true)
   lastRunAt             DateTime?
   lastRunGeneratedCount Int?

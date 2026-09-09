@@ -5,7 +5,7 @@ import { MaintenanceTriggerType, MaintenancePlanStatus, MaintenancePlanType, Mai
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
-import { NotFoundError, ValidationError, ForbiddenError } from "../../utils/errors";
+import { NotFoundError, ValidationError } from "../../utils/errors";
 import { writeAuditLog } from "../../utils/audit";
 import { clientScopeFilter, assertServiceAccess, assertOwnClient, resolveClientId, resolveClientScope } from "../../middleware/rbac";
 import { deriveDueStatus, computeNextDueDate } from "../../utils/status";
@@ -807,28 +807,28 @@ export const runPlanGeneration = asyncHandler(async (req: Request, res: Response
 });
 
 /**
- * Interruptor geral da geracao automatica (a rodada por hora, sozinha) - so' a OptiProcess
- * mexe, porque a rodada varre todos os clientes de uma vez, nao e' um ajuste por empresa.
- * "Rodar agora" continua liberado pra todo mundo mesmo com isso pausado: aqui e' so o
- * piloto automatico, nao a geracao em si.
+ * Interruptor da geracao automatica (a rodada por hora, sozinha) - da propria empresa.
+ * Quem decide se quer ligado e' o cliente, na tela de Planos preventivos dele; a OptiProcess
+ * nao mexe nisso pela Gestao. "Rodar agora" continua liberado mesmo com isso pausado: aqui
+ * e' so o piloto automatico, nao a geracao em si.
  */
 export const getAutomationStatus = asyncHandler(async (req: Request, res: Response) => {
-  if (req.user?.role !== "ADMIN") throw new ForbiddenError();
+  const clientId = resolveClientId(req, req.query.clientId as string | undefined);
   const { getAutomationSettings } = await import("../../lib/planRunner.js");
-  res.json(await getAutomationSettings());
+  res.json(await getAutomationSettings(clientId));
 });
 
 export const updateAutomationStatus = asyncHandler(async (req: Request, res: Response) => {
-  if (req.user?.role !== "ADMIN") throw new ForbiddenError();
-  const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
+  const { enabled, clientId: bodyClientId } = z.object({ enabled: z.boolean(), clientId: z.string().uuid().optional() }).parse(req.body);
+  const clientId = resolveClientId(req, bodyClientId);
   const { setAutomationEnabled } = await import("../../lib/planRunner.js");
-  const settings = await setAutomationEnabled(enabled, req.user?.sub);
+  const settings = await setAutomationEnabled(clientId, enabled, req.user?.sub);
 
   await writeAuditLog({
     userId: req.user?.sub,
     action: "UPDATE",
     entityType: "AutomationSettings",
-    entityId: "singleton",
+    entityId: clientId,
     description: `Geracao automatica de OS ${enabled ? "retomada" : "pausada"}`,
   });
 

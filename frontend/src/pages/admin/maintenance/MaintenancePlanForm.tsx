@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Trash2, Check } from "lucide-react";
+import { Plus, Trash2, Check, X } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
 import { TextInput, TextareaInput, SelectInput, CheckboxInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
@@ -12,6 +12,7 @@ import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
 import { listMeters } from "../../../api/meters";
 import { createMaintenancePlan, getMaintenancePlan, updateMaintenancePlan } from "../../../api/maintenancePlans";
+import { getInstrument } from "../../../api/instruments";
 import { listSpareParts } from "../../../api/spareParts";
 import { listLaborTypes } from "../../../api/laborTypes";
 import { useToast } from "../../../components/Toast";
@@ -27,7 +28,9 @@ const PRIORITY_LABELS: Record<string, string> = { LOW: "Baixa", MEDIUM: "Media",
 
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
-  instrumentId: z.string().uuid("Selecione o ativo."),
+  // Obrigatorio so no ativo individual - a familia de ativos valida a propria lista
+  // (instrumentosFamilia, fora do react-hook-form) na hora de avancar/salvar.
+  instrumentId: z.string().uuid().optional().or(z.literal("")),
   name: z.string().min(2, "Informe o nome do plano."),
   description: z.string().optional(),
   triggerType: z.enum(["TIME", "METER", "CONDITION"]),
@@ -138,7 +141,14 @@ export default function MaintenancePlanForm() {
   const instrumentId = watch("instrumentId");
   const triggerType = watch("triggerType");
   const planType = watch("planType");
+  const scope = watch("scope");
   const lubricationRouteId = watch("lubricationRouteId");
+
+  // Familia de ativos, so no cadastro (editar continua sendo a ficha de um plano so, ja
+  // preso a um ativo no banco): um plano por ativo escolhido, todos com a mesma
+  // configuracao - "aplicado a varios ativos" sem inventar uma tabela nova so pra isso.
+  const [instrumentosFamilia, setInstrumentosFamilia] = useState<string[]>([]);
+  const [erroFamilia, setErroFamilia] = useState<string | null>(null);
 
   const { data: rotasDeLubrificacao } = useQuery({
     queryKey: ["rotas-lubrificacao-plano", clientId],
@@ -178,7 +188,7 @@ export default function MaintenancePlanForm() {
   // validos, para o usuario nao descobrir erro da etapa 1 ao clicar em salvar na 3.
   const [step, setStep] = useState(0);
   const STEP_FIELDS: (keyof FormValues)[][] = [
-    ["clientId", "instrumentId", "name", "planType", "scope", "defaultPriority", "status"],
+    ["clientId", "name", "planType", "scope", "defaultPriority", "status"],
     ["triggerType", "frequencyEvery", "frequencyUnit", "meterId", "meterInterval", "conditionMeterId", "toleranceDaysBefore", "toleranceDaysAfter"],
     ["estimatedLaborHours", "procedure", "parts", "checklistTemplate"],
   ];
@@ -186,6 +196,19 @@ export default function MaintenancePlanForm() {
     if (next > step) {
       const ok = await trigger(STEP_FIELDS[step]);
       if (!ok) return;
+      if (step === 0) {
+        const usaFamilia = !isEdit && scope === "ASSET_FAMILY";
+        if (usaFamilia && instrumentosFamilia.length === 0) {
+          setErroFamilia("Adicione pelo menos um ativo.");
+          return;
+        }
+        if (!usaFamilia && !instrumentId) {
+          setErroFamilia(null);
+          notify("error", "Selecione o ativo.");
+          return;
+        }
+        setErroFamilia(null);
+      }
     }
     setStep(next);
   }
@@ -261,6 +284,17 @@ export default function MaintenancePlanForm() {
   }, [existing, reset]);
 
   async function onSubmit(values: FormValues) {
+    const usaFamilia = !isEdit && values.scope === "ASSET_FAMILY";
+    if (usaFamilia && instrumentosFamilia.length === 0) {
+      setErroFamilia("Adicione pelo menos um ativo.");
+      setStep(0);
+      return;
+    }
+    if (!usaFamilia && !values.instrumentId) {
+      notify("error", "Selecione o ativo.");
+      setStep(0);
+      return;
+    }
     try {
       const payload = {
         ...values,
@@ -296,7 +330,21 @@ export default function MaintenancePlanForm() {
           .filter((p) => p.sparePartId)
           .map((p) => ({ ...p, alternativeSparePartId: p.alternativeSparePartId || null, suggestedSupplier: p.suggestedSupplier || null })),
       };
-      const saved = isEdit ? await updateMaintenancePlan(id!, payload) : await createMaintenancePlan(payload);
+      if (usaFamilia) {
+        // Mesma configuracao, um plano por ativo - e' o que "aplicado a varios ativos"
+        // significa aqui: nao existe uma linha "plano da familia" no banco, sao N planos
+        // de verdade, cada um gerando a propria OS no proprio ciclo.
+        const planos = [];
+        for (const instId of instrumentosFamilia) {
+          planos.push(await createMaintenancePlan({ ...payload, instrumentId: instId }));
+        }
+        notify("success", `${planos.length} planos criados, um por ativo.`);
+        navigate(`${base}/planos`);
+        return;
+      }
+      // Ja garantido acima (usaFamilia === false implica values.instrumentId preenchido).
+      const payloadUnico = { ...payload, instrumentId: values.instrumentId! };
+      const saved = isEdit ? await updateMaintenancePlan(id!, payloadUnico) : await createMaintenancePlan(payloadUnico);
       notify("success", isEdit ? "Plano atualizado." : "Plano criado.");
       navigate(`${base}/planos/${saved.id}`);
     } catch (error) {
@@ -355,7 +403,11 @@ export default function MaintenancePlanForm() {
             ) : (
               <ClientPicker required error={errors.clientId?.message} {...register("clientId")} />
             )}
-            <InstrumentPicker clientId={clientId} required error={errors.instrumentId?.message} {...register("instrumentId")} />
+            {isEdit || scope !== "ASSET_FAMILY" ? (
+              <InstrumentPicker clientId={clientId} required error={errors.instrumentId?.message} {...register("instrumentId")} />
+            ) : (
+              <input type="hidden" {...register("instrumentId")} />
+            )}
           </div>
           <TextInput label="Nome do plano" required placeholder="Ex.: Manutencao preventiva mensal" error={errors.name?.message} {...register("name")} />
           <TextareaInput label="Descricao (opcional)" rows={2} {...register("description")} />
@@ -439,6 +491,42 @@ export default function MaintenancePlanForm() {
               {...register("specialtyId")}
             />
           </div>
+
+          {!isEdit && scope === "ASSET_FAMILY" && (
+            <div className="rounded-lg border border-gray-200 p-4">
+              <p className="text-sm font-medium text-graphite-700">Ativos desta familia</p>
+              <p className="mt-0.5 text-xs text-graphite-500">
+                Um plano igual (mesma configuracao, checklist e pecas) para cada ativo adicionado - salvar cria um
+                plano por ativo.
+              </p>
+              {instrumentosFamilia.length > 0 && (
+                <ul className="mt-3 space-y-1">
+                  {instrumentosFamilia.map((instId) => (
+                    <FamiliaChip
+                      key={instId}
+                      instrumentId={instId}
+                      onRemover={() => setInstrumentosFamilia((atual) => atual.filter((x) => x !== instId))}
+                    />
+                  ))}
+                </ul>
+              )}
+              <div className="mt-3">
+                <InstrumentPicker
+                  key={instrumentosFamilia.length}
+                  name="instrumentoFamiliaAdicionar"
+                  clientId={clientId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    if (id && !instrumentosFamilia.includes(id)) {
+                      setInstrumentosFamilia((atual) => [...atual, id]);
+                      setErroFamilia(null);
+                    }
+                  }}
+                />
+              </div>
+              {erroFamilia && <p className="mt-1 text-xs text-safety-red">{erroFamilia}</p>}
+            </div>
+          )}
 
           {!isClient && (
             <UserPicker label="Responsavel pelo plano" roles={["ADMIN", "TECHNICIAN"]} error={errors.responsibleId?.message} {...register("responsibleId")} />
@@ -877,5 +965,24 @@ export default function MaintenancePlanForm() {
         </div>
       </form>
     </div>
+  );
+}
+
+/** Uma linha da lista de ativos da familia - busca so o necessario pra identificar o
+ * ativo (TAG/descricao), a ficha completa nao interessa aqui. */
+function FamiliaChip({ instrumentId, onRemover }: { instrumentId: string; onRemover: () => void }) {
+  const { data: instrumento } = useQuery({
+    queryKey: ["instrument-resumo-familia", instrumentId],
+    queryFn: () => getInstrument(instrumentId),
+  });
+  return (
+    <li className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm">
+      <span className="min-w-0 truncate text-graphite-800">
+        {instrumento ? `${instrumento.tag ?? instrumento.type} - ${instrumento.description || instrumento.model || ""}` : "Carregando..."}
+      </span>
+      <button type="button" className="shrink-0 text-graphite-400 hover:text-safety-red" onClick={onRemover} aria-label="Remover da familia">
+        <X className="h-4 w-4" />
+      </button>
+    </li>
   );
 }

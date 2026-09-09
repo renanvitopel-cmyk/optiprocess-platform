@@ -122,7 +122,12 @@ Gerar a OS agora mesmo assim?`)) {
           canManage && (
             <>
               {due && plan.status === "ACTIVE" && (
-                <button className="btn-primary" onClick={() => handleGenerate()} disabled={generating}>
+                <button
+                  className="btn-primary"
+                  onClick={() => handleGenerate()}
+                  disabled={generating || !plan.instrumentId}
+                  title={!plan.instrumentId ? "Escolha um ativo antes de gerar a OS." : undefined}
+                >
                   <PlayCircle className="h-4 w-4" /> {generating ? "Gerando..." : "Gerar OS"}
                 </button>
               )}
@@ -148,6 +153,17 @@ Gerar a OS agora mesmo assim?`)) {
           )
         }
       />
+
+      {!plan.instrumentId && canManage && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-safety-yellow/40 bg-safety-yellow/10 px-4 py-3">
+          <p className="text-sm text-graphite-700">
+            Este plano ainda nao tem um ativo vinculado - a OS so pode ser gerada depois de escolher um.
+          </p>
+          <button className="btn-outline text-sm" onClick={() => navigate(`${base}/planos/${id}/editar`)}>
+            Escolher ativo
+          </button>
+        </div>
+      )}
 
       {indicators && (
         <div className="mb-6 space-y-4">

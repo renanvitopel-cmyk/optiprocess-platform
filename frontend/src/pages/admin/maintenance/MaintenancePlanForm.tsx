@@ -197,14 +197,11 @@ export default function MaintenancePlanForm() {
       const ok = await trigger(STEP_FIELDS[step]);
       if (!ok) return;
       if (step === 0) {
+        // Ativo e' opcional (pode ser atribuido depois, na edicao) - so a familia exige
+        // pelo menos um, porque "familia de ativos" sem ativo nenhum nao significa nada.
         const usaFamilia = !isEdit && scope === "ASSET_FAMILY";
         if (usaFamilia && instrumentosFamilia.length === 0) {
           setErroFamilia("Adicione pelo menos um ativo.");
-          return;
-        }
-        if (!usaFamilia && !instrumentId) {
-          setErroFamilia(null);
-          notify("error", "Selecione o ativo.");
           return;
         }
         setErroFamilia(null);
@@ -217,7 +214,7 @@ export default function MaintenancePlanForm() {
     if (existing) {
       reset({
         clientId: existing.clientId,
-        instrumentId: existing.instrumentId,
+        instrumentId: existing.instrumentId ?? "",
         name: existing.name,
         description: existing.description ?? "",
         triggerType: existing.triggerType,
@@ -290,11 +287,6 @@ export default function MaintenancePlanForm() {
       setStep(0);
       return;
     }
-    if (!usaFamilia && !values.instrumentId) {
-      notify("error", "Selecione o ativo.");
-      setStep(0);
-      return;
-    }
     try {
       const payload = {
         ...values,
@@ -342,8 +334,7 @@ export default function MaintenancePlanForm() {
         navigate(`${base}/planos`);
         return;
       }
-      // Ja garantido acima (usaFamilia === false implica values.instrumentId preenchido).
-      const payloadUnico = { ...payload, instrumentId: values.instrumentId! };
+      const payloadUnico = { ...payload, instrumentId: values.instrumentId || null };
       const saved = isEdit ? await updateMaintenancePlan(id!, payloadUnico) : await createMaintenancePlan(payloadUnico);
       notify("success", isEdit ? "Plano atualizado." : "Plano criado.");
       navigate(`${base}/planos/${saved.id}`);
@@ -404,41 +395,48 @@ export default function MaintenancePlanForm() {
               <ClientPicker required error={errors.clientId?.message} {...register("clientId")} />
             )}
             {isEdit || scope !== "ASSET_FAMILY" ? (
-              <InstrumentPicker clientId={clientId} required error={errors.instrumentId?.message} {...register("instrumentId")} />
+              <InstrumentPicker
+                clientId={clientId}
+                hint="Opcional - pode ficar em branco agora e ser escolhido depois, na edicao. Sem ativo, o codigo abaixo e' o que identifica o plano."
+                error={errors.instrumentId?.message}
+                {...register("instrumentId")}
+              />
             ) : (
               <input type="hidden" {...register("instrumentId")} />
             )}
           </div>
-          <TextInput label="Nome do plano" required placeholder="Ex.: Manutencao preventiva mensal" error={errors.name?.message} {...register("name")} />
+          <TextInput label="Nome do plano" required placeholder="Ex.: Manutencao preventiva mensal" hint="Descreva do que se trata - e' o que identifica o plano no dia a dia." error={errors.name?.message} {...register("name")} />
           <TextareaInput label="Descricao (opcional)" rows={2} {...register("description")} />
 
           {/* Dados que o plano carrega mas nao se digita: codigo, origem e a criticidade
-              do proprio ativo. So leitura, para nao virar informacao repetida. */}
-          {(isEdit || instrumentId) && (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-graphite-400">Dados do plano</p>
-              <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-3">
-                <div>
-                  <dt className="text-xs text-graphite-400">Codigo</dt>
-                  <dd className="font-medium text-graphite-800">{existing?.code ?? "Gerado ao salvar (PM-0001)"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-graphite-400">Origem</dt>
-                  <dd className="font-medium text-graphite-800">
-                    {existing?.template ? `Modelo: ${existing.template.name}` : "Plano proprio"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-graphite-400">Criticidade do ativo</dt>
-                  <dd className="font-medium text-graphite-800">
-                    {existing?.instrument?.criticality
+              do proprio ativo. So leitura, para nao virar informacao repetida. Sempre
+              visivel (nao so com ativo escolhido): o codigo e' o que identifica o plano
+              quando nao ha ativo nenhum. */}
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-graphite-400">Dados do plano</p>
+            <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-3">
+              <div>
+                <dt className="text-xs text-graphite-400">Codigo</dt>
+                <dd className="font-medium text-graphite-800">{existing?.code ?? "Gerado ao salvar (PM-0001)"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-graphite-400">Origem</dt>
+                <dd className="font-medium text-graphite-800">
+                  {existing?.template ? `Modelo: ${existing.template.name}` : "Plano proprio"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-graphite-400">Criticidade do ativo</dt>
+                <dd className="font-medium text-graphite-800">
+                  {!instrumentId
+                    ? "Sem ativo vinculado"
+                    : existing?.instrument?.criticality
                       ? PRIORITY_LABELS[existing.instrument.criticality]
                       : "Definida no cadastro do ativo"}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          )}
+                </dd>
+              </div>
+            </dl>
+          </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
             <SelectInput

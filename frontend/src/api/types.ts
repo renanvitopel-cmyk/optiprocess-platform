@@ -816,8 +816,9 @@ export interface MaintenancePlan {
     } | null;
   };
   client?: ClientRef;
-  instrumentId: string;
-  instrument?: InstrumentRef;
+  /** Opcional: um plano pode nao ter ativo vinculado ainda. */
+  instrumentId: string | null;
+  instrument?: InstrumentRef | null;
   name: string;
   description: string | null;
   triggerType: MaintenanceTriggerType;

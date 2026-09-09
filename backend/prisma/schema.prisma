@@ -1610,8 +1610,11 @@ model MaintenancePlan {
   // catalogo LaborType em vez de criar mais uma lista de texto livre.
   specialtyId   String?
   specialty     LaborType?             @relation(fields: [specialtyId], references: [id])
-  instrumentId  String
-  instrument    Instrument             @relation(fields: [instrumentId], references: [id])
+  // Opcional: um plano pode nascer sem ativo (uma inspecao geral, por exemplo) e ganhar
+  // um depois, na edicao - o codigo (PM-0001) identifica o plano enquanto isso, e a OS so
+  // pode ser gerada depois que um ativo for atribuido (a OS em si sempre exige um).
+  instrumentId  String?
+  instrument    Instrument?            @relation(fields: [instrumentId], references: [id])
   name          String
   description   String?
   triggerType   MaintenanceTriggerType

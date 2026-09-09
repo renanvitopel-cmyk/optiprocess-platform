@@ -144,7 +144,10 @@ const planPartSchema = z.object({
 
 const planSchema = z.object({
   clientId: z.string().uuid().optional(),
-  instrumentId: z.string().uuid(),
+  // Opcional: um plano pode nascer sem ativo (uma inspecao geral, por exemplo) e ganhar um
+  // mais tarde, na edicao - o codigo sequencial (PM-0001) e' o que identifica o plano
+  // enquanto isso, e o nome digitado pelo usuario descreve do que se trata.
+  instrumentId: z.string().uuid().nullish(),
   name: z.string().min(2, "Informe o nome do plano."),
   description: z.string().nullish(),
   triggerType: z.nativeEnum(MaintenanceTriggerType),
@@ -268,7 +271,7 @@ async function sincronizarPeriodicidadeDeCalibracao(planId: string): Promise<voi
     where: { id: planId, deletedAt: null },
     select: { planType: true, status: true, instrumentId: true, frequencyDays: true },
   });
-  if (!plan || plan.planType !== "CALIBRATION" || plan.status !== "ACTIVE" || !plan.frequencyDays) return;
+  if (!plan || !plan.instrumentId || plan.planType !== "CALIBRATION" || plan.status !== "ACTIVE" || !plan.frequencyDays) return;
 
   // frequencyDays ja e' o intervalo normalizado do plano; a ficha do ativo fala em meses.
   const meses = Math.max(1, Math.round(plan.frequencyDays / 30));
@@ -290,6 +293,28 @@ async function sincronizarPeriodicidadeDeCalibracao(planId: string): Promise<voi
   });
 }
 
+/**
+ * Calibracao e' servico da OptiProcess, nao autoatendimento do CMMS: o que o cliente cria
+ * aqui e' um pedido, nao o programa oficial de calibracao (que vive em Ativo calibravel +
+ * Calibration, com certificado de verdade). Sem um aviso, esse plano ficaria enterrado na
+ * lista do cliente e a OptiProcess nunca saberia que ele pediu.
+ */
+async function alertarOptiProcessSobrePlanoDeCalibracao(plan: { id: string; name: string; code: string | null; client: { companyName: string } }) {
+  const equipe = await prisma.user.findMany({
+    where: { role: { in: ["ADMIN", "COMMERCIAL"] }, active: true, deletedAt: null },
+    select: { id: true },
+  });
+  if (equipe.length === 0) return;
+  await prisma.notification.createMany({
+    data: equipe.map((u) => ({
+      userId: u.id,
+      title: "Plano de calibracao criado pelo cliente",
+      message: `${plan.client.companyName} criou o plano ${plan.code ?? plan.name} (${plan.name}) - decida se ele entra no programa de calibracao da OptiProcess.`,
+      link: `/gestao/manutencao/planos/${plan.id}`,
+    })),
+  });
+}
+
 export const createMaintenancePlan = asyncHandler(async (req: Request, res: Response) => {
   await assertServiceAccess(req, ["CMMS_MAINTENANCE"]);
   const data = planSchema.parse(req.body);
@@ -303,9 +328,14 @@ export const createMaintenancePlan = asyncHandler(async (req: Request, res: Resp
     throw new ValidationError("Informe o medidor e o intervalo para um plano por medidor.");
   }
 
-  const instrument = await prisma.instrument.findFirst({ where: { id: data.instrumentId, deletedAt: null }, select: { clientId: true } });
-  if (!instrument) throw new NotFoundError("Ativo");
-  if (instrument.clientId !== clientId) throw new ValidationError("Esse ativo pertence a outra empresa.");
+  // Ativo e' opcional na criacao - um plano pode nascer so com nome e periodicidade (uma
+  // inspecao geral, por exemplo) e ganhar o ativo depois, na edicao. So valida quando
+  // um ativo de fato foi escolhido.
+  if (data.instrumentId) {
+    const instrument = await prisma.instrument.findFirst({ where: { id: data.instrumentId, deletedAt: null }, select: { clientId: true } });
+    if (!instrument) throw new NotFoundError("Ativo");
+    if (instrument.clientId !== clientId) throw new ValidationError("Esse ativo pertence a outra empresa.");
+  }
 
   if (data.parts?.length) await assertPartsBelongToClient(data.parts, clientId);
   assertLubrificacaoCoerente(data.planType, data);
@@ -366,6 +396,12 @@ export const createMaintenancePlan = asyncHandler(async (req: Request, res: Resp
     description: `Plano de manutencao "${plan.name}" criado`,
   });
 
+  // So avisa quando quem criou e' do lado do cliente - a propria equipe interna, criando
+  // pelo acesso master, ja sabe que criou.
+  if (plan.planType === "CALIBRATION" && ["CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN"].includes(req.user?.role ?? "")) {
+    await alertarOptiProcessSobrePlanoDeCalibracao(plan);
+  }
+
   res.status(201).json(withDerivedStatus(plan));
 });
 
@@ -375,6 +411,14 @@ export const updateMaintenancePlan = asyncHandler(async (req: Request, res: Resp
   const existing = await prisma.maintenancePlan.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!existing) throw new NotFoundError("Plano de manutencao");
   assertOwnClient(req, existing.clientId);
+
+  // Ativo pode ser atribuido agora, num plano que nasceu sem um (a inspecao geral virou
+  // "sobre este ativo especifico").
+  if (data.instrumentId && data.instrumentId !== existing.instrumentId) {
+    const instrument = await prisma.instrument.findFirst({ where: { id: data.instrumentId, deletedAt: null }, select: { clientId: true } });
+    if (!instrument) throw new NotFoundError("Ativo");
+    if (instrument.clientId !== existing.clientId) throw new ValidationError("Esse ativo pertence a outra empresa.");
+  }
 
   if (data.parts) await assertPartsBelongToClient(data.parts, existing.clientId);
 
@@ -465,6 +509,11 @@ export const updateMaintenancePlan = asyncHandler(async (req: Request, res: Resp
     });
   }
 
+  // Virou plano de calibracao agora (nao era antes) - mesmo aviso da criacao.
+  if (plan.planType === "CALIBRATION" && existing.planType !== "CALIBRATION" && ["CLIENT", "CLIENT_PLANNER", "CLIENT_TECHNICIAN"].includes(req.user?.role ?? "")) {
+    await alertarOptiProcessSobrePlanoDeCalibracao(plan);
+  }
+
   res.json(withDerivedStatus(plan));
 });
 
@@ -517,6 +566,12 @@ async function criarOsDoPlano(planId: string, opcoes: { userId?: string; automat
       CLOSED: "Este plano foi encerrado.",
     };
     throw new ValidationError(`${motivo[plan.status] ?? "Plano inativo."} So plano Ativo gera ordem de manutencao.`);
+  }
+  // A OS precisa de um ativo (nao existe OS "no ar") - um plano criado sem ativo fica
+  // parado ate alguem editar e escolher um. A automatica cai em "ignorados", nao em erro
+  // de rodada: nao e' um problema do plano, e' so cedo demais para gerar.
+  if (!plan.instrumentId) {
+    throw new ValidationError("Este plano ainda nao tem um ativo vinculado. Edite o plano e escolha um ativo antes de gerar a OS.");
   }
 
   // Uma OS aberta por vez. Sem isso, a rodada automatica criaria uma OS a cada passada e o

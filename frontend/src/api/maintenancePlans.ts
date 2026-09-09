@@ -22,7 +22,8 @@ export async function getMaintenancePlan(id: string): Promise<MaintenancePlan> {
 
 export interface MaintenancePlanInput {
   clientId: string;
-  instrumentId: string;
+  // Opcional: um plano pode nascer sem ativo e ganhar um depois, na edicao.
+  instrumentId?: string | null;
   name: string;
   description?: string | null;
   triggerType: MaintenanceTriggerType;

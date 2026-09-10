@@ -1,6 +1,5 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { AssetHierarchyLevel } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/errors";
@@ -28,7 +27,7 @@ function semNomesRepetidos<T extends { name: string; clientId: string | null }>(
 }
 
 export const listAssetTypes = asyncHandler(async (req: Request, res: Response) => {
-  await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const { active, clientId } = req.query as { active?: string; clientId?: string };
   const types = await prisma.assetType.findMany({
     where: {
@@ -43,14 +42,10 @@ export const listAssetTypes = asyncHandler(async (req: Request, res: Response) =
 const assetTypeSchema = z.object({
   name: z.string().min(2, "Informe o nome do tipo."),
   clientId: z.string().uuid().nullish(),
-  // Nivel na hierarquia funcional (Planta/Area/Maquina/Subconjunto/Parte) - so pra arvore
-  // de ativos escolher o icone certo. Opcional: tipos antigos (Motor, Compressor...) nao
-  // precisam disso pra continuar funcionando.
-  level: z.nativeEnum(AssetHierarchyLevel).nullish(),
 });
 
 export const createAssetType = asyncHandler(async (req: Request, res: Response) => {
-  await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const data = assetTypeSchema.parse(req.body);
   if (req.user?.role === "CLIENT") {
     if (!req.user.clientId) throw new ForbiddenError();
@@ -76,7 +71,7 @@ export const createAssetType = asyncHandler(async (req: Request, res: Response) 
 const updateSchema = assetTypeSchema.partial().extend({ active: z.boolean().optional() });
 
 export const updateAssetType = asyncHandler(async (req: Request, res: Response) => {
-  await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const data = updateSchema.parse(req.body);
   const existing = await prisma.assetType.findFirst({ where: { id: req.params.id } });
   if (!existing) throw new NotFoundError("Tipo de ativo");
@@ -93,7 +88,7 @@ export const updateAssetType = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const deleteAssetType = asyncHandler(async (req: Request, res: Response) => {
-  await assertServiceAccess(req, ["CALIBRATION", "CMMS_MAINTENANCE"]);
+  await assertServiceAccess(req, ["CALIBRATION"]);
   const existing = await prisma.assetType.findFirst({ where: { id: req.params.id } });
   if (!existing) throw new NotFoundError("Tipo de ativo");
 

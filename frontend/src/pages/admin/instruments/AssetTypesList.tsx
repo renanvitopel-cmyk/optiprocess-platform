@@ -3,12 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { listAssetTypes, createAssetType, updateAssetType, deleteAssetType } from "../../../api/assetTypes";
 import type { AssetType } from "../../../api/types";
-import { ASSET_LEVEL_LABELS, ASSET_LEVEL_OPTIONS } from "../../../lib/assetHierarchy";
 import { PageHeader } from "../../../components/PageHeader";
 import { DataTable } from "../../../components/DataTable";
 import { StatusBadge } from "../../../components/StatusBadge";
 import { Modal } from "../../../components/Modal";
-import { TextInput, SelectInput } from "../../../components/form/Field";
+import { TextInput } from "../../../components/form/Field";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 import { useAuth } from "../../../auth/AuthContext";
@@ -18,7 +17,6 @@ import { z } from "zod";
 
 const schema = z.object({
   name: z.string().min(2, "Informe o nome do tipo."),
-  level: z.enum(["PLANT", "AREA", "MACHINE", "SUBASSEMBLY", "PART"]).optional().or(z.literal("")),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -48,19 +46,19 @@ export default function AssetTypesList() {
   }
 
   function openCreate() {
-    reset({ name: "", level: "" });
+    reset({ name: "" });
     setEditingType(null);
     setCreateOpen(true);
   }
 
   function openEdit(type: AssetType) {
-    reset({ name: type.name, level: type.level ?? "" });
+    reset({ name: type.name });
     setEditingType(type);
     setCreateOpen(true);
   }
 
   async function onSubmit(values: FormValues) {
-    const payload = { name: values.name, level: values.level || null };
+    const payload = { name: values.name };
     try {
       if (editingType) {
         await updateAssetType(editingType.id, payload);
@@ -124,10 +122,6 @@ export default function AssetTypesList() {
         columns={[
           { header: "Nome", accessor: (t) => <span className="font-medium text-navy-900">{t.name}</span> },
           {
-            header: "Nivel",
-            accessor: (t) => <span className="text-xs text-graphite-500">{t.level ? ASSET_LEVEL_LABELS[t.level] : "-"}</span>,
-          },
-          {
             header: "Origem",
             accessor: (t) => <span className="text-xs text-graphite-500">{t.clientId ? "Meu catalogo" : "Padrao OptiProcess"}</span>,
           },
@@ -174,15 +168,7 @@ export default function AssetTypesList() {
         }
       >
         <form id="asset-type-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-          <TextInput label="Nome" required placeholder="Ex.: Planta, Maquina, Subconjunto" error={errors.name?.message} {...register("name")} />
-          <SelectInput
-            label="Nivel na arvore"
-            hint="Define o icone deste tipo na arvore de ativos. Deixe em branco para um tipo antigo/especifico."
-            placeholder="Sem nivel definido"
-            options={ASSET_LEVEL_OPTIONS}
-            error={errors.level?.message}
-            {...register("level")}
-          />
+          <TextInput label="Nome" required placeholder="Ex.: Multimetro, Manometro, Termometro" error={errors.name?.message} {...register("name")} />
         </form>
       </Modal>
     </div>

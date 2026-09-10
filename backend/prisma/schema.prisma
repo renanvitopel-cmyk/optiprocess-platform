@@ -43,16 +43,6 @@ enum ClientStatus {
   PROSPECT
 }
 
-// Situacao do CONTRATO do CMMS - separada de ClientStatus, que diz se a EMPRESA e' cliente,
-// prospect ou inativa no cadastro. Uma empresa ativa pode estar em periodo de teste, e um
-// contrato cancelado nao apaga a empresa nem o historico dela.
-enum CmmsContractStatus {
-  TRIAL
-  ACTIVE
-  SUSPENDED
-  CANCELED
-}
-
 enum ServiceCategory {
   ELECTRICAL_MAINTENANCE
   PANEL_MAINTENANCE
@@ -63,238 +53,6 @@ enum ServiceCategory {
   EV_CHARGER
   CMMS_MAINTENANCE
   OTHER
-}
-
-// ---------------------------------------------------------------------------
-// CMMS (gestao de manutencao) - enums
-// ---------------------------------------------------------------------------
-
-enum MaintenanceTriggerType {
-  TIME
-  METER
-  // Dispara quando um ponto de medicao entra em zona de alarme/critico. Ciclo de producao
-  // e contador de partidas nao viram tipos proprios: sao METER com a unidade do medidor
-  // (ciclos, partidas, toneladas) - mesma mecanica, evita tres jeitos de contar a mesma coisa.
-  CONDITION
-}
-
-// Periodicidade do plano por tempo. frequencyDays continua no banco (compatibilidade e
-// consultas antigas), calculado a partir daqui.
-enum MaintenanceFrequencyUnit {
-  DAY
-  WEEK
-  MONTH
-  YEAR
-}
-
-// Em que dias a manutencao pode cair.
-enum OperationalCalendar {
-  ALL_DAYS
-  BUSINESS_DAYS
-}
-
-// O que fazer quando o medidor e' trocado ou zerado.
-enum MeterResetRule {
-  CONTINUE    // segue somando: leitura acumulada do ativo, nao do medidor
-  RESET_BASE  // zera a base na troca: conta a partir da nova leitura
-}
-
-// Com mais de um gatilho, o que faz a OS nascer.
-enum MaintenanceTriggerMode {
-  FIRST_DUE // o primeiro que vencer
-  ALL_DUE   // so quando todos vencerem
-}
-
-// O que fazer quando falta material obrigatorio na hora de gerar a OS. Nao existe
-// "melhor esforco silencioso": em qualquer opcao o planejador fica sabendo o motivo.
-enum MaterialPolicy {
-  RESERVE_AUTO             // reserva o que da e registra o que faltou
-  BLOCK_AWAITING_MATERIAL  // gera a OS ja em "Aguardando material"
-  ALERT_ONLY               // gera sem reservar, com alerta
-  DO_NOT_GENERATE          // nao gera se faltar material obrigatorio
-}
-
-// Ciclo de vida do plano. Substitui o boolean "active" como fonte da verdade (o boolean
-// continua no banco, sincronizado, para nao quebrar consultas antigas): Rascunho e' o
-// plano em montagem, Suspenso para de gerar OS mas volta, Encerrado e' aposentado.
-enum MaintenancePlanStatus {
-  DRAFT
-  ACTIVE
-  SUSPENDED
-  CLOSED
-}
-
-// Natureza do trabalho do plano - muda o que se espera do checklist e entra nos
-// indicadores (ex.: quanto da carga e' inspecao x lubrificacao x legal).
-enum MaintenancePlanType {
-  PREVENTIVE
-  PREDICTIVE
-  INSPECTION
-  LUBRICATION
-  CALIBRATION
-  ELECTRICAL
-  MECHANICAL
-  REGULATORY
-  OTHER
-}
-
-// Plano de um ativo so, ou modelo aplicavel a varios ativos do mesmo tipo/familia.
-enum MaintenancePlanScope {
-  SINGLE_ASSET
-  ASSET_FAMILY
-}
-
-// Tecnicas de manutencao preditiva. COUNTER e' o caso a parte: nao mede condicao, mede
-// uso acumulado (horimetro/odometro) e serve ao plano preventivo por uso.
-enum PredictiveTechnique {
-  COUNTER
-  VIBRATION
-  THERMOGRAPHY
-  OIL_ANALYSIS
-  ULTRASOUND
-  MOTOR_CURRENT
-  VISUAL
-  OTHER
-}
-
-enum MeasurementDirection {
-  UPPER // quanto maior, pior (vibracao, temperatura, dB, particulas)
-  LOWER // quanto menor, pior (pressao, espessura, resistencia de isolamento)
-  RANGE // ruim fora da faixa min/max (contador, variavel de processo)
-}
-
-// Zonas de condicao, na linha do que a ISO 10816/20816 faz com as faixas A/B/C/D: cada
-// zona tem uma acao diferente, e e' isso que separa preditiva de simples alarme.
-enum ConditionSeverity {
-  NORMAL   // opera normalmente
-  WARNING  // degradacao comecou: monitorar mais de perto, sem abrir OS
-  ALARM    // programar intervencao na proxima oportunidade
-  CRITICAL // agir imediatamente
-}
-
-enum MaintenanceOrderType {
-  PREVENTIVE
-  CORRECTIVE
-  PREDICTIVE
-  LUBRICATION
-  INSPECTION
-  PROJECT
-}
-
-enum MaintenancePriority {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
-// Nivel do ativo na hierarquia funcional (planta -> maquina -> subconjunto -> parte),
-// usado pelo catalogo AssetType so pra escolher o icone certo na arvore de ativos -
-// nao trava o que pode ser filho de que (a arvore continua livre por parentId).
-enum AssetHierarchyLevel {
-  PLANT
-  AREA
-  MACHINE
-  SUBASSEMBLY
-  PART
-}
-
-// Condicao operacional do ativo agora (esta rodando? parado? so reserva?) - diferente
-// de InstrumentStatus, que e' sobre vencimento de calibracao (Valido/Vencido/...).
-// Um ativo pode estar "Valido" na calibracao e "Parado" na operacao ao mesmo tempo.
-enum OperationalStatus {
-  IN_OPERATION
-  STOPPED
-  STANDBY
-  DEACTIVATED
-  IN_MAINTENANCE
-}
-
-// Fluxo da OS: Aberta -> Em triagem -> Planejada -> Programada -> Liberada -> Em execucao
-// -> Concluida (ou Cancelada a qualquer momento). Os 3 "Aguardando..." sao estados de
-// bloqueio que podem acontecer durante o planejamento ou a execucao. Nao ha validacao
-// rigida de transicao (a equipe pode pular etapas que nao se aplicam) - o valor guia o
-// quadro/relatorio, nao trava o fluxo.
-// Como a OS sera executada - decisao do planejador, nao do operador que abriu a
-// solicitacao. Muda tudo no planejamento: uma troca de rolamento com a maquina rodando
-// nao existe, e uma inspecao que espera a parada anual atrasa um ano se ninguem disser.
-enum WorkOrderExecutionCondition {
-  MACHINE_RUNNING   // com o equipamento em operacao
-  OPPORTUNITY_STOP  // na proxima parada de oportunidade
-  PLANNED_SHUTDOWN  // so na parada programada
-}
-
-// Em que momento a quebra chegou ao sistema. Muda o que o cadastro pede: a maquina que ja
-// voltou tem janela fechada; a que esta parada agora so tem inicio; a que sera tratada
-// depois ainda nao tem janela nenhuma.
-enum BreakdownSituation {
-  ALREADY_HAPPENED
-  HAPPENING_NOW
-  TO_PLAN
-}
-
-enum MaintenanceOrderStatus {
-  OPEN
-  IN_TRIAGE
-  PLANNED
-  PROGRAMMED
-  RELEASED
-  IN_PROGRESS
-  AWAITING_MATERIAL
-  AWAITING_RELEASE
-  AWAITING_STOPPAGE
-  COMPLETED
-  CANCELED
-}
-
-enum LaborHourType {
-  NORMAL
-  OVERTIME
-  NIGHT
-}
-
-// Fluxo da RCA: Aberta (falha critica/recorrente disparou a analise) -> Em andamento
-// (plano de acao em execucao) -> Encerrada (eficacia verificada).
-enum RcaStatus {
-  OPEN
-  IN_PROGRESS
-  CLOSED
-}
-
-enum SparePartReservationStatus {
-  RESERVED
-  CONSUMED
-  RELEASED
-}
-
-// Fluxo da Solicitacao de Servico (SS) - porta de entrada simples pra quem opera reportar
-// necessidade de manutencao, antes de virar uma OS de verdade. Nao confundir com o status
-// da OS (MaintenanceOrderStatus) nem com ServiceOrder (OS externa da OptiProcess).
-enum ServiceRequestStatus {
-  OPEN
-  IN_TRIAGE
-  AWAITING_INFO
-  PLANNED
-  CONVERTED
-  REJECTED
-  CLOSED
-}
-
-// O que o executante preenche em cada item do checklist. YES_NO_NA e' o padrao (o que
-// existia); os outros permitem medicao com faixa, foto obrigatoria e assinatura.
-enum ChecklistResponseType {
-  YES_NO_NA
-  TEXT
-  NUMBER
-  PHOTO
-  SIGNATURE
-}
-
-enum ChecklistItemResult {
-  PENDING
-  OK
-  NOT_OK
-  NA
 }
 
 enum ServiceOrderStatus {
@@ -410,21 +168,17 @@ enum AttachmentEntityType {
   SERVICE_CONTRACT
   PRODUCT
   CLIENT
-  MAINTENANCE_WORK_ORDER
   INSTRUMENT
-  SERVICE_REQUEST
-  ROOT_CAUSE_ANALYSIS
-  MAINTENANCE_PLAN
 }
 
 // Classifica o registro fotografico feito pelo tecnico em campo. As fotos entram
 // como anexo fotografico no certificado gerado pela plataforma.
 enum AttachmentCategory {
-  LOCATION    // local da calibracao / instalacao
-  INSTRUMENT  // instrumento calibrado
-  STANDARD    // padrao utilizado
+  LOCATION // local da calibracao / instalacao
+  INSTRUMENT // instrumento calibrado
+  STANDARD // padrao utilizado
   MEASUREMENT // leituras e medicoes
-  DOCUMENT    // documento complementar
+  DOCUMENT // documento complementar
   OTHER
 }
 
@@ -433,41 +187,31 @@ enum AttachmentCategory {
 // ---------------------------------------------------------------------------
 
 model User {
-  id           String    @id @default(uuid())
-  name         String
-  email        String    @unique
-  passwordHash String
+  id                 String    @id @default(uuid())
+  name               String
+  email              String    @unique
+  passwordHash       String
   // Senha provisoria: definida por outra pessoa e ainda nao trocada por quem usa. Enquanto
   // for true, o login abre so a tela de troca de senha - a senha passou por e-mail ou
   // papel ate chegar aqui, e continuar valendo indefinidamente e' o que a torna insegura.
-  mustChangePassword         Boolean   @default(false)
-  role         Role
-  clientId     String?
-  client       Client?   @relation(fields: [clientId], references: [id])
-  active       Boolean   @default(true)
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  mustChangePassword Boolean   @default(false)
+  role               Role
+  clientId           String?
+  client             Client?   @relation(fields: [clientId], references: [id])
+  active             Boolean   @default(true)
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
 
-  serviceOrdersAsTechnician     ServiceOrder[]     @relation("ServiceOrderTechnician")
-  calibrationsAsTechnician      Calibration[]      @relation("CalibrationTechnician")
-  technicalReportsAsResponsible TechnicalReport[]  @relation("TechnicalReportResponsible")
-  contractsAsResponsible        ServiceContract[]  @relation("ContractResponsible")
-  maintenancePlansAsResponsible      MaintenancePlan[]       @relation("MaintenancePlanResponsible")
-  maintenanceWorkOrdersAsTechnician  MaintenanceWorkOrder[]  @relation("MaintenanceWorkOrderTechnician")
-  maintenanceWorkOrdersApproved      MaintenanceWorkOrder[]  @relation("MaintenanceWorkOrderApprover")
-  maintenanceWorkOrdersClosed        MaintenanceWorkOrder[]  @relation("MaintenanceWorkOrderCloser")
-  serviceRequestsAsRequester    ServiceRequest[]        @relation("ServiceRequestRequester")
-  serviceRequestsAsTriage       ServiceRequest[]        @relation("ServiceRequestTriage")
-  rcaAsResponsible              RootCauseAnalysis[]     @relation("RcaResponsible")
+  serviceOrdersAsTechnician     ServiceOrder[]    @relation("ServiceOrderTechnician")
+  calibrationsAsTechnician      Calibration[]     @relation("CalibrationTechnician")
+  technicalReportsAsResponsible TechnicalReport[] @relation("TechnicalReportResponsible")
+  contractsAsResponsible        ServiceContract[] @relation("ContractResponsible")
   auditLogs                     AuditLog[]
   notifications                 Notification[]
 
   @@index([clientId])
-  // Cadastro na mao de obra da empresa, quando esta pessoa executa OS.
-  laborResource              LaborResource? @relation("LaborResourceUser")
-
   @@map("users")
 }
 
@@ -510,44 +254,42 @@ model RolePermission {
 // ---------------------------------------------------------------------------
 
 model Client {
-  id                     String       @id @default(uuid())
-  companyName            String
-  tradeName              String?
-  cnpj                   String?      @unique
-  stateRegistration      String?
-  addressStreet          String?
-  addressNumber          String?
-  addressComplement      String?
-  addressDistrict        String?
-  addressCity            String?
-  addressState           String?
-  addressZip             String?
-  phone                  String?
-  whatsapp               String?
-  email                  String?
-  technicalContactName   String?
-  commercialContactName  String?
-  status                 ClientStatus @default(PROSPECT)
+  id                    String            @id @default(uuid())
+  companyName           String
+  tradeName             String?
+  cnpj                  String?           @unique
+  stateRegistration     String?
+  addressStreet         String?
+  addressNumber         String?
+  addressComplement     String?
+  addressDistrict       String?
+  addressCity           String?
+  addressState          String?
+  addressZip            String?
+  phone                 String?
+  whatsapp              String?
+  email                 String?
+  technicalContactName  String?
+  commercialContactName String?
+  status                ClientStatus      @default(PROSPECT)
   // Logo do cliente: substitui a marca do RLP Maintenance no painel do CMMS dele (o
   // grande, no topo da tela) - o logo pequeno da barra lateral continua sendo o do
   // produto sempre, so o painel principal ganha a marca da propria empresa.
-  logoKey                String?
-  logoFileName           String?
-  // Situacao do contrato do CMMS (teste, ativo, suspenso, cancelado).
-  contractStatus         CmmsContractStatus @default(TRIAL)
+  logoKey               String?
+  logoFileName          String?
   // Areas de servico que o cliente contratou (marcacao rapida na ficha, usada
   // para segmentar). Contratos com vigencia e valor ficam em ServiceContract.
-  contractedServices     ServiceCategory[]
+  contractedServices    ServiceCategory[]
   // Plano de assinatura (limites de uso) - opcional: sem plano atribuido, o cliente
   // segue sem limite nenhum (compatibilidade com todo cliente cadastrado antes da Fase 7).
-  planId                 String?
-  plan                   Plan?        @relation(fields: [planId], references: [id])
-  planStartedAt          DateTime?
-  notes                  String?
-  createdById            String?
-  createdAt              DateTime     @default(now())
-  updatedAt              DateTime     @updatedAt
-  deletedAt               DateTime?
+  planId                String?
+  plan                  Plan?             @relation(fields: [planId], references: [id])
+  planStartedAt         DateTime?
+  notes                 String?
+  createdById           String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  deletedAt             DateTime?
 
   contacts         ClientContact[]
   users            User[]
@@ -558,31 +300,11 @@ model Client {
   contracts        ServiceContract[]
   quotes           Quote[]
   orders           Order[]
-  maintenancePlans      MaintenancePlan[]
-  maintenanceWorkOrders MaintenanceWorkOrder[]
-  spareParts            SparePart[]
-  failureCodes          FailureCode[]
-  assetTypes            AssetType[]
-  laborTypes            LaborType[]
-  laborResources        LaborResource[]
-  plants                Plant[]
-  areas                 Area[]
-  assetSystems          AssetSystem[]
-  costCenters           CostCenter[]
-  serviceRequests           ServiceRequest[]
-  serviceRequestCategories  ServiceRequestCategory[]
-  stoppageReasons           StoppageReason[]
-  rootCauseAnalyses         RootCauseAnalysis[]
-  maintenancePlanTemplates  MaintenancePlanTemplate[]
-  automationSettings        AutomationSettings?
+  assetTypes       AssetType[]
 
   @@index([status])
   @@index([planId])
   @@map("clients")
-  lubricants Lubricant[]
-  lubricationPoints LubricationPoint[]
-  lubricationRoutes LubricationRoute[]
-  lubricationRecords LubricationRecord[]
 }
 
 // ---------------------------------------------------------------------------
@@ -593,15 +315,15 @@ model Client {
 // Define limites de uso (null = sem limite) - nao ha integracao de cobranca aqui, so
 // atribuicao de plano + aplicacao dos limites nas telas de Usuarios e Ativos.
 model Plan {
-  id             String    @id @default(uuid())
-  name           String    @unique
+  id             String   @id @default(uuid())
+  name           String   @unique
   description    String?
   priceMonthly   Float?
   maxUsers       Int?
   maxInstruments Int?
-  features       String[]  @default([])
-  active         Boolean   @default(true)
-  createdAt      DateTime  @default(now())
+  features       String[] @default([])
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
 
   clients Client[]
 
@@ -629,27 +351,27 @@ model ClientContact {
 // ---------------------------------------------------------------------------
 
 model ServiceOrder {
-  id               String              @id @default(uuid())
-  number           String              @unique
+  id               String             @id @default(uuid())
+  number           String             @unique
   clientId         String
-  client           Client              @relation(fields: [clientId], references: [id])
+  client           Client             @relation(fields: [clientId], references: [id])
   // Ativo (instrumento) ao qual este servico se refere, quando aplicavel - permite
   // ver, na ficha do ativo, o historico de servicos alem das calibracoes.
   instrumentId     String?
-  instrument       Instrument?         @relation(fields: [instrumentId], references: [id])
+  instrument       Instrument?        @relation(fields: [instrumentId], references: [id])
   siteAddress      String
   category         ServiceCategory
   description      String
   technicianId     String?
-  technician       User?               @relation("ServiceOrderTechnician", fields: [technicianId], references: [id])
+  technician       User?              @relation("ServiceOrderTechnician", fields: [technicianId], references: [id])
   scheduledDate    DateTime?
   deadline         DateTime?
   laborHours       Float?
-  status           ServiceOrderStatus  @default(BUDGET)
+  status           ServiceOrderStatus @default(BUDGET)
   clientApprovedAt DateTime?
   createdById      String?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
   deletedAt        DateTime?
 
   items        ServiceOrderItem[]
@@ -682,14 +404,10 @@ model ServiceOrderItem {
 // ---------------------------------------------------------------------------
 
 model Instrument {
-  id                         String            @id @default(uuid())
+  id                         String           @id @default(uuid())
   clientId                   String
-  client                     Client            @relation(fields: [clientId], references: [id])
+  client                     Client           @relation(fields: [clientId], references: [id])
   type                       String
-  // Nivel na arvore (Planta > Area > Maquina > Subconjunto > Parte). Antes vinha do
-  // catalogo "Tipo de ativo", casando pelo nome - dois campos dizendo a mesma coisa, e o
-  // que mandava nas regras era o menos obvio dos dois. Agora e' do proprio ativo.
-  level                      AssetHierarchyLevel?
   tag                        String?
   // Nome do ativo em linguagem de gente ("Compressor de ar - Linha 4"). Junto com o TAG e'
   // o que identifica o equipamento nas telas; o resto e' ficha tecnica complementar.
@@ -709,81 +427,25 @@ model Instrument {
   // varios - o album completo continua nos anexos.
   photoKey                   String?
   photoFileName              String?
-  // Marca o ativo como sujeito a calibracao. E' o que separa os dois mundos: a lista de
-  // Ativos da OptiProcess mostra so os calibraveis (o que ela presta servico), enquanto o
-  // CMMS do cliente enxerga toda a arvore dele - linha, maquina, componente.
-  calibratable               Boolean           @default(false)
-  // Ativo que tem ponto de lubrificacao. Irmao de calibratable: marcar aqui e' o que faz
-  // a ficha cobrar o cadastro do ponto, em vez de o ativo ficar sem lubrificacao so
-  // porque ninguem abriu a tela de Lubrificacao para cria-lo.
-  lubricatable               Boolean           @default(false)
-  // Marcado por quem cadastrou, dizendo que a lista de pontos deste ativo esta completa.
-  // Sem isso, o primeiro ponto ja tirava o ativo da fila e o segundo nunca era cobrado -
-  // e ninguem alem de quem olhou a maquina sabe quantos pontos ela tem.
-  lubricationPointsComplete  Boolean           @default(false)
-  // Este ativo define a propria area (em vez de herdar a do pai). Irmao de
-  // costCenterOverride: existe para a propagacao vinda de cima nao apagar a escolha.
-  areaOverride               Boolean           @default(false)
-  // Campos tecnicos que dependem do tipo (ex.: potencia e rotacao num Motor, relacao de
-  // reducao num Redutor). O catalogo de tipos e' aberto (cada cliente pode criar o proprio),
-  // entao a definicao de "quais campos" mora no frontend por nome de tipo - aqui e' so um
-  // par chave/valor solto, sem uma coluna por atributo.
-  specificAttributes         Json?
-  // Opcional: so faz sentido para ativos com calibracao periodica rastreada. Uma empresa
-  // que contratou so o CMMS (sem Calibracao) cadastra o ativo sem preencher isso.
+  // Marca o ativo como sujeito a calibracao (o que a OptiProcess presta servico).
+  calibratable               Boolean          @default(false)
+  // Opcional: so faz sentido para ativos com calibracao periodica rastreada.
   calibrationFrequencyMonths Int?
   lastCalibrationDate        DateTime?
   nextDueDate                DateTime?
-  status                     InstrumentStatus  @default(VALID)
-  // Quanto uma parada deste ativo pesa pra empresa - guia prioridade de OS, politica de
-  // estoque de pecas e o que merece analise de causa. Mesma escala da prioridade da OS.
-  criticality                MaintenancePriority @default(MEDIUM)
-  // Condicao operacional agora - independente do status de calibracao acima.
-  operationalStatus          OperationalStatus @default(IN_OPERATION)
-  // Arvore de ativos: um filho e' um Ativo completo (TAG, calibracoes e planos proprios) que
-  // aponta para o pai - nao uma lista solta sem ficha propria.
-  parentId                   String?
-  parent                     Instrument?       @relation("InstrumentHierarchy", fields: [parentId], references: [id])
-  children                   Instrument[]      @relation("InstrumentHierarchy")
-  // Planta/Area/Sistema/Centro de custo: atributos diretos de localizacao/classificacao do
-  // ativo (opcionais, cascata Planta->Area->Sistema) - complementam a arvore pai/filho
-  // (que e' sobre composicao fisica, ex.: compressor->motor), nao a substituem. Permitem
-  // filtrar "todos os ativos da Area X" sem precisar percorrer a arvore.
-  plantId                    String?
-  plant                      Plant?            @relation(fields: [plantId], references: [id], onDelete: Restrict)
-  areaId                     String?
-  area                       Area?             @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  systemId                   String?
-  system                     AssetSystem?      @relation(fields: [systemId], references: [id], onDelete: Restrict)
-  costCenterId               String?
-  costCenter                 CostCenter?       @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
-  // true = ADMIN definiu um centro de custo diferente do padrao da area, entao a heranca
-  // para de sobrescrever este ativo.
-  costCenterOverride         Boolean           @default(false)
+  status                     InstrumentStatus @default(VALID)
   createdById                String?
-  createdAt                  DateTime          @default(now())
-  updatedAt                  DateTime          @updatedAt
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
   deletedAt                  DateTime?
 
   calibrations  Calibration[]
   serviceOrders ServiceOrder[]
-  meters                Meter[]
-  maintenancePlans      MaintenancePlan[]
-  maintenanceWorkOrders MaintenanceWorkOrder[]
-  assetParts            AssetPart[]
-  serviceRequests       ServiceRequest[]
-  rootCauseAnalyses     RootCauseAnalysis[]
 
   @@index([clientId])
   @@index([status])
   @@index([nextDueDate])
-  @@index([parentId])
-  @@index([plantId])
-  @@index([areaId])
-  @@index([systemId])
-  @@index([costCenterId])
   @@map("instruments")
-  lubricationPoints LubricationPoint[]
 }
 
 model Calibration {
@@ -796,7 +458,7 @@ model Calibration {
   serviceOrderId      String?
   serviceOrder        ServiceOrder?     @relation(fields: [serviceOrderId], references: [id])
   calibrationDate     DateTime
-  location             String
+  location            String
   technicianId        String
   technician          User              @relation("CalibrationTechnician", fields: [technicianId], references: [id])
   // Resumo livre; a rastreabilidade detalhada fica em CalibrationStandard.
@@ -878,24 +540,24 @@ model CalibrationPoint {
 // ---------------------------------------------------------------------------
 
 model TechnicalReport {
-  id              String                   @id @default(uuid())
-  number          String                   @unique
+  id              String                  @id @default(uuid())
+  number          String                  @unique
   category        TechnicalReportCategory
   clientId        String
-  client          Client                   @relation(fields: [clientId], references: [id])
+  client          Client                  @relation(fields: [clientId], references: [id])
   location        String
   responsibleId   String
-  responsible     User                     @relation("TechnicalReportResponsible", fields: [responsibleId], references: [id])
+  responsible     User                    @relation("TechnicalReportResponsible", fields: [responsibleId], references: [id])
   reportDate      DateTime
   validUntil      DateTime?
-  status          DocumentStatus           @default(DRAFT)
+  status          DocumentStatus          @default(DRAFT)
   observations    String?
-  visibleToClient Boolean                  @default(false)
+  visibleToClient Boolean                 @default(false)
   pdfAttachmentId String?
-  pdfAttachment   Attachment?              @relation("TechnicalReportPdf", fields: [pdfAttachmentId], references: [id])
+  pdfAttachment   Attachment?             @relation("TechnicalReportPdf", fields: [pdfAttachmentId], references: [id])
   createdById     String?
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
   deletedAt       DateTime?
 
   @@index([clientId])
@@ -920,8 +582,8 @@ model Attachment {
   uploadedById String?
   createdAt    DateTime             @default(now())
 
-  calibrationsAsPdf      Calibration[]     @relation("CalibrationPdf")
-  technicalReportsAsPdf  TechnicalReport[] @relation("TechnicalReportPdf")
+  calibrationsAsPdf     Calibration[]     @relation("CalibrationPdf")
+  technicalReportsAsPdf TechnicalReport[] @relation("TechnicalReportPdf")
 
   @@index([entityType, entityId])
   @@map("attachments")
@@ -959,10 +621,10 @@ model ServiceContract {
 // ---------------------------------------------------------------------------
 
 model ProductCategory {
-  id        String    @id @default(uuid())
-  name      String    @unique
-  slug      String    @unique
-  createdAt DateTime  @default(now())
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
 
   products Product[]
 
@@ -970,10 +632,10 @@ model ProductCategory {
 }
 
 model Product {
-  id                String        @id @default(uuid())
+  id                String          @id @default(uuid())
   name              String
-  slug              String        @unique
-  sku               String        @unique
+  slug              String          @unique
+  sku               String          @unique
   categoryId        String
   category          ProductCategory @relation(fields: [categoryId], references: [id])
   brand             String?
@@ -981,14 +643,14 @@ model Product {
   technicalSheetUrl String?
   price             Float?
   promoPrice        Float?
-  priceOnRequest    Boolean       @default(false)
-  stockQty          Int           @default(0)
-  minStock          Int           @default(0)
-  status            ProductStatus @default(ACTIVE)
-  featured          Boolean       @default(false)
+  priceOnRequest    Boolean         @default(false)
+  stockQty          Int             @default(0)
+  minStock          Int             @default(0)
+  status            ProductStatus   @default(ACTIVE)
+  featured          Boolean         @default(false)
   createdById       String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
   deletedAt         DateTime?
 
   inventoryMovements InventoryMovement[]
@@ -1114,250 +776,15 @@ model OrderStatusHistory {
   @@map("order_status_history")
 }
 
-// ---------------------------------------------------------------------------
-// CMMS - Gestao de Manutencao (RLP Maintenance CMMS)
-// Pacote de servico opcional (ServiceCategory.CMMS_MAINTENANCE). Usa o mesmo Ativo
-// (Instrument/TAG) ja existente - nao duplica cadastro de equipamento.
-// ---------------------------------------------------------------------------
-
-// Ponto de medicao do ativo. Serve para dois usos que nao se misturam:
-// - COUNTER (horimetro/odometro): mede USO acumulado e alimenta plano preventivo por uso.
-// - demais tecnicas (vibracao, termografia, oleo...): medem CONDICAO e alimentam a
-//   manutencao preditiva, com zonas de severidade e acao diferente por zona.
-model Meter {
-  id           String    @id @default(uuid())
-  instrumentId String
-  instrument   Instrument @relation(fields: [instrumentId], references: [id])
-  name         String    // ex.: "Horimetro", "Mancal LA - vibracao"
-  unit         String    // ex.: "h", "km", "mm/s", "°C", "dB"
-  currentValue Float     @default(0)
-  // Tecnica preditiva usada neste ponto - define unidade, criterio e periodicidade tipicas.
-  technique    PredictiveTechnique  @default(COUNTER)
-  // Como ler os limites: quanto maior pior (vibracao), quanto menor pior (pressao,
-  // isolamento) ou fora da faixa (contador/processo).
-  direction    MeasurementDirection @default(RANGE)
-  // Zonas de severidade. minThreshold/maxThreshold sao a zona de ALARME (mantidos com o
-  // nome antigo para nao quebrar o que ja esta cadastrado); warning e' o aviso antecipado
-  // e critical e' o ponto de parar a maquina.
-  minThreshold Float?
-  maxThreshold Float?
-  warningLimit  Float?
-  criticalLimit Float?
-  // Norma/criterio que sustenta os limites (ex.: "ISO 10816-3 Classe II") - auditoria pede.
-  criterion     String?
-  // De quanto em quanto tempo este ponto deve ser medido. Sem coleta na frequencia, o
-  // painel preditivo acusa "coleta atrasada" - ponto que parou de ser medido nao protege.
-  frequencyDays Int?
-  lastReadingAt DateTime?
-  createdById  String?
-  createdAt    DateTime  @default(now())
-  deletedAt    DateTime?
-
-  readings MeterReading[]
-  plans    MaintenancePlan[]
-  conditionPlans MaintenancePlan[] @relation("PlanConditionMeter")
-  triggeredWorkOrders MaintenanceWorkOrder[]
-
-  @@index([instrumentId])
-  @@map("meters")
-}
-
-model MeterReading {
-  id           String   @id @default(uuid())
-  meterId      String
-  meter        Meter    @relation(fields: [meterId], references: [id], onDelete: Cascade)
-  value        Float
-  readAt       DateTime @default(now())
-  // Ficou fora do min/maxThreshold vigente no momento do registro - guardado na leitura
-  // (nao recalculado depois) porque o limite do medidor pode mudar com o tempo.
-  alertTriggered Boolean @default(false)
-  // Zona em que a leitura caiu, congelada no momento do registro pelo mesmo motivo do
-  // campo acima: e' o historico da condicao, nao pode mudar quando o limite mudar.
-  severity     ConditionSeverity @default(NORMAL)
-  notes        String?
-  recordedById String?
-  createdAt    DateTime @default(now())
-
-  @@index([meterId])
-  @@index([readAt])
-  @@map("meter_readings")
-}
-
-// Catalogo de causas de falha usado nas ordens de manutencao corretivas.
-model LaborType {
-  id       String  @id @default(uuid())
-  // Mesmo padrao do AssetType: sem clientId e' o catalogo padrao da OptiProcess
-  // (Tecnico mecanico, Tecnico eletrico, Engenheiro...), com clientId e' proprio da empresa.
-  clientId String?
-  client   Client? @relation(fields: [clientId], references: [id])
-  name     String
-  active   Boolean @default(true)
-  createdAt DateTime @default(now())
-
-  maintenancePlans MaintenancePlan[]
-
-  @@unique([clientId, name])
-  @@index([clientId])
-  @@map("labor_types")
-}
-
-// Mao de obra do CMMS do proprio cliente - quem executa as OS, com custo/hora pra
-// apurar gasto de manutencao por ativo (ao lado do custo de pecas). Nao e' um login
-// de sistema (isso e' User/technicianId) - e' o cadastro do profissional/recurso.
-model LaborResource {
-  id                 String    @id @default(uuid())
-  clientId           String
-  client             Client    @relation(fields: [clientId], references: [id])
-  // Tecnico mecanico, Tecnico eletrico, Engenheiro... (catalogo LaborType)
-  type               String
-  name               String
-  // O acesso desta pessoa no sistema, quando ela tem um. E' o que permite o proprio
-  // mantenedor assumir uma OS: sem a ligacao, o sistema nao sabe que aquele login e'
-  // aquela pessoa da equipe.
-  userId             String?   @unique
-  user               User?     @relation("LaborResourceUser", fields: [userId], references: [id], onDelete: SetNull)
-  // DRT/CREA/CFT etc - registro profissional, quando aplicavel.
-  registrationNumber String?
-  // Valor/hora - opcional, so alimenta custo quando preenchido.
-  hourlyRate         Float?
-  // Foto da pessoa: aparece em miniatura no quadro de programacao do PCM, onde reconhecer
-  // quem esta na coluna pelo rosto e' mais rapido do que ler uma lista de nomes parecidos.
-  photoKey           String?
-  photoFileName      String?
-  active             Boolean   @default(true)
-  createdById        String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-  deletedAt          DateTime?
-
-  workOrderAssignments WorkOrderAssignee[]
-
-  workOrderEntries WorkOrderLabor[]
-  // OS programadas para esta pessoa no quadro de programacao do PCM.
-  assignedWorkOrders MaintenanceWorkOrder[] @relation("WorkOrderAssignedResource")
-
-  @@index([clientId])
-  @@map("labor_resources")
-  lubricationRoutes LubricationRoute[] @relation("LubricationRouteResponsible")
-  lubricationRecords LubricationRecord[] @relation("LubricationExecutor")
-}
-
-// Lancamento de horas de um recurso de mao de obra numa OS - mesmo papel do
-// SparePartMovement para pecas, so que para horas trabalhadas.
-model WorkOrderLabor {
-  id              String               @id @default(uuid())
-  workOrderId     String
-  workOrder       MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id])
-  laborResourceId String
-  laborResource   LaborResource        @relation(fields: [laborResourceId], references: [id])
-  hours           Float
-  // Snapshot do valor/hora no momento do lancamento - preserva o custo historico correto
-  // mesmo que o valor/hora do recurso mude depois.
-  hourlyRateSnapshot Float?
-  // Inicio/fim opcionais (quando informados, a UI sugere "hours" a partir da diferenca -
-  // "hours" continua sendo o campo usado no calculo de custo, pra nao depender de todo
-  // lancamento antigo/futuro ter os dois preenchidos).
-  hourType        LaborHourType?
-  startedAt       DateTime?
-  endedAt         DateTime?
-  notes           String?
-  createdById     String?
-  createdAt       DateTime             @default(now())
-
-  @@index([workOrderId])
-  @@index([laborResourceId])
-  @@map("work_order_labor")
-}
-
-// Servico de terceiro contratado pontualmente pra uma OS (ex.: calibracao externa,
-// solda especializada) - custo entra na apuracao total da OS ao lado de pecas e mao de
-// obra propria.
-model WorkOrderThirdPartyService {
-  id            String               @id @default(uuid())
-  workOrderId   String
-  workOrder     MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id])
-  supplierName  String
-  description   String
-  cost          Float
-  invoiceNumber String?
-  notes         String?
-  createdById   String?
-  createdAt     DateTime             @default(now())
-
-  @@index([workOrderId])
-  @@map("work_order_third_party_services")
-}
-
-// Reserva de peca do almoxarifado pra uma OS, sem baixar o estoque ainda - so marca
-// como comprometido (SparePart.reservedQty), pra o planejamento garantir material sem
-// duas OS disputarem a mesma peca. Consumir a reserva vira uma baixa de verdade
-// (SparePartMovement OUT); liberar so cancela, sem mexer no estoque.
-model SparePartReservation {
-  id          String                      @id @default(uuid())
-  sparePartId String
-  sparePart   SparePart                   @relation(fields: [sparePartId], references: [id])
-  workOrderId String
-  workOrder   MaintenanceWorkOrder        @relation(fields: [workOrderId], references: [id])
-  quantity    Int
-  // Quanto foi de fato consumido ao executar. Pode ser menos que o reservado - o resto
-  // volta para o estoque no mesmo ato, em vez de ficar preso a uma OS ja encerrada.
-  consumedQuantity Int?
-  status      SparePartReservationStatus  @default(RESERVED)
-  createdById String?
-  createdAt   DateTime                    @default(now())
-  resolvedAt  DateTime?
-
-  @@index([sparePartId])
-  @@index([workOrderId])
-  @@map("spare_part_reservations")
-}
-
-// Catalogo de motivos de parada (ex.: falta de material, quebra, manutencao programada) -
-// mesmo padrao do FailureCode: global OptiProcess + por cliente.
-model StoppageReason {
+// (removido) CMMS - Gestao de Manutencao (RLP Maintenance CMMS agora e produto a parte)
+model AssetType {
   id        String   @id @default(uuid())
+  // Sem clientId = catalogo padrao da OptiProcess (motor, compressor, extrusora...),
+  // visivel para todos. Com clientId = tipo que a propria empresa cadastrou.
   clientId  String?
   client    Client?  @relation(fields: [clientId], references: [id])
   name      String
   active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-
-  stoppages WorkOrderStoppage[]
-
-  @@unique([clientId, name])
-  @@index([clientId])
-  @@map("stoppage_reasons")
-}
-
-// Evento de parada do ativo durante a OS - janela especifica de equipamento parado,
-// mais granular que o intervalo iniciada/concluida da OS inteira.
-model WorkOrderStoppage {
-  id          String               @id @default(uuid())
-  workOrderId String
-  workOrder   MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id])
-  reasonId    String?
-  reason      StoppageReason?      @relation(fields: [reasonId], references: [id])
-  startedAt   DateTime
-  endedAt     DateTime?
-  notes       String?
-  createdById String?
-  createdAt   DateTime             @default(now())
-
-  @@index([workOrderId])
-  @@map("work_order_stoppages")
-}
-
-model AssetType {
-  id       String  @id @default(uuid())
-  // Sem clientId = catalogo padrao da OptiProcess (motor, compressor, extrusora...),
-  // visivel para todos. Com clientId = tipo que a propria empresa cadastrou.
-  clientId String?
-  client   Client? @relation(fields: [clientId], references: [id])
-  name     String
-  // Opcional: tipos antigos (Motor, Compressor...) ja cadastrados nao tem nivel definido -
-  // a arvore so troca o icone quando sabe o nivel, sem bloquear nada por falta dele.
-  level    AssetHierarchyLevel?
-  active   Boolean @default(true)
   createdAt DateTime @default(now())
 
   @@unique([clientId, name])
@@ -1365,773 +792,8 @@ model AssetType {
   @@map("asset_types")
 }
 
-// ---------------------------------------------------------------------------
-// Cadastro tecnico: planta/area/sistema/centro de custo - sempre da propria empresa
-// (diferente de AssetType/FailureCode/LaborType, que tem catalogo global da OptiProcess;
-// uma planta so faz sentido dentro de UMA empresa). Cascata: Area pertence a uma Planta,
-// Sistema pertence a uma Area - cada nivel so lista os filhos do nivel escolhido acima.
-// ---------------------------------------------------------------------------
-
-model Plant {
-  id        String    @id @default(uuid())
-  clientId  String
-  client    Client    @relation(fields: [clientId], references: [id])
-  name      String
-  code      String?
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-
-  areas       Area[]
-  instruments Instrument[]
-
-  @@unique([clientId, name])
-  @@index([clientId])
-  @@map("plants")
-  lubricationRoutes LubricationRoute[]
-}
-
-model Area {
-  id        String    @id @default(uuid())
-  clientId  String
-  client    Client    @relation(fields: [clientId], references: [id])
-  plantId   String
-  plant     Plant     @relation(fields: [plantId], references: [id])
-  name      String
-  code      String?
-  // Centro de custo padrao da area: todo ativo dentro dela herda este centro de custo.
-  // Excecao por ativo so o ADMIN pode fazer (Instrument.costCenterOverride).
-  costCenterId String?
-  costCenter   CostCenter? @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-
-  assetSystems AssetSystem[]
-  instruments  Instrument[]
-  serviceRequests ServiceRequest[]
-
-  @@unique([plantId, name])
-  @@index([clientId])
-  @@index([plantId])
-  @@map("areas")
-  lubricationRoutes LubricationRoute[]
-}
-
-model AssetSystem {
-  id        String    @id @default(uuid())
-  clientId  String
-  client    Client    @relation(fields: [clientId], references: [id])
-  areaId    String
-  area      Area      @relation(fields: [areaId], references: [id])
-  name      String
-  code      String?
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-
-  instruments Instrument[]
-
-  @@unique([areaId, name])
-  @@index([clientId])
-  @@index([areaId])
-  @@map("asset_systems")
-}
-
-model CostCenter {
-  id        String    @id @default(uuid())
-  clientId  String
-  client    Client    @relation(fields: [clientId], references: [id])
-  name      String
-  code      String?
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-
-  instruments Instrument[]
-  areasAsDefault Area[]
-
-  @@unique([clientId, name])
-  @@index([clientId])
-  @@map("cost_centers")
-  maintenanceWorkOrders MaintenanceWorkOrder[]
-}
-
-model FailureCode {
-  id          String   @id @default(uuid())
-  // Sem clientId = catalogo padrao da OptiProcess, visivel para todos. Com clientId =
-  // codigo criado pela propria empresa cliente no portal, visivel so para ela.
-  clientId    String?
-  client      Client?  @relation(fields: [clientId], references: [id])
-  code        String
-  description String
-  category    String?
-  // Taxonomia de falha (tudo opcional - codigo+descricao continuam bastando pro uso
-  // basico, quem quiser detalhar preenche mais). Sintoma = o que se observa; Modo = como
-  // a falha se manifesta; Mecanismo = o processo fisico por tras (ex.: corrosao, fadiga);
-  // Causa = a raiz apontada; Acao corretiva = o reparo padrao recomendado (o que
-  // realmente foi feito numa OS especifica fica em MaintenanceWorkOrder.observations).
-  symptom              String?
-  mode                 String?
-  mechanism            String?
-  cause                String?
-  correctiveAction     String?
-  // Familia de equipamento a que esse codigo se aplica (ex.: "Motores eletricos",
-  // "Bombas centrifugas") - texto livre, nao amarrado ao catalogo AssetType (que hoje
-  // representa nivel na arvore, nao tipo de equipamento).
-  applicableAssetFamily String?
-  severity             MaintenancePriority?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-
-  workOrders MaintenanceWorkOrder[]
-
-  @@unique([clientId, code])
-  @@index([clientId])
-  @@map("failure_codes")
-}
-
-// RCA (analise de causa raiz / 5 Porquues) para falha critica ou recorrente. Fluxo:
-// falha dispara a abertura -> plano de acao -> execucao -> verificacao de eficacia ->
-// encerramento. Participantes fica como texto livre (nomes) - nao amarra a um multi-
-// select de usuarios so pra um campo informativo.
-model RootCauseAnalysis {
-  id           String    @id @default(uuid())
-  clientId     String
-  client       Client    @relation(fields: [clientId], references: [id])
-  instrumentId String?
-  instrument   Instrument? @relation(fields: [instrumentId], references: [id])
-  workOrderId  String?
-  workOrder    MaintenanceWorkOrder? @relation(fields: [workOrderId], references: [id])
-  problem      String
-  participants String?
-  why1         String?
-  why2         String?
-  why3         String?
-  why4         String?
-  why5         String?
-  rootCause    String?
-  correctiveActions String?
-  preventiveActions String?
-  responsibleId String?
-  responsible  User?     @relation("RcaResponsible", fields: [responsibleId], references: [id])
-  dueDate      DateTime?
-  effectivenessVerifiedAt DateTime?
-  effectivenessNotes String?
-  status       RcaStatus @default(OPEN)
-  createdById  String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
-
-  @@index([clientId])
-  @@index([instrumentId])
-  @@index([status])
-  @@map("root_cause_analyses")
-}
-
-// Catalogo de categorias de Solicitacao de Servico (ex.: Eletrica, Mecanica, Limpeza) -
-// mesmo padrao do FailureCode: sem clientId e' o catalogo padrao da OptiProcess, com
-// clientId e' o que a propria empresa cadastrou.
-model ServiceRequestCategory {
-  id        String   @id @default(uuid())
-  clientId  String?
-  client    Client?  @relation(fields: [clientId], references: [id])
-  name      String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-
-  requests ServiceRequest[]
-
-  @@unique([clientId, name])
-  @@index([clientId])
-  @@map("service_request_categories")
-}
-
-// Solicitacao de Servico (SS): porta de entrada simples pra operadores/solicitantes
-// reportarem uma necessidade de manutencao. PCM faz a triagem (aprova/pede informacao/
-// rejeita); se aprovada, vira uma Ordem de Manutencao (OS) vinculada. Nao e' a OS em si
-// (isso e' MaintenanceWorkOrder) nem a Ordem de Servico externa da OptiProcess (isso e'
-// ServiceOrder) - sao os 3 conceitos distintos deste sistema.
-model ServiceRequest {
-  id           String               @id @default(uuid())
-  // Numeracao propria por cliente ("SS-1", "SS-2"...), mesmo padrao da OS do CMMS.
-  number       String
-  clientId     String
-  client       Client               @relation(fields: [clientId], references: [id])
-  requestedById String?
-  requestedBy  User?                @relation("ServiceRequestRequester", fields: [requestedById], references: [id])
-  areaId       String?
-  area         Area?                @relation(fields: [areaId], references: [id])
-  instrumentId String?
-  instrument   Instrument?          @relation(fields: [instrumentId], references: [id])
-  location     String?
-  categoryId   String?
-  category     ServiceRequestCategory? @relation(fields: [categoryId], references: [id])
-  description  String
-  // Impacto percebido pelo solicitante - ajuda a triagem a priorizar sem depender so
-  // do texto livre da descricao.
-  safetyImpact     Boolean @default(false)
-  qualityImpact    Boolean @default(false)
-  productionImpact Boolean @default(false)
-  suggestedPriority MaintenancePriority @default(MEDIUM)
-  status       ServiceRequestStatus @default(OPEN)
-  triageById   String?
-  triageBy     User?                @relation("ServiceRequestTriage", fields: [triageById], references: [id])
-  triageNotes  String?
-  rejectionReason String?
-  // Preenchido quando a triagem aprova e a OS e' gerada - a SS nunca desaparece depois
-  // de convertida, so referencia a OS.
-  workOrderId  String?              @unique
-  workOrder    MaintenanceWorkOrder? @relation(fields: [workOrderId], references: [id])
-  createdById  String?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  deletedAt    DateTime?
-
-  @@unique([clientId, number])
-  @@index([clientId])
-  @@index([status])
-  @@index([instrumentId])
-  @@index([areaId])
-  @@map("service_requests")
-}
-
-model MaintenancePlan {
-  id            String                 @id @default(uuid())
-  clientId      String
-  client        Client                 @relation(fields: [clientId], references: [id])
-  // Codigo legivel por cliente ("PM-0001") - o que aparece em documento e conversa.
-  code          String?
-  status        MaintenancePlanStatus  @default(ACTIVE)
-  planType      MaintenancePlanType    @default(PREVENTIVE)
-  scope         MaintenancePlanScope   @default(SINGLE_ASSET)
-  // Prioridade que a OS gerada por este plano recebe.
-  defaultPriority MaintenancePriority  @default(MEDIUM)
-  // Especialidade sugerida (Mecanica, Eletrica, Instrumentacao...) - reaproveita o
-  // catalogo LaborType em vez de criar mais uma lista de texto livre.
-  specialtyId   String?
-  specialty     LaborType?             @relation(fields: [specialtyId], references: [id])
-  // Opcional: um plano pode nascer sem ativo (uma inspecao geral, por exemplo) e ganhar
-  // um depois, na edicao - o codigo (PM-0001) identifica o plano enquanto isso, e a OS so
-  // pode ser gerada depois que um ativo for atribuido (a OS em si sempre exige um).
-  instrumentId  String?
-  instrument    Instrument?            @relation(fields: [instrumentId], references: [id])
-  name          String
-  description   String?
-  triggerType   MaintenanceTriggerType
-  // Disparo por tempo: intervalo em dias + proxima data de vencimento (mesmo padrao de
-  // deriveDueStatus/computeNextDueDate ja usado no Ativo para calibracao).
-  frequencyDays Int?
-  nextDueDate   DateTime?
-  // Periodicidade legivel: "a cada 3 MESES" em vez de "a cada 90 dias". frequencyDays
-  // acima e' derivado disto.
-  frequencyUnit  MaintenanceFrequencyUnit @default(DAY)
-  frequencyEvery Int?
-  // Data-base do ciclo e ultima execucao concluida de verdade (nao a ultima geracao).
-  baseDate        DateTime?
-  lastExecutionAt DateTime?
-  // Ancoragem no calendario, quando a periodicidade pede: dia da semana (0=domingo),
-  // dia do mes e mes do ano.
-  dayOfWeek   Int?
-  dayOfMonth  Int?
-  monthOfYear Int?
-  operationalCalendar OperationalCalendar @default(ALL_DAYS)
-  // Feriados, parada programada, shutdown - datas em que a OS nao pode cair.
-  blockedDates DateTime[]
-  // Quantos dias antes do vencimento a OS ja e' criada (para o PCM planejar).
-  generateAdvanceDays Int?
-  // Disparo por medidor: leitura-base do ciclo, antecedencia e tolerancia em unidades do
-  // medidor, e o que fazer quando o medidor e' trocado/zerado.
-  meterBaseReading         Float?
-  generateAdvanceMeterUnits Float?
-  toleranceMeterBefore     Float?
-  toleranceMeterAfter      Float?
-  meterResetRule           MeterResetRule @default(CONTINUE)
-  // Com mais de um gatilho configurado, quando a OS nasce.
-  triggerMode MaintenanceTriggerMode @default(FIRST_DUE)
-  // ----- Como a OS gerada nasce -----
-  // Em que status a OS entra: normalmente Programada (ja com data) ou Planejada.
-  initialWorkOrderStatus MaintenanceOrderStatus @default(PROGRAMMED)
-  // Pre-requisitos de seguranca/operacao que a OS carrega do plano.
-  requiresShutdown         Boolean @default(false)
-  estimatedShutdownHours   Float?
-  requiresOperationalRelease Boolean @default(false)
-  requiresLoto             Boolean @default(false)
-  requiresApproval         Boolean @default(false)
-  // Uma OS por ativo (padrao) ou uma OS agrupando os ativos da familia.
-  groupWorkOrder Boolean @default(false)
-  // --- Lubrificacao (so preenchido em plano do tipo Lubrificacao) --------------------
-  // Qual lubrificante, quantos pontos, quanto em cada ponto e como aplicar. O lubrificante
-  // vem do almoxarifado para que o consumo do plano baixe do mesmo estoque das outras pecas.
-  // Um plano de lubrificacao agenda uma ROTA: quem diz o lubrificante, a quantidade e o
-  // metodo e' cada ponto da rota. Descrever isso no plano de novo criaria duas versoes da
-  // mesma especificacao.
-  lubricationRouteId String?
-  lubricationRoute   LubricationRoute? @relation(fields: [lubricationRouteId], references: [id])
-
-  // Instrucoes gerais do plano (procedimento, cuidados, referencia de manual) - texto
-  // livre que acompanha toda OS gerada a partir dele.
-  instructions String?
-  materialPolicy MaterialPolicy @default(RESERVE_AUTO)
-  // Gatilho por condicao: ponto de medicao que, ao entrar em alarme, gera a OS do plano.
-  conditionMeterId String?
-  conditionMeter   Meter? @relation("PlanConditionMeter", fields: [conditionMeterId], references: [id])
-  // Disparo por medidor: gera quando (leitura atual - leitura na ultima geracao) >= intervalo.
-  meterId       String?
-  meter         Meter?                 @relation(fields: [meterId], references: [id])
-  meterInterval Float?
-  lastGeneratedAt      DateTime?
-  lastMeterAtGeneration Float?
-  active        Boolean                @default(true)
-  responsibleId String?
-  responsible   User?                  @relation("MaintenancePlanResponsible", fields: [responsibleId], references: [id])
-  // Tolerancia (dias) pra antecipar ou atrasar sem quebrar o padrao - so informativo por
-  // enquanto (nao reescreve deriveDueStatus, que e' compartilhado com calibracao/contrato).
-  toleranceDaysBefore Int?
-  toleranceDaysAfter  Int?
-  // Procedimento padrao (texto livre/rich) - diferente do checklist, que sao itens curtos
-  // marcaveis; isso e' a descricao de como executar o servico.
-  procedure           String?
-  // HH prevista - copiada pra MaintenanceWorkOrder.laborHours quando a OS e' gerada
-  // (mesmo campo usado no "HH prevista x realizada" do painel PCM).
-  estimatedLaborHours Float?
-  // Plano criado a partir de um template reutilizavel (opcional, so rastreabilidade).
-  templateId          String?
-  template            MaintenancePlanTemplate? @relation(fields: [templateId], references: [id])
-  createdById   String?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-  deletedAt     DateTime?
-
-  checklistTemplate MaintenancePlanChecklistItem[]
-  workOrders        MaintenanceWorkOrder[]
-  parts             MaintenancePlanPart[]
-
-  @@index([clientId])
-  @@index([instrumentId])
-  @@index([nextDueDate])
-  @@index([status])
-  @@map("maintenance_plans")
-}
-
-// Materiais previstos do plano (lista de materiais esperada) - ao gerar a OS, o sistema
-// tenta reservar essas pecas automaticamente (melhor esforco: falta de saldo nao impede
-// a OS de ser criada, so deixa de reservar aquele item).
-model MaintenancePlanPart {
-  id          String          @id @default(uuid())
-  planId      String
-  plan        MaintenancePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  sparePartId String
-  sparePart   SparePart       @relation(fields: [sparePartId], references: [id])
-  quantity    Int
-  // Obrigatorio decide se a falta bloqueia a geracao (conforme a politica do plano).
-  required    Boolean         @default(true)
-  // Substituto aceito quando o principal falta - evita parar o servico por causa de
-  // um item que tem equivalente no almoxarifado.
-  alternativeSparePartId String?
-  alternativeSparePart   SparePart? @relation("PlanPartAlternative", fields: [alternativeSparePartId], references: [id])
-  suggestedSupplier String?
-  notes             String?
-
-  @@index([planId])
-  @@index([sparePartId])
-  @@map("maintenance_plan_parts")
-}
-
-// Modelo reutilizavel de plano por familia de ativo (ex.: "Lubrificacao trimestral -
-// motores eletricos") - aplicar o template num ativo especifico cria um MaintenancePlan
-// de verdade, copiando os campos e o checklist. Mesmo padrao global OptiProcess + por
-// cliente do FailureCode/AssetType.
-model MaintenancePlanTemplate {
-  id                     String                 @id @default(uuid())
-  clientId               String?
-  client                 Client?                @relation(fields: [clientId], references: [id])
-  name                   String
-  applicableAssetFamily  String?
-  triggerType            MaintenanceTriggerType
-  frequencyDays          Int?
-  meterInterval          Float?
-  toleranceDaysBefore    Int?
-  toleranceDaysAfter     Int?
-  procedure              String?
-  estimatedLaborHours    Float?
-  active                 Boolean                @default(true)
-  createdAt              DateTime               @default(now())
-
-  checklistItems MaintenancePlanTemplateChecklistItem[]
-  plans          MaintenancePlan[]
-
-  @@unique([clientId, name])
-  @@index([clientId])
-  @@map("maintenance_plan_templates")
-}
-
-model MaintenancePlanTemplateChecklistItem {
-  id          String                  @id @default(uuid())
-  templateId  String
-  template    MaintenancePlanTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  description String
-  sortOrder   Int                     @default(0)
-
-  @@index([templateId])
-  @@map("maintenance_plan_template_checklist_items")
-}
-
-// Item do checklist padrao do plano - copiado para a OS a cada geracao.
-model MaintenancePlanChecklistItem {
-  id          String          @id @default(uuid())
-  planId      String
-  plan        MaintenancePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  description String
-  sortOrder   Int             @default(0)
-  // Agrupa itens em etapas ("Preparacao", "Execucao", "Encerramento").
-  section      String?
-  required     Boolean               @default(true)
-  responseType ChecklistResponseType @default(YES_NO_NA)
-  // Para responseType NUMBER: unidade e faixa aceitavel da medicao.
-  unit         String?
-  minValue     Float?
-  maxValue     Float?
-  targetValue  Float?
-  requiresPhoto Boolean              @default(false)
-  // Quanto tempo se espera gastar neste item - somado, da a duracao estimada do servico.
-  estimatedMinutes Int?
-  // Procedimento, desenho, manual ou video que apoia este item.
-  reference    String?
-
-  @@index([planId])
-  @@map("maintenance_plan_checklist_items")
-}
-
-// Ordem de Manutencao ("OM") - entidade propria do CMMS, separada de ServiceOrder.
-// Corretiva em operacao: o equipamento continua rodando e o servico foi planejado (folga
-// detectada, ajuste, troca programada). Corretiva de quebra: o equipamento parou. Sao
-// realidades distintas - a de quebra exige o registro da falha para ser concluida, a outra
-// nao - e ficam num campo proprio, e nao em MaintenanceOrderType, para que tudo que hoje
-// filtra "corretiva" (Pareto, MTTR, disponibilidade) continue enxergando as duas.
-// Como o lubrificante e' aplicado no ponto.
-enum LubricationMethod {
-  MANUAL_GUN
-  AUTOMATIC_CENTRAL
-  OIL_BATH
-  IMMERSION
-  BRUSH
-  SPRAY
-}
-
-enum CorrectiveType {
-  IN_OPERATION
-  BREAKDOWN
-}
-
-// Impacto da falha no processo - preenchido por quem atendeu a quebra, no momento em que
-// atendeu. Diferente da prioridade da OS (que e' sobre urgencia de atender).
-enum FailureSeverity {
-  LOW
-  MODERATE
-  HIGH
-  CRITICAL
-}
-
-model MaintenanceWorkOrder {
-  id           String                 @id @default(uuid())
-  // Numeracao propria por cliente ("OS-1", "OS-2"...) em vez de sequencia global -
-  // por isso unico so dentro do cliente, nao globalmente.
-  number       String
-  clientId     String
-  client       Client                 @relation(fields: [clientId], references: [id])
-  instrumentId String
-  instrument   Instrument             @relation(fields: [instrumentId], references: [id])
-  planId       String?
-  plan         MaintenancePlan?       @relation(fields: [planId], references: [id])
-  // Rota de lubrificacao que gerou esta OS - irmao de planId, mas fora do mecanismo de
-  // plano/agendamento: uma rota cobre varios ativos, e o plano so sabe gerar para um so.
-  // "Gerar OS" na rota cria uma por ativo coberto, todas apontando pra mesma rota.
-  lubricationRouteId String?
-  lubricationRoute    LubricationRoute? @relation(fields: [lubricationRouteId], references: [id])
-  type         MaintenanceOrderType
-  // Preenchido apenas quando type = CORRECTIVE. Nulo nas OS anteriores a essa distincao.
-  correctiveType CorrectiveType?
-  priority     MaintenancePriority    @default(MEDIUM)
-  status       MaintenanceOrderStatus @default(OPEN)
-  // Titulo curto ("Troca do rolamento do mancal LA") - e' o que aparece nas listas e no
-  // quadro de programacao. Opcional porque as OS antigas so tinham a descricao; quando
-  // vazio, as telas caem na descricao.
-  title        String?
-  // Descricao/sintoma: o relato do problema ou do servico a fazer.
-  description  String
-  // Rateio contabil desta OS. Nasce do centro de custo do ativo, mas fica gravado aqui
-  // porque uma OS pode ser rateada em outro centro (ex.: obra, projeto) sem que isso mude
-  // o cadastro do ativo.
-  costCenterId String?
-  costCenter   CostCenter?            @relation(fields: [costCenterId], references: [id])
-  technicianId String?
-  technician   User?                  @relation("MaintenanceWorkOrderTechnician", fields: [technicianId], references: [id])
-  // Quem vai executar, vindo do catalogo de mao de obra do proprio cliente - e' o eixo
-  // do quadro de programacao do PCM. Diferente de technicianId, que aponta para um
-  // usuario interno da OptiProcess (so faz sentido quando quem opera e' a equipe interna).
-  assignedResourceId String?
-  assignedResource   LaborResource?     @relation("WorkOrderAssignedResource", fields: [assignedResourceId], references: [id])
-  scheduledDate DateTime?
-  // Janela planejada: quando o servico deve comecar e terminar. scheduledDate continua
-  // sendo o dia em que a OS aparece no quadro de programacao; estes dois dizem o horario
-  // combinado e permitem comparar planejado x realizado.
-  plannedStart DateTime?
-  plannedEnd   DateTime?
-  // Como sera executada e o que ainda falta para isso - preenchido na conversao da
-  // solicitacao em OS, que e' onde o planejador decide.
-  executionCondition WorkOrderExecutionCondition?
-  needsPurchase      Boolean  @default(false)
-  purchaseNotes      String?
-  // Quanto se espera gastar de mao de obra. Copiado do plano quando a OS e' gerada.
-  estimatedHours Float?
-  // Alimentam MTTR (tempo de reparo) e disponibilidade.
-  startedAt    DateTime?
-  completedAt  DateTime?
-  failureCodeId String?
-  failureCode   FailureCode?          @relation(fields: [failureCodeId], references: [id])
-  meterReadingAtExecution Float?
-  laborHours   Float?
-  observations String?
-  // O que foi de fato executado, escrito por quem executou. Numa OS corretiva, e' tambem
-  // a acao corretiva tomada sobre a falha - por isso nao existe um campo separado para ela.
-  executionNotes String?
-  // Em que momento a quebra chegou ao sistema - so em corretiva de quebra.
-  breakdownSituation BreakdownSituation?
-  // --- Registro de falha (so faz sentido em OS corretiva) ---------------------------
-  // Preenchido pelo tecnico que atendeu a quebra. Fica na propria OS, e nao numa tabela
-  // separada, porque a OS corretiva ja e' o registro do evento: duplicar viraria duas
-  // versoes da mesma falha. A investigacao aprofundada (5 porques) continua sendo a RCA,
-  // que se abre a partir daqui quando o caso merece.
-  failureStartedAt DateTime?
-  failureEndedAt   DateTime?
-  failureSeverity  FailureSeverity?
-  // O que aconteceu, na descricao de quem atendeu. Separado da descricao de abertura da OS:
-  // uma e' o pedido ("maquina fazendo barulho"), a outra e' o laudo de quem foi ver.
-  failureDescription String?
-  // Causa imediata identificada no atendimento. Uma causa raiz de verdade sai da RCA.
-  failureRootCause String?
-  // O que foi feito para corrigir a falha especificamente (executionNotes descreve todo o
-  // servico da OS, que pode incluir outras atividades).
-  failureCorrectiveAction String?
-  // Perda de producao estimada, na unidade que a empresa usa (pecas, toneladas, horas).
-  productionLoss   Float?
-  // Registro do encerramento: o que ficou pendente, o que foi combinado, o que observar.
-  closureNotes   String?
-  // Quem liberou a OS para execucao (quando o plano exige aprovacao) e quem a encerrou.
-  approvedById String?
-  approvedBy   User?     @relation("MaintenanceWorkOrderApprover", fields: [approvedById], references: [id])
-  approvedAt   DateTime?
-  closedById   String?
-  closedBy     User?     @relation("MaintenanceWorkOrderCloser", fields: [closedById], references: [id])
-  closedAt     DateTime?
-  // Preenchido quando a OS foi aberta sozinha por uma leitura de medidor fora da faixa -
-  // e' o que torna "Preditiva" uma manutencao de verdade, nao so uma opcao no formulario.
-  triggeredByMeterId String?
-  triggeredByMeter    Meter?              @relation(fields: [triggeredByMeterId], references: [id])
-  // Rastreabilidade preventiva -> corretiva: preenchido quando esta OS (corretiva) foi
-  // aberta automaticamente porque um item do checklist de outra OS (a preventiva/preditiva)
-  // foi marcado "Nao OK". originChecklistItemId e' unico - no maximo uma corretiva por
-  // anomalia encontrada.
-  originWorkOrderId String?
-  originWorkOrder    MaintenanceWorkOrder?  @relation("WorkOrderOrigin", fields: [originWorkOrderId], references: [id])
-  spawnedWorkOrders  MaintenanceWorkOrder[] @relation("WorkOrderOrigin")
-  originChecklistItemId String?                            @unique
-  originChecklistItem    MaintenanceWorkOrderChecklistItem? @relation("ChecklistItemOrigin", fields: [originChecklistItemId], references: [id])
-  createdById  String?
-  createdAt    DateTime               @default(now())
-  updatedAt    DateTime               @updatedAt
-  deletedAt    DateTime?
-
-  checklist MaintenanceWorkOrderChecklistItem[]
-  partsUsed SparePartMovement[]
-  laborEntries WorkOrderLabor[]
-  thirdPartyServices WorkOrderThirdPartyService[]
-  partReservations SparePartReservation[]
-  stoppages WorkOrderStoppage[]
-  rootCauseAnalyses RootCauseAnalysis[]
-  // SS que originou esta OS (quando veio de uma Solicitacao de Servico aprovada) - lado
-  // inverso de ServiceRequest.workOrderId.
-  serviceRequest ServiceRequest?
-  // Equipe de apoio: quem mais pode atuar nesta OS alem do responsavel
-  // (assignedResourceId). Apontar horas nao exige estar aqui - a lista serve para
-  // combinar quem entra no servico, nao para bloquear o apontamento.
-  assignees WorkOrderAssignee[]
-  materialLogs WorkOrderMaterialLog[]
-
-  @@unique([clientId, number])
-  @@index([clientId])
-  @@index([instrumentId])
-  @@index([planId])
-  @@index([lubricationRouteId])
-  @@index([status])
-  @@index([originWorkOrderId])
-  @@index([assignedResourceId])
-  @@index([scheduledDate])
-  @@index([costCenterId])
-  @@map("maintenance_work_orders")
-  lubricationRecords LubricationRecord[]
-}
-
-// Equipe de apoio da OS - o responsavel fica em MaintenanceWorkOrder.assignedResourceId.
-model WorkOrderAssignee {
-  id              String               @id @default(uuid())
-  workOrderId     String
-  workOrder       MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
-  laborResourceId String
-  laborResource   LaborResource        @relation(fields: [laborResourceId], references: [id])
-  createdAt       DateTime             @default(now())
-
-  @@unique([workOrderId, laborResourceId])
-  @@index([workOrderId])
-  @@map("work_order_assignees")
-}
-
-// Registro do que aconteceu com cada material previsto quando a OS foi gerada. Existe
-// para o planejador saber POR QUE um item nao foi reservado, em vez de descobrir na hora
-// da execucao que a peca nao esta separada.
-model WorkOrderMaterialLog {
-  id          String   @id @default(uuid())
-  workOrderId String
-  workOrder   MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
-  sparePartId String
-  sparePart   SparePart @relation("MaterialLogPart", fields: [sparePartId], references: [id])
-  quantityNeeded Int
-  reserved       Boolean
-  // Motivo quando nao reservou: saldo insuficiente, peca inativa, etc.
-  reason      String?
-  // Item obrigatorio impede (ou marca) a execucao quando falta; opcional so avisa.
-  required    Boolean  @default(true)
-  // Substituto aceito quando o principal nao tem saldo.
-  alternativeSparePartId String?
-  alternativeSparePart   SparePart? @relation("MaterialLogAlternative", fields: [alternativeSparePartId], references: [id])
-  suggestedSupplier      String?
-  createdById String?
-  createdAt   DateTime @default(now())
-
-  @@index([workOrderId])
-  @@map("work_order_material_logs")
-}
-
-model MaintenanceWorkOrderChecklistItem {
-  id          String               @id @default(uuid())
-  workOrderId String
-  workOrder   MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
-  description String
-  result      ChecklistItemResult  @default(PENDING)
-  notes       String?
-  sortOrder   Int                  @default(0)
-  // Copiados do plano na geracao da OS - o item executado guarda a propria regra, para o
-  // historico nao mudar se o plano for editado depois.
-  section      String?
-  required     Boolean               @default(true)
-  responseType ChecklistResponseType @default(YES_NO_NA)
-  unit         String?
-  minValue     Float?
-  maxValue     Float?
-  targetValue  Float?
-  requiresPhoto Boolean              @default(false)
-  // Quanto tempo se espera gastar neste item - somado, da a duracao estimada do servico.
-  estimatedMinutes Int?
-  reference    String?
-  // O que o executante preencheu, conforme o tipo de resposta.
-  numericValue Float?
-  textValue    String?
-  signedBy     String?
-  signedAt     DateTime?
-  // Corretiva aberta automaticamente quando este item foi marcado "Nao OK" - lado inverso
-  // de MaintenanceWorkOrder.originChecklistItemId.
-  spawnedCorrectiveOrder MaintenanceWorkOrder? @relation("ChecklistItemOrigin")
-
-  @@index([workOrderId])
-  @@map("maintenance_work_order_checklist_items")
-}
-
-// ---------------------------------------------------------------------------
-// Almoxarifado do CMMS - estoque tecnico interno, separado do catalogo comercial
-// (Product/InventoryMovement) usado para vender material eletrico aos clientes.
-// ---------------------------------------------------------------------------
-
-// Almoxarifado e' do proprio cliente (nao um estoque unico da OptiProcess) - cada
-// empresa cadastra e gerencia as pecas dela, sem ver o que outro cliente tem.
-model SparePart {
-  id          String    @id @default(uuid())
-  clientId    String
-  client      Client    @relation(fields: [clientId], references: [id])
-  name        String
-  code        String?
-  category    String?
-  unit        String    @default("un")
-  stockQty    Int       @default(0)
-  minStock    Int       @default(0)
-  // Quanto do estoque atual ja esta comprometido com alguma OS (reservado, ainda nao
-  // baixado) - saldo disponivel pra nova reserva/consumo e' stockQty - reservedQty.
-  reservedQty Int       @default(0)
-  // Custo unitario da ultima compra registrada (opcional) - alimenta o valor do estoque
-  // e o custo de manutencao por ativo. Sem isso, o almoxarifado funciona igual a antes.
-  unitCost    Float?
-  active      Boolean   @default(true)
-  createdById String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-
-  movements    SparePartMovement[]
-  assetLinks   AssetPart[]
-  reservations SparePartReservation[]
-  planParts    MaintenancePlanPart[]
-  planPartsAsAlternative MaintenancePlanPart[]  @relation("PlanPartAlternative")
-  materialLogs           WorkOrderMaterialLog[] @relation("MaterialLogPart")
-
-  @@index([clientId])
-  @@index([active])
-  @@map("spare_parts")
-  lubricante Lubricant?
-  materialLogsComoAlternativa WorkOrderMaterialLog[] @relation("MaterialLogAlternative")
-}
-
-model SparePartMovement {
-  id                     String                @id @default(uuid())
-  sparePartId            String
-  sparePart              SparePart             @relation(fields: [sparePartId], references: [id])
-  type                   InventoryMovementType
-  quantity               Int
-  // Custo unitario NESTE movimento (opcional, snapshot) - se nao informado ao registrar,
-  // herda o unitCost vigente da peca naquele momento.
-  unitCost               Float?
-  reason                 String?
-  maintenanceWorkOrderId String?
-  maintenanceWorkOrder   MaintenanceWorkOrder? @relation(fields: [maintenanceWorkOrderId], references: [id])
-  createdById            String?
-  createdAt              DateTime              @default(now())
-
-  @@index([sparePartId])
-  @@index([maintenanceWorkOrderId])
-  @@map("spare_part_movements")
-  lubricationRecord LubricationRecord?
-}
-
-// Lista de materiais (BOM): quais pecas do almoxarifado sao usadas em cada ativo.
-model AssetPart {
-  id           String     @id @default(uuid())
-  instrumentId String
-  instrument   Instrument @relation(fields: [instrumentId], references: [id])
-  sparePartId  String
-  sparePart    SparePart  @relation(fields: [sparePartId], references: [id])
-  notes        String?
-  createdAt    DateTime   @default(now())
-
-  @@unique([instrumentId, sparePartId])
-  @@index([instrumentId])
-  @@index([sparePartId])
-  @@map("asset_parts")
-}
-
-// ---------------------------------------------------------------------------
-// Auditoria e notificacoes
-// ---------------------------------------------------------------------------
-
+// (removido) Cadastro tecnico do CMMS (plantas, areas, centros de custo, falhas, RCA,
+// solicitacoes de servico, planos e ordens de manutencao, almoxarifado tecnico)
 model AuditLog {
   id          String   @id @default(uuid())
   userId      String?
@@ -2157,24 +819,6 @@ model Counter {
   @@map("counters")
 }
 
-// Interruptor da geracao automatica de OS a partir dos planos preventivos, um por cliente
-// - e' o cliente quem decide se quer a propria rodada ligada ou pausada, nao a OptiProcess
-// (que nao mexe nisso pela Gestao). Guarda tambem o que aconteceu na ultima rodada dele.
-model AutomationSettings {
-  id                    String    @id @default(uuid())
-  clientId              String    @unique
-  client                Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  planGenerationEnabled Boolean   @default(true)
-  lastRunAt             DateTime?
-  lastRunGeneratedCount Int?
-  lastRunIgnoredCount   Int?
-  lastRunErrorCount     Int?
-  updatedById           String?
-  updatedAt             DateTime  @updatedAt
-
-  @@map("automation_settings")
-}
-
 model Notification {
   id        String   @id @default(uuid())
   userId    String
@@ -2188,185 +832,4 @@ model Notification {
 
   @@index([userId])
   @@map("notifications")
-}
-
-// ---------------------------------------------------------------------------
-// Lubrificacao
-//
-// O ciclo completo, do almoxarifado ao ponto: o lubrificante e' uma peca do
-// almoxarifado (saldo, custo e movimentacao ficam la, num lugar so) com uma ficha
-// tecnica propria; cada ponto do equipamento diz qual lubrificante, quanto e de
-// quanto em quanto tempo; as rotas agrupam pontos para o lubrificador percorrer; e
-// cada aplicacao registrada baixa o estoque. Dessas frequencias sai a previsao de
-// consumo por periodo.
-// ---------------------------------------------------------------------------
-
-enum LubricantType {
-  GREASE
-  OIL
-  OTHER
-}
-
-enum LubricantBase {
-  MINERAL
-  SYNTHETIC
-  SEMI_SYNTHETIC
-}
-
-// Se o ponto pode ser lubrificado com a maquina rodando. Nao e' detalhe: lubrificar
-// acoplamento girando e' acidente, e o campo existe para o plano avisar antes.
-enum MachineStateForLubrication {
-  STOPPED
-  RUNNING
-  ANY
-}
-
-// Como o ponto foi encontrado / como ficou.
-enum LubricationCondition {
-  NORMAL
-  LOW
-  DRY
-  CONTAMINATED
-  EXCESS
-}
-
-model Lubricant {
-  id            String         @id @default(uuid())
-  clientId      String
-  client        Client         @relation(fields: [clientId], references: [id])
-  // O lubrificante E' uma peca do almoxarifado - esta tabela so acrescenta a ficha
-  // tecnica. Assim saldo, custo medio e historico de movimentacao nao viram duas
-  // verdades diferentes.
-  sparePartId   String         @unique
-  sparePart     SparePart      @relation(fields: [sparePartId], references: [id])
-  type          LubricantType  @default(GREASE)
-  // ISO VG 220, NLGI 2, SAE 90...
-  specification String?
-  base          LubricantBase?
-  manufacturer  String?
-  application   String?
-  notes         String?
-  active        Boolean        @default(true)
-  createdById   String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  deletedAt     DateTime?
-
-  points  LubricationPoint[]
-  records LubricationRecord[]
-
-  @@index([clientId])
-  @@map("lubricants")
-}
-
-model LubricationPoint {
-  id           String     @id @default(uuid())
-  clientId     String
-  client       Client     @relation(fields: [clientId], references: [id])
-  instrumentId String
-  instrument   Instrument @relation(fields: [instrumentId], references: [id])
-  code         String
-  name         String
-  // Mancal LA, redutor, corrente, guia linear...
-  component    String?
-  lubricantId  String
-  lubricant    Lubricant  @relation(fields: [lubricantId], references: [id])
-  // Quantidade por aplicacao, na unidade da peca do almoxarifado (nao se repete a
-  // unidade aqui: duas unidades para a mesma coisa e' garantia de divergencia).
-  quantityPerApplication Float
-  method       LubricationMethod
-  // Intervalo de engenharia deste ponto. E' a unica frequencia que existe - a rota so
-  // agrupa pontos, nao redefine periodicidade.
-  frequencyDays Int
-  machineState MachineStateForLubrication @default(ANY)
-  accessNotes  String?
-  safetyNotes  String?
-  lastLubricatedAt DateTime?
-  nextDueAt    DateTime?
-  active       Boolean    @default(true)
-  createdById  String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  deletedAt    DateTime?
-
-  routeItems LubricationRouteItem[]
-  records    LubricationRecord[]
-
-  @@unique([clientId, code])
-  @@index([clientId])
-  @@index([instrumentId])
-  @@index([lubricantId])
-  @@index([nextDueAt])
-  @@map("lubrication_points")
-}
-
-model LubricationRoute {
-  id            String         @id @default(uuid())
-  clientId      String
-  client        Client         @relation(fields: [clientId], references: [id])
-  name          String
-  code          String?
-  plantId       String?
-  plant         Plant?         @relation(fields: [plantId], references: [id])
-  areaId        String?
-  area          Area?          @relation(fields: [areaId], references: [id])
-  responsibleId String?
-  responsible   LaborResource? @relation("LubricationRouteResponsible", fields: [responsibleId], references: [id])
-  notes         String?
-  active        Boolean        @default(true)
-  createdById   String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  deletedAt     DateTime?
-
-  items LubricationRouteItem[]
-  plans MaintenancePlan[]
-  workOrders MaintenanceWorkOrder[]
-
-  @@index([clientId])
-  @@map("lubrication_routes")
-}
-
-model LubricationRouteItem {
-  id        String           @id @default(uuid())
-  routeId   String
-  route     LubricationRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
-  pointId   String
-  point     LubricationPoint @relation(fields: [pointId], references: [id], onDelete: Cascade)
-  sortOrder Int              @default(0)
-
-  @@unique([routeId, pointId])
-  @@index([routeId])
-  @@map("lubrication_route_items")
-}
-
-model LubricationRecord {
-  id              String                @id @default(uuid())
-  clientId        String
-  client          Client                @relation(fields: [clientId], references: [id])
-  pointId         String
-  point           LubricationPoint      @relation(fields: [pointId], references: [id])
-  // Guardado alem do ponto porque o lubrificante aplicado pode ter sido outro (faltou o
-  // especificado) - e o historico precisa dizer o que realmente entrou no equipamento.
-  lubricantId     String
-  lubricant       Lubricant             @relation(fields: [lubricantId], references: [id])
-  workOrderId     String?
-  workOrder       MaintenanceWorkOrder? @relation(fields: [workOrderId], references: [id])
-  quantity        Float
-  executedAt      DateTime              @default(now())
-  laborResourceId String?
-  laborResource   LaborResource?        @relation("LubricationExecutor", fields: [laborResourceId], references: [id])
-  conditionBefore LubricationCondition?
-  conditionAfter  LubricationCondition?
-  notes           String?
-  // Baixa correspondente no almoxarifado - a aplicacao e o consumo sao o mesmo evento.
-  movementId      String?               @unique
-  movement        SparePartMovement?    @relation(fields: [movementId], references: [id])
-  createdById     String?
-  createdAt       DateTime              @default(now())
-
-  @@index([clientId])
-  @@index([pointId])
-  @@index([executedAt])
-  @@map("lubrication_records")
 }

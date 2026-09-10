@@ -12,7 +12,6 @@ import {
   ReceiptText,
   Users,
   History,
-  Wrench,
   Layers3,
 } from "lucide-react";
 import type { Role } from "../api/types";
@@ -32,9 +31,6 @@ export const ADMIN_NAV: NavItem[] = [
   { to: "/gestao/calibracoes", label: "Calibracoes", icon: BadgeCheck, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
   { to: "/gestao/laudos", label: "Laudos tecnicos", icon: FileWarning, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
   { to: "/gestao/contratos", label: "Contratos", icon: FileSignature, roles: ["ADMIN", "COMMERCIAL"] },
-  // O CMMS e' o produto vendido ao cliente, operado por ele. Aqui fica so o acesso
-  // master do dono da plataforma (suporte/administracao) - por isso ADMIN apenas.
-  { to: "/gestao/manutencao", label: "CMMS (acesso master)", icon: Wrench, roles: ["ADMIN"] },
   { to: "/gestao/produtos", label: "Produtos e estoque", icon: Package, roles: ["ADMIN", "COMMERCIAL"] },
   { to: "/gestao/orcamentos", label: "Orcamentos", icon: ReceiptText, roles: ["ADMIN", "COMMERCIAL"] },
   { to: "/gestao/pedidos", label: "Pedidos", icon: ShoppingCart, roles: ["ADMIN", "COMMERCIAL"] },

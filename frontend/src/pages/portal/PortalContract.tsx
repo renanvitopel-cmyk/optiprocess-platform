@@ -90,13 +90,6 @@ function Uso({
   );
 }
 
-const SITUACAO_DO_CONTRATO: Record<string, { rotulo: string; classe: string }> = {
-  TRIAL: { rotulo: "Em teste", classe: "border-navy-200 bg-navy-50 text-navy-700" },
-  ACTIVE: { rotulo: "Ativo", classe: "border-green-200 bg-green-50 text-safety-green-dark" },
-  SUSPENDED: { rotulo: "Suspenso", classe: "border-yellow-200 bg-yellow-50 text-safety-yellow-dark" },
-  CANCELED: { rotulo: "Cancelado", classe: "border-red-200 bg-red-50 text-safety-red" },
-};
-
 /** Contrato do cliente: qual plano, o que ele da direito, quem ja usa e quanto ainda cabe.
  * Antes o cliente so descobria o limite quando um cadastro era recusado. */
 export default function PortalContract() {
@@ -205,11 +198,6 @@ export default function PortalContract() {
             <p className="text-xs uppercase tracking-wide text-graphite-400">Plano contratado</p>
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
               <p className="text-xl font-bold text-navy-900">{plano?.name ?? "Sem plano atribuido"}</p>
-              {empresa.contractStatus && SITUACAO_DO_CONTRATO[empresa.contractStatus] && (
-                <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${SITUACAO_DO_CONTRATO[empresa.contractStatus].classe}`}>
-                  {SITUACAO_DO_CONTRATO[empresa.contractStatus].rotulo}
-                </span>
-              )}
             </div>
             {plano?.description && <p className="mt-1 text-sm text-graphite-600">{plano.description}</p>}
             {!plano && (

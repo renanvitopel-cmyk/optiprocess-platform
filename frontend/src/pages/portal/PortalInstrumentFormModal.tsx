@@ -1,25 +1,16 @@
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Modal } from "../../components/Modal";
-import { TextInput, SelectInput, CheckboxInput } from "../../components/form/Field";
-import { InstrumentPicker } from "../../components/InstrumentPicker";
-import { AssetLevelInput } from "../../components/AssetLevelInput";
+import { TextInput, CheckboxInput } from "../../components/form/Field";
 import { AssetTypeInput } from "../../components/AssetTypeInput";
-import { LocationPicker } from "../../components/LocationPicker";
-import { listAreas } from "../../api/areas";
-import { areaComCentroDeCusto, centroDeCustoComDescricao } from "../../lib/centroDeCusto";
-import { createInstrument, updateInstrument, getInstrument } from "../../api/instruments";
+import { createInstrument, updateInstrument } from "../../api/instruments";
 import type { Instrument } from "../../api/types";
 import { useToast } from "../../components/Toast";
 import { getApiErrorMessage } from "../../api/client";
-import { useAuth } from "../../auth/AuthContext";
-import { camposDoTipo } from "../../lib/camposPorTipoDeAtivo";
 
 const schema = z.object({
-  level: z.enum(["PLANT", "AREA", "MACHINE", "SUBASSEMBLY", "PART"]).optional().or(z.literal("")),
   type: z.string().optional(),
   tag: z.string().min(1, "Informe o TAG do ativo."),
   description: z.string().min(2, "Informe a descricao do ativo."),
@@ -28,13 +19,6 @@ const schema = z.object({
   serialNumber: z.string().optional(),
   installationLocation: z.string().optional(),
   calibratable: z.boolean().optional(),
-  lubricatable: z.boolean().optional(),
-  criticality: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
-  operationalStatus: z.enum(["IN_OPERATION", "STOPPED", "STANDBY", "DEACTIVATED", "IN_MAINTENANCE"]).optional(),
-  parentId: z.string().uuid().optional().or(z.literal("")),
-  plantId: z.string().uuid().optional().or(z.literal("")),
-  areaId: z.string().uuid().optional().or(z.literal("")),
-  specificAttributes: z.record(z.string(), z.string()).optional(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -43,59 +27,21 @@ interface Props {
   onClose: () => void;
   onSaved: (instrument: Instrument) => void;
   instrument?: Instrument;
-  /** Pre-preenche o ativo pai quando aberto pelo "Adicionar componente" da ficha do pai. */
-  initialParentId?: string;
-  /** Sugestao de TAG (ex.: "F01-RMP-") a partir do TAG do pai - so um valor inicial, o campo continua livre pra editar/apagar. */
-  initialTagPrefix?: string;
 }
 
 /** Cadastro de ativo pelo proprio cliente no portal - sem escolha de empresa (o backend
  * sempre grava para a empresa do usuario logado) e so com os campos essenciais. */
-export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, initialParentId, initialTagPrefix }: Props) {
+export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument }: Props) {
   const { notify } = useToast();
-  const { user } = useAuth();
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
   });
-
-  // O pai escolhido define o contexto herdado mostrado acima.
-  const parentId = watch("parentId");
-  // O tipo so aparece depois do nivel escolhido - e' ele que diz qual lista faz sentido.
-  const nivel = watch("level") || undefined;
-  const tipoEscolhido = watch("type");
-  const camposEspecificos = camposDoTipo(tipoEscolhido);
-  const plantId = watch("plantId");
-  const areaId = watch("areaId");
-
-  // O centro de custo nao se escolhe no ativo: ele e' o padrao da area. Antes o formulario
-  // perguntava e o backend descartava logo em seguida - a pessoa preenchia e depois nao
-  // encontrava o que tinha escolhido.
-  const { data: areasDaPlanta } = useQuery({
-    queryKey: ["areas-centro-custo", plantId],
-    queryFn: () => listAreas({ plantId: plantId as string, active: true }),
-    enabled: !!plantId && !parentId,
-  });
-  const centroDaArea = (areasDaPlanta ?? []).find((a) => a.id === areaId)?.costCenter ?? null;
-  const { data: pai } = useQuery({
-    queryKey: ["instrument-parent-context", parentId],
-    queryFn: () => getInstrument(parentId as string),
-    enabled: !!parentId,
-  });
-
-  // Areas da planta do PAI - e' entre elas que um ativo do meio da arvore escolhe a sua.
-  const { data: areasDaPlantaDoPai } = useQuery({
-    queryKey: ["areas-do-pai", pai?.plantId],
-    queryFn: () => listAreas({ plantId: pai?.plantId as string, active: true }),
-    enabled: !!parentId && !!pai?.plantId,
-  });
-
 
   useEffect(() => {
     if (open) {
       reset(
         instrument
           ? {
-              level: instrument.level ?? "",
               type: instrument.type ?? "",
               tag: instrument.tag ?? "",
               description: instrument.description ?? "",
@@ -104,36 +50,21 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
               serialNumber: instrument.serialNumber ?? "",
               installationLocation: instrument.installationLocation ?? "",
               calibratable: instrument.calibratable,
-              lubricatable: instrument.lubricatable,
-              criticality: instrument.criticality,
-              operationalStatus: instrument.operationalStatus,
-              parentId: instrument.parentId ?? "",
-              plantId: instrument.plantId ?? "",
-              areaId: instrument.areaId ?? "",
-              specificAttributes: instrument.specificAttributes ?? {},
             }
-          : { criticality: "MEDIUM", operationalStatus: "IN_OPERATION", parentId: initialParentId ?? "", tag: initialTagPrefix ?? "" },
+          : { tag: "" },
       );
     }
-  }, [open, instrument, initialParentId, initialTagPrefix, reset]);
+  }, [open, instrument, reset]);
 
   async function onSubmit(values: FormValues) {
     try {
-      const attrsPreenchidos = Object.fromEntries(
-        Object.entries(values.specificAttributes ?? {}).filter(([, v]) => v?.trim()),
-      );
       const payload = {
         ...values,
         description: values.description || null,
         manufacturer: values.manufacturer || null,
         model: values.model || null,
         serialNumber: values.serialNumber || null,
-        parentId: values.parentId || null,
-        level: values.level || null,
         type: values.type || undefined,
-        plantId: values.plantId || null,
-        areaId: values.areaId || null,
-        specificAttributes: Object.keys(attrsPreenchidos).length > 0 ? attrsPreenchidos : null,
       };
       const saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
       notify("success", instrument ? "Ativo atualizado." : "Ativo cadastrado.");
@@ -175,127 +106,9 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
-          <AssetLevelInput
-            error={errors.level?.message}
-            {...register("level", {
-              // Trocar o nivel muda a lista do campo seguinte: manter "Bomba" num ativo que
-              // virou "Parte" deixaria a ficha dizendo uma coisa que a lista nao oferece.
-              onChange: () => setValue("type", ""),
-            })}
-          />
-          {nivel && <AssetTypeInput nivel={nivel} currentValue={instrument?.type} {...register("type")} />}
-          <SelectInput
-            label="Criticidade"
-            hint="Quanto uma parada deste ativo pesa pra sua operacao."
-            options={[
-              { value: "LOW", label: "Baixa" },
-              { value: "MEDIUM", label: "Media" },
-              { value: "HIGH", label: "Alta" },
-              { value: "CRITICAL", label: "Critica" },
-            ]}
-            {...register("criticality")}
-          />
-          <SelectInput
-            label="Condicao operacional"
-            hint="O que esta acontecendo com o ativo agora."
-            options={[
-              { value: "IN_OPERATION", label: "Em operacao" },
-              { value: "STOPPED", label: "Parado" },
-              { value: "STANDBY", label: "Reserva" },
-              { value: "DEACTIVATED", label: "Desativado" },
-              { value: "IN_MAINTENANCE", label: "Em manutencao" },
-            ]}
-            {...register("operationalStatus")}
-          />
+          <AssetTypeInput currentValue={instrument?.type} {...register("type")} />
         </div>
 
-        {camposEspecificos.length > 0 && (
-          <div className="rounded-lg border border-gray-200 p-4">
-            <p className="text-sm font-medium text-graphite-700">Ficha tecnica de {tipoEscolhido}</p>
-            <p className="mt-0.5 text-xs text-graphite-500">Campos proprios deste tipo de equipamento - todos opcionais.</p>
-            <div className="mt-3 grid gap-4 sm:grid-cols-3">
-              {camposEspecificos.map((campo) =>
-                campo.tipo === "select" ? (
-                  <SelectInput
-                    key={campo.chave}
-                    label={campo.rotulo}
-                    options={(campo.opcoes ?? []).map((o) => ({ value: o, label: o }))}
-                    {...register(`specificAttributes.${campo.chave}` as "specificAttributes.string")}
-                  />
-                ) : (
-                  <TextInput
-                    key={campo.chave}
-                    label={campo.rotulo}
-                    placeholder={campo.placeholder}
-                    {...register(`specificAttributes.${campo.chave}` as "specificAttributes.string")}
-                  />
-                ),
-              )}
-            </div>
-          </div>
-        )}
-
-        <InstrumentPicker
-          label="Faz parte de (ativo pai)"
-          hint="A estrutura e' uma arvore: Planta > Linha > Maquina > Componente. Vazio = ativo no topo."
-          excludeId={instrument?.id}
-          error={errors.parentId?.message}
-          {...register("parentId")}
-        />
-        {/* Planta, area e centro de custo sao definidos uma vez no ativo raiz e herdados por
-            todo o galho abaixo. Num ativo filho eles nao se editam - antes o formulario
-            pedia esses campos e o backend os descartava em seguida, substituindo pelo
-            contexto do pai: o usuario preenchia e nao entendia por que mudava sozinho. */}
-        {parentId ? (
-          <div className="rounded-lg border border-gray-200 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-graphite-400">Onde fica</p>
-            <p className="mt-0.5 text-xs text-graphite-500">
-              A planta vem do ativo pai - um componente nao muda de fabrica.
-            </p>
-            <p className="mt-2 text-sm">
-              <span className="text-xs text-graphite-400">Planta: </span>
-              <span className="font-medium text-graphite-800">{pai?.plant?.name ?? "-"}</span>
-            </p>
-
-            {/* A area NAO e' so do topo. A raiz costuma ser a planta inteira, que tem
-                varias linhas: se o ativo que representa a linha nao pudesse dizer em que
-                area fica, a arvore toda ficaria sem area - e portanto sem centro de custo,
-                que e' exatamente o que aconteceu antes desta correcao. */}
-            <div className="mt-3">
-              <SelectInput
-                label="Area / Centro de custo"
-                placeholder={
-                  pai?.area ? `Herdar do pai: ${areaComCentroDeCusto(pai.area, pai.costCenter)}` : "Herdar do pai (sem area definida)"
-                }
-                hint="Preencha no ativo que representa a linha/area. Tudo abaixo dele herda daqui, com o centro de custo junto."
-                options={(areasDaPlantaDoPai ?? []).map((a) => ({
-                  value: a.id,
-                  label: areaComCentroDeCusto(a, a.costCenter),
-                }))}
-                {...register("areaId")}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-gray-200 p-4">
-            <p className="text-sm font-medium text-graphite-700">Onde fica</p>
-            <p className="mt-0.5 text-xs text-graphite-500">
-              Como este ativo nao tem pai, e' aqui que planta e area sao definidas - todo ativo abaixo dele herda.
-            </p>
-            <div className="mt-3">
-              <LocationPicker clientId={user?.clientId ?? undefined} register={register} watch={watch} setValue={setValue} hideCostCenter />
-            </div>
-            {areaId && (
-              <p className="mt-3 text-xs text-graphite-500">
-                Centro de custo:{" "}
-                <span className="font-medium text-graphite-800">
-                  {centroDaArea ? centroDeCustoComDescricao(centroDaArea) : "a area escolhida ainda nao tem um numero"}
-                </span>{" "}
-                - vem junto da area, e todo ativo abaixo deste herda os dois.
-              </p>
-            )}
-          </div>
-        )}
         <div className="grid gap-4 sm:grid-cols-3">
           <TextInput label="Fabricante" {...register("manufacturer")} />
           <TextInput label="Modelo" {...register("model")} />
@@ -303,10 +116,6 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
         </div>
         <TextInput label="Local de instalacao" {...register("installationLocation")} />
 
-        {/* As duas marcas que ligam este ativo aos outros dois modulos. A periodicidade de
-            calibracao saiu daqui: era um numero solto na ficha, digitado uma vez e nunca
-            mais olhado. Ela agora vive no plano de calibracao, que e' onde se decide o que
-            sera feito e quando - a ficha so acompanha. */}
         <div className="space-y-3 rounded-lg border border-gray-200 p-4">
           <p className="text-sm font-medium text-graphite-700">Este ativo participa de</p>
           <CheckboxInput
@@ -315,15 +124,7 @@ export function PortalInstrumentFormModal({ open, onClose, onSaved, instrument, 
           />
           <p className="-mt-1 pl-6 text-xs text-graphite-500">
             Ao marcar, o ativo entra na lista de calibracao da OptiProcess. Depois e' preciso criar o plano de
-            calibracao, que define de quanto em quanto tempo - a ficha lembra disso enquanto faltar.
-          </p>
-          <CheckboxInput
-            label="Lubrificacao - este ativo tem ponto de lubrificacao"
-            {...register("lubricatable")}
-          />
-          <p className="-mt-1 pl-6 text-xs text-graphite-500">
-            Ao marcar, o ponto e' cadastrado na ficha do ativo ja com o ativo e o nome preenchidos, e passa a
-            aparecer em Lubrificacao.
+            calibracao, que define de quanto em quanto tempo.
           </p>
         </div>
       </form>

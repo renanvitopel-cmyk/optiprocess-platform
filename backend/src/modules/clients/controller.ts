@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { ClientStatus, CmmsContractStatus, ServiceCategory } from "@prisma/client";
+import { ClientStatus, ServiceCategory } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -51,7 +51,7 @@ export const listClients = asyncHandler(async (req: Request, res: Response) => {
       where,
       orderBy: { companyName: "asc" },
       ...toSkipTake(pageParams),
-      include: { _count: { select: { instruments: true, serviceOrders: true, contracts: true } }, plan: { select: { id: true, name: true } } },
+      include: { _count: { select: { instruments: true } }, plan: { select: { id: true, name: true } } },
     }),
     prisma.client.count({ where }),
   ]);
@@ -108,7 +108,7 @@ export const getClient = asyncHandler(async (req: Request, res: Response) => {
         orderBy: { createdAt: "asc" },
       },
       _count: {
-        select: { instruments: true, serviceOrders: true, contracts: true, calibrations: true, orders: true },
+        select: { instruments: true },
       },
     },
   });
@@ -139,8 +139,6 @@ const clientSchema = z.object({
   technicalContactName: z.string().nullish(),
   commercialContactName: z.string().nullish(),
   status: z.nativeEnum(ClientStatus).optional(),
-  // Situacao do contrato do CMMS. So a equipe da OptiProcess mexe: e' dado comercial.
-  contractStatus: z.nativeEnum(CmmsContractStatus).optional(),
   contractedServices: z.array(z.nativeEnum(ServiceCategory)).optional(),
   planId: z.string().uuid().nullish(),
   notes: z.string().nullish(),

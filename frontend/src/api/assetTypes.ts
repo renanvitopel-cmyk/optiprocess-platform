@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { AssetType, AssetHierarchyLevel } from "./types";
+import type { AssetType } from "./types";
 
 export async function listAssetTypes(params: { active?: boolean; clientId?: string } = {}): Promise<AssetType[]> {
   const { data } = await api.get<AssetType[]>("/asset-types", { params });
@@ -9,7 +9,6 @@ export async function listAssetTypes(params: { active?: boolean; clientId?: stri
 export interface AssetTypeInput {
   name: string;
   clientId?: string | null;
-  level?: AssetHierarchyLevel | null;
 }
 
 export async function createAssetType(input: AssetTypeInput): Promise<AssetType> {

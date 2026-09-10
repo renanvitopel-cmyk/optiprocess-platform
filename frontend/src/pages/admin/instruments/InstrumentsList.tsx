@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, GitBranch, Tags } from "lucide-react";
+import { Plus, Search, Tags } from "lucide-react";
 import { listInstruments } from "../../../api/instruments";
-import type { InstrumentStatus, MaintenancePriority, OperationalStatus } from "../../../api/types";
+import type { InstrumentStatus } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { DataTable } from "../../../components/DataTable";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -15,41 +15,27 @@ export default function InstrumentsList() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const clientId = searchParams.get("clientId") ?? undefined;
-  // As telas do CMMS chamam esta lista com scope=cmms para ver a arvore completa do
-  // cliente; sem isso a equipe da OptiProcess ve so os ativos calibraveis.
-  const scope = searchParams.get("scope") ?? undefined;
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const canManage = user?.role === "ADMIN" || user?.role === "TECHNICIAN";
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<InstrumentStatus | "">("");
-  const [criticality, setCriticality] = useState<MaintenancePriority | "">("");
-  const [operationalStatus, setOperationalStatus] = useState<OperationalStatus | "">("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["instruments", scope, search, status, criticality, operationalStatus, page, clientId],
-    queryFn: () => listInstruments({ scope, search: search || undefined, status: status || undefined, criticality: criticality || undefined, operationalStatus: operationalStatus || undefined, page, pageSize: 15, clientId }),
+    queryKey: ["instruments", search, status, page, clientId],
+    queryFn: () => listInstruments({ search: search || undefined, status: status || undefined, page, pageSize: 15, clientId }),
   });
 
   return (
     <div>
       <PageHeader
-        title={scope === "cmms" ? "Ativos do CMMS" : "Ativos"}
-        description={
-          scope === "cmms"
-            ? "Arvore completa de manutencao do cliente"
-            : "Equipamentos dos clientes sujeitos a calibracao"
-        }
+        title="Ativos"
+        description="Equipamentos dos clientes sujeitos a calibracao"
         actions={
           <>
-            {clientId && (
-              <button className="btn-outline" onClick={() => navigate(`/gestao/manutencao/arvore?clientId=${clientId}`)}>
-                <GitBranch className="h-4 w-4" /> Ver arvore
-              </button>
-            )}
             <button className="btn-outline" onClick={() => navigate("/gestao/instrumentos/cadastros")}>
               <Tags className="h-4 w-4" /> Cadastros tecnicos
             </button>
@@ -82,21 +68,6 @@ export default function InstrumentsList() {
           <option value="EXPIRED">Vencido</option>
           <option value="IN_MAINTENANCE">Em manutencao</option>
         </select>
-        <select className="input sm:w-56" value={criticality} onChange={(e) => { setCriticality(e.target.value as MaintenancePriority | ""); setPage(1); }}>
-          <option value="">Todas as criticidades</option>
-          <option value="CRITICAL">Critica</option>
-          <option value="HIGH">Alta</option>
-          <option value="MEDIUM">Media</option>
-          <option value="LOW">Baixa</option>
-        </select>
-        <select className="input sm:w-56" value={operationalStatus} onChange={(e) => { setOperationalStatus(e.target.value as OperationalStatus | ""); setPage(1); }}>
-          <option value="">Todas as condicoes operacionais</option>
-          <option value="IN_OPERATION">Em operacao</option>
-          <option value="STOPPED">Parado</option>
-          <option value="STANDBY">Reserva</option>
-          <option value="DEACTIVATED">Desativado</option>
-          <option value="IN_MAINTENANCE">Em manutencao</option>
-        </select>
       </div>
 
       <DataTable
@@ -108,21 +79,7 @@ export default function InstrumentsList() {
         onPageChange={setPage}
         emptyTitle="Nenhum ativo cadastrado"
         columns={[
-          {
-            header: "Tag",
-            // Filhos entram recuados, para a lista mostrar a arvore de ativos.
-            accessor: (i) => (
-              <span
-                className={i.treeDepth ? "text-graphite-600" : ""}
-                // Recuo pela profundidade real na arvore: com tres niveis, filho e neto
-                // ficavam no mesmo lugar e a estrutura sumia.
-                style={i.treeDepth ? { paddingLeft: i.treeDepth * 16 } : undefined}
-              >
-                {!!i.treeDepth && <span className="mr-1 text-graphite-300">&#8627;</span>}
-                {i.tag ?? "-"}
-              </span>
-            ),
-          },
+          { header: "Tag", accessor: (i) => i.tag ?? "-" },
           {
             header: "Ativo",
             accessor: (i) => (
@@ -139,10 +96,7 @@ export default function InstrumentsList() {
               </div>
             ),
           },
-          { header: "Componente de", accessor: (i) => (i.parent ? `TAG ${i.parent.tag ?? i.parent.type}` : "-") },
           { header: "Cliente", accessor: (i) => clientDisplayName(i.client) },
-          { header: "Criticidade", accessor: (i) => <StatusBadge status={i.criticality} /> },
-          { header: "Condicao", accessor: (i) => <StatusBadge status={i.operationalStatus} /> },
           { header: "Proxima calibracao", accessor: (i) => formatDate(i.nextDueDate) },
           { header: "Status", accessor: (i) => <StatusBadge status={i.derivedStatus ?? i.status} /> },
         ]}

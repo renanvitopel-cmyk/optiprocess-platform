@@ -43,8 +43,8 @@ export default function Home() {
           </div>
 
           {/* O lado direito estava vazio. Em vez de uma foto generica de banco de imagem,
-              mostra o proprio produto: um recorte do painel do CMMS, que e' o que a
-              OptiProcess vende por assinatura. */}
+              mostra um recorte dos servicos executados pela OptiProcess (o CMMS, que e'
+              por assinatura, tem pagina e hero propria). */}
           <PainelDeServicos className="hidden lg:block" />
         </div>
       </section>
@@ -72,9 +72,9 @@ export default function Home() {
             />
             <HighlightCard
               icon={Wrench}
-              title="RLP Maintenance CMMS"
-              description="Assine o software de gestão de manutenção: planos, ordens, almoxarifado, mão de obra e custo por ativo."
-              to="/servicos/rlp-maintenance-cmms"
+              title="Assistência técnica"
+              description="Assistência técnica em equipamentos eletrônicos e inversores das principais marcas."
+              to="/servicos/assistencia-tecnica"
             />
           </div>
         </div>
@@ -87,7 +87,9 @@ export default function Home() {
             Soluções completas para instalação, manutenção, instrumentação e assistência técnica industrial.
           </p>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {serviceLines.map((service) => (
+            {/* O CMMS e' um produto por assinatura, com pagina propria - a home fala so
+                dos servicos executados pela OptiProcess. */}
+            {serviceLines.filter((service) => service.slug !== "rlp-maintenance-cmms").map((service) => (
               <Link
                 key={service.slug}
                 to={`/servicos/${service.slug}`}

@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { dataOpcional } from "../../utils/zod";
+import { dataOpcional, uuidOpcional } from "../../utils/zod";
 import { CalibrationResult, PointResult, DocumentStatus, AttachmentCategory } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -159,7 +159,7 @@ const pointSchema = z.object({
   label: z.string().nullish(),
   // Se veio de um ponto ja cadastrado no ativo (ver /instruments/:id/calibration-points),
   // emitir o certificado atualiza a proxima data de calibracao DESSE ponto especifico.
-  instrumentCalibrationPointId: z.string().uuid().nullish(),
+  instrumentCalibrationPointId: uuidOpcional,
   standardValue: z.coerce.number(),
   indicatedValue: z.coerce.number(),
   error: z.coerce.number(),
@@ -179,7 +179,7 @@ const standardSchema = z.object({
   // Se veio do catalogo de Padroes de referencia, guarda o link de volta - o snapshot
   // acima (fabricante, numero de serie, certificado) e' o que vale no laudo mesmo que o
   // padrao seja recalibrado depois; o link e' so' rastreabilidade de onde veio.
-  referenceStandardId: z.string().uuid().nullish(),
+  referenceStandardId: uuidOpcional,
 });
 
 const calibrationSchema = z.object({

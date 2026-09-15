@@ -12,3 +12,16 @@ export const dataOpcional = z.preprocess(
   (v) => (v === "" || v === null || v === undefined ? null : v),
   z.coerce.date().nullable(),
 );
+
+/**
+ * UUID opcional que aceita campo vazio.
+ *
+ * Mesma armadilha do dataOpcional acima: um campo escondido de formulario (ex.:
+ * "referenceStandardId" quando o padrao foi digitado a mao, sem escolher do catalogo)
+ * manda "" em vez de nao mandar nada, e z.string().uuid() rejeita "" com "Invalid uuid" -
+ * um erro de validacao para quem nem tentou preencher esse campo.
+ */
+export const uuidOpcional = z.preprocess(
+  (v) => (v === "" || v === null || v === undefined ? null : v),
+  z.string().uuid().nullable(),
+);

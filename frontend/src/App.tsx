@@ -37,6 +37,8 @@ const InstrumentsList = lazyPagina(() => import("./pages/admin/instruments/Instr
 const InstrumentDetail = lazyPagina(() => import("./pages/admin/instruments/InstrumentDetail"));
 const AssetTypesList = lazyPagina(() => import("./pages/admin/instruments/AssetTypesList"));
 const TechnicalCatalogsHub = lazyPagina(() => import("./pages/admin/instruments/TechnicalCatalogsHub"));
+const ReferenceStandardsList = lazyPagina(() => import("./pages/admin/referenceStandards/ReferenceStandardsList"));
+const ReferenceStandardDetail = lazyPagina(() => import("./pages/admin/referenceStandards/ReferenceStandardDetail"));
 const CalibrationsList = lazyPagina(() => import("./pages/admin/calibrations/CalibrationsList"));
 const CalibrationForm = lazyPagina(() => import("./pages/admin/calibrations/CalibrationForm"));
 const CalibrationDetail = lazyPagina(() => import("./pages/admin/calibrations/CalibrationDetail"));
@@ -110,6 +112,9 @@ export default function App() {
                 <Route path="calibracoes" element={<CalibrationsList />} />
                 <Route path="calibracoes/novo" element={<CalibrationForm />} />
                 <Route path="calibracoes/:id" element={<CalibrationDetail />} />
+
+                <Route path="padroes-referencia" element={<ReferenceStandardsList />} />
+                <Route path="padroes-referencia/:id" element={<ReferenceStandardDetail />} />
 
                 <Route path="laudos" element={<TechnicalReportsList />} />
                 <Route path="laudos/:id" element={<TechnicalReportDetail />} />

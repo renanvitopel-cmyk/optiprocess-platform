@@ -503,9 +503,9 @@ model Calibration {
 // (certificado do proprio padrao, validade e laboratorio emissor) - exigencia de
 // um certificado de calibracao profissional.
 model CalibrationStandard {
-  id                    String      @id @default(uuid())
+  id                    String             @id @default(uuid())
   calibrationId         String
-  calibration           Calibration @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
+  calibration           Calibration        @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
   description           String
   manufacturer          String?
   model                 String?
@@ -513,10 +513,70 @@ model CalibrationStandard {
   certificateNumber     String?
   certificateValidUntil DateTime?
   laboratory            String?
-  sortOrder             Int         @default(0)
+  sortOrder             Int                @default(0)
+  // Aponta para o padrao do catalogo interno (Cadastros > Padroes de referencia) que deu
+  // origem a este registro, quando preenchido a partir dele. O snapshot acima (fabricante,
+  // numero de serie, certificado etc.) continua sendo a fonte da verdade do laudo - mesmo
+  // que o padrao seja recalibrado depois, este registro historico nao muda.
+  referenceStandardId   String?
+  referenceStandard     ReferenceStandard? @relation(fields: [referenceStandardId], references: [id])
 
   @@index([calibrationId])
+  @@index([referenceStandardId])
   @@map("calibration_standards")
+}
+
+// ---------------------------------------------------------------------------
+// Padroes de referencia (equipamentos comparativos proprios da OptiProcess,
+// usados como padrao nas calibracoes que a empresa executa). Uso interno -
+// nunca aparece para o role CLIENT.
+// ---------------------------------------------------------------------------
+
+model ReferenceStandard {
+  id               String    @id @default(uuid())
+  description      String
+  type             String?
+  manufacturer     String?
+  model            String?
+  serialNumber     String?
+  measurementRange String?
+  resolution       String?
+  unit             String?
+  // Foto do proprio padrao, mesmo padrao usado em Instrument.photoKey.
+  photoKey         String?
+  photoFileName    String?
+  active           Boolean   @default(true)
+  createdById      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  certificates         ReferenceStandardCertificate[]
+  calibrationStandards CalibrationStandard[]
+
+  @@index([active])
+  @@map("reference_standards")
+}
+
+model ReferenceStandardCertificate {
+  id                  String            @id @default(uuid())
+  referenceStandardId String
+  referenceStandard   ReferenceStandard @relation(fields: [referenceStandardId], references: [id], onDelete: Cascade)
+  certificateNumber   String?
+  laboratory          String?
+  calibrationDate     DateTime
+  // Validade do certificado - normalmente 1 ano apos a calibracao, mas digitada e nao
+  // calculada, porque o laboratorio emissor e' quem define o ciclo real.
+  validUntil          DateTime
+  fileKey             String?
+  fileFileName        String?
+  notes               String?
+  createdById         String?
+  createdAt           DateTime          @default(now())
+
+  @@index([referenceStandardId])
+  @@index([validUntil])
+  @@map("reference_standard_certificates")
 }
 
 model CalibrationPoint {

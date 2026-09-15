@@ -13,6 +13,7 @@ import {
   Users,
   History,
   Layers3,
+  Ruler,
 } from "lucide-react";
 import type { Role } from "../api/types";
 
@@ -29,6 +30,7 @@ export const ADMIN_NAV: NavItem[] = [
   { to: "/gestao/ordens-servico", label: "Ordens de servico", icon: ClipboardList, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
   { to: "/gestao/instrumentos", label: "Ativos", icon: Gauge, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
   { to: "/gestao/calibracoes", label: "Calibracoes", icon: BadgeCheck, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
+  { to: "/gestao/padroes-referencia", label: "Padroes de referencia", icon: Ruler, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
   { to: "/gestao/laudos", label: "Laudos tecnicos", icon: FileWarning, roles: ["ADMIN", "TECHNICIAN", "COMMERCIAL"] },
   { to: "/gestao/contratos", label: "Contratos", icon: FileSignature, roles: ["ADMIN", "COMMERCIAL"] },
   { to: "/gestao/produtos", label: "Produtos e estoque", icon: Package, roles: ["ADMIN", "COMMERCIAL"] },

@@ -20,6 +20,8 @@ const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   EXPIRED: { label: "Vencido", tone: "red" },
   EXPIRING_SOON: { label: "Vencendo em breve", tone: "yellow" },
   IN_MAINTENANCE: { label: "Em manutencao", tone: "navy" },
+  // padrao de referencia sem nenhum certificado cadastrado ainda
+  NO_CERTIFICATE: { label: "Sem certificado", tone: "graphite" },
   // condicao operacional do ativo (independente do status de calibracao acima)
   IN_OPERATION: { label: "Em operacao", tone: "green" },
   STOPPED: { label: "Parado", tone: "red" },

@@ -12,6 +12,7 @@ import {
   getCalibrationPdfUrl,
 } from "../../../api/calibrations";
 import { CalibrationPhotos } from "./CalibrationPhotos";
+import { CalibrationFieldsForm } from "./CalibrationFieldsForm";
 import { PageHeader } from "../../../components/PageHeader";
 import { FullPageSpinner } from "../../../components/Spinner";
 import { StatusBadge } from "../../../components/StatusBadge";
@@ -136,6 +137,16 @@ export default function CalibrationDetail() {
         }
       />
 
+      {isDraft && canManage ? (
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <CalibrationFieldsForm calibration={calibration} onSaved={() => invalidate()} />
+          </div>
+          <div className="space-y-6">
+            <CalibrationPhotos calibrationId={id} canEdit={!!canManage} certificateAttachmentId={calibration.pdfAttachment?.id} />
+          </div>
+        </div>
+      ) : (
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <div className="card space-y-4 p-5">
@@ -306,6 +317,7 @@ export default function CalibrationDetail() {
           />
         </div>
       </div>
+      )}
 
       <ConfirmDialog
         open={confirmIssue}

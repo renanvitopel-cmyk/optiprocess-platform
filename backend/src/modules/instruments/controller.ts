@@ -107,7 +107,10 @@ const instrumentSchema = z.object({
   // Opcional aqui porque o portal do cliente nunca envia clientId (o backend forca a
   // propria empresa do usuario); obrigatorio apenas para a equipe interna, checado abaixo.
   clientId: z.string().uuid().optional(),
-  type: z.string().min(2, "Informe o tipo do instrumento."),
+  // O cadastro rapido (modoRapido no front) nao pergunta o tipo - ele entra depois, na
+  // ficha do ativo. Sem valor aqui, createInstrument grava "A definir" (placeholder que a
+  // ficha do ativo reconhece para pedir para completar o cadastro).
+  type: z.string().min(2, "Informe o tipo do instrumento.").optional(),
   // TAG e o codigo que identifica o ativo (cadastrado pelo cliente ou pela OptiProcess) -
   // e' o que agrupa, na ficha do ativo, todas as calibracoes e ordens de servico dele.
   tag: z.string().min(1, "Informe o TAG do ativo."),
@@ -163,6 +166,7 @@ export const createInstrument = asyncHandler(async (req: Request, res: Response)
   const instrument = await prisma.instrument.create({
     data: {
       ...data,
+      type: data.type || "A definir",
       clientId,
       nextDueDate,
       createdById: req.user?.sub,

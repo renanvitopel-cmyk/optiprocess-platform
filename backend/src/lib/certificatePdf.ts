@@ -335,8 +335,12 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
     // --------------------------------------------------- 5. resultados/pontos
     sectionTitle("5. Resultados da calibração");
     const unit = instrument.unit ? ` (${instrument.unit})` : "";
+    // So mostra a coluna "Ponto" quando faz sentido - ativo com um so ponto calibravel
+    // nao precisa dessa coluna repetindo "-" em toda linha.
+    const temPontosNomeados = cal.points.some((p) => p.label);
     table(
       [
+        ...(temPontosNomeados ? ["Ponto"] : []),
         `Valor padrão${unit}`,
         `Valor indicado${unit}`,
         `Erro${unit}`,
@@ -345,6 +349,7 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
         "Resultado",
       ],
       cal.points.map((p) => [
+        ...(temPontosNomeados ? [p.label || "-"] : []),
         num(p.standardValue),
         num(p.indicatedValue),
         num(p.error),
@@ -352,8 +357,8 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
         `± ${num(p.uncertainty)}`,
         p.result === "PASS" ? "Aprovado" : "Reprovado",
       ]),
-      [17, 17, 15, 17, 17, 17],
-      (row) => (row[5] === "Aprovado" ? GREEN : RED),
+      temPontosNomeados ? [16, 14, 14, 12, 14, 14, 16] : [17, 17, 15, 17, 17, 17],
+      (row) => (row[row.length - 1] === "Aprovado" ? GREEN : RED),
     );
 
     doc.font(FONT).fontSize(7.5).fillColor(GRAPHITE);

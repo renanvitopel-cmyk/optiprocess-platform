@@ -213,6 +213,7 @@ export default function CalibrationDetail() {
               <table className="table-base">
                 <thead>
                   <tr>
+                    <th>Ponto</th>
                     <th>Valor padrao</th>
                     <th>Valor indicado</th>
                     <th>Erro</th>
@@ -224,6 +225,7 @@ export default function CalibrationDetail() {
                 <tbody>
                   {calibration.points.map((p, i) => (
                     <tr key={p.id ?? i}>
+                      <td>{p.label ?? "-"}</td>
                       <td>{p.standardValue}</td>
                       <td>{p.indicatedValue}</td>
                       <td>{p.error}</td>

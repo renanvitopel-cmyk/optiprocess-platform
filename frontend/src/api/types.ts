@@ -187,6 +187,22 @@ export interface Instrument {
   status: InstrumentStatus;
   derivedStatus?: InstrumentStatus;
   calibrations?: CalibrationSummary[];
+  instrumentCalibrationPoints?: InstrumentCalibrationPoint[];
+}
+
+/** Ponto calibravel dentro de um ativo maior - ex.: um dos 10 PT-100 de uma extrusora. */
+export interface InstrumentCalibrationPoint {
+  id: string;
+  instrumentId: string;
+  label: string;
+  measurementRange: string | null;
+  unit: string | null;
+  calibrationFrequencyMonths: number | null;
+  lastCalibrationDate: string | null;
+  nextDueDate: string | null;
+  derivedStatus?: "VALID" | "DUE_SOON" | "EXPIRED";
+  sortOrder: number;
+  active: boolean;
 }
 
 export type CalibrationResult = "APPROVED" | "APPROVED_WITH_RESTRICTION" | "REJECTED";
@@ -195,6 +211,8 @@ export type DocumentStatus = "DRAFT" | "ISSUED";
 
 export interface CalibrationPoint {
   id?: string;
+  label?: string | null;
+  instrumentCalibrationPointId?: string | null;
   standardValue: number;
   indicatedValue: number;
   error: number;

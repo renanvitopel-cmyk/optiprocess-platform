@@ -154,6 +154,12 @@ export const getCalibrationHistory = asyncHandler(async (req: Request, res: Resp
 });
 
 const pointSchema = z.object({
+  // Identifica qual ponto fisico foi medido (ex.: "PT-100 - Zona 1 Canhao") quando o
+  // ativo tem varios; livre para uma calibracao sem pontos pre-cadastrados.
+  label: z.string().nullish(),
+  // Se veio de um ponto ja cadastrado no ativo (ver /instruments/:id/calibration-points),
+  // emitir o certificado atualiza a proxima data de calibracao DESSE ponto especifico.
+  instrumentCalibrationPointId: z.string().uuid().nullish(),
   standardValue: z.coerce.number(),
   indicatedValue: z.coerce.number(),
   error: z.coerce.number(),
@@ -317,6 +323,24 @@ export const issueCalibration = asyncHandler(async (req: Request, res: Response)
     ? computeNextDueDate(existing.calibrationDate, instrument.calibrationFrequencyMonths)
     : null;
 
+  // Pontos pre-cadastrados no ativo (ex.: um dos 10 PT-100 da extrusora) usados nesta
+  // calibracao ganham sua propria proxima data - cada um pode vencer numa data diferente
+  // do resto do ativo, entao nao basta atualizar so o Instrument acima.
+  const linkedPointIds = [...new Set(existing.points.map((p) => p.instrumentCalibrationPointId).filter((id): id is string => !!id))];
+  const linkedPoints = linkedPointIds.length
+    ? await prisma.instrumentCalibrationPoint.findMany({ where: { id: { in: linkedPointIds } } })
+    : [];
+  const linkedPointsById = new Map(linkedPoints.map((p) => [p.id, p]));
+  const pointUpdates = linkedPointIds.map((id) => {
+    const catalogPoint = linkedPointsById.get(id);
+    const frequency = catalogPoint?.calibrationFrequencyMonths ?? instrument.calibrationFrequencyMonths;
+    const pointNextDue = frequency ? computeNextDueDate(existing.calibrationDate, frequency) : null;
+    return prisma.instrumentCalibrationPoint.update({
+      where: { id },
+      data: { lastCalibrationDate: existing.calibrationDate, nextDueDate: pointNextDue },
+    });
+  });
+
   const [calibration] = await prisma.$transaction([
     prisma.calibration.update({
       where: { id: existing.id },
@@ -327,6 +351,7 @@ export const issueCalibration = asyncHandler(async (req: Request, res: Response)
       where: { id: existing.instrumentId },
       data: { lastCalibrationDate: existing.calibrationDate, nextDueDate, status: "VALID" },
     }),
+    ...pointUpdates,
   ]);
 
   await writeAuditLog({

@@ -15,6 +15,10 @@ import {
   deleteInstrumentPhoto,
   deleteInstrumentAttachment,
   getInstrumentAttachmentUrl,
+  listInstrumentCalibrationPoints,
+  createInstrumentCalibrationPoint,
+  updateInstrumentCalibrationPoint,
+  deleteInstrumentCalibrationPoint,
 } from "./controller";
 
 export const instrumentsRouter = Router();
@@ -42,3 +46,10 @@ instrumentsRouter.post("/:id/photo", requireRole(...CMMS_PLANNING_ROLES, "TECHNI
 instrumentsRouter.delete("/:id/photo", requireRole(...CMMS_PLANNING_ROLES, "TECHNICIAN"), deleteInstrumentPhoto);
 instrumentsRouter.post("/:id/attachments", requireRole(...CMMS_PLANNING_ROLES, "TECHNICIAN"), uploadAny.single("file"), uploadInstrumentAttachment);
 instrumentsRouter.delete("/:id/attachments/:attachmentId", requireRole(...CMMS_PLANNING_ROLES, "TECHNICIAN"), deleteInstrumentAttachment);
+
+// Pontos de calibracao do ativo (ex.: os 10 PT-100 de uma extrusora) - mesmo criterio de
+// acesso do proprio ativo: o cliente cadastra o que precisa calibrar, a OptiProcess tambem.
+instrumentsRouter.get("/:id/calibration-points", listInstrumentCalibrationPoints);
+instrumentsRouter.post("/:id/calibration-points", requireRole(...CMMS_PLANNING_ROLES, "TECHNICIAN"), createInstrumentCalibrationPoint);
+instrumentsRouter.patch("/:id/calibration-points/:pointId", requireRole(...CMMS_PLANNING_ROLES, "TECHNICIAN"), updateInstrumentCalibrationPoint);
+instrumentsRouter.delete("/:id/calibration-points/:pointId", requireRole(...CMMS_ADMIN_ROLES), deleteInstrumentCalibrationPoint);

@@ -439,13 +439,49 @@ model Instrument {
   updatedAt                  DateTime         @updatedAt
   deletedAt                  DateTime?
 
-  calibrations  Calibration[]
-  serviceOrders ServiceOrder[]
+  calibrations                Calibration[]
+  serviceOrders               ServiceOrder[]
+  // Pontos de calibracao cadastrados neste ativo - ex.: os 10 PT-100 de uma extrusora.
+  // So existe quando o ativo tem mais de um ponto calibravel; sem nenhum cadastrado, o
+  // proprio ativo (lastCalibrationDate/nextDueDate acima) continua sendo o rastreamento.
+  instrumentCalibrationPoints InstrumentCalibrationPoint[]
 
   @@index([clientId])
   @@index([status])
   @@index([nextDueDate])
   @@map("instruments")
+}
+
+// Um ponto calibravel dentro de um ativo maior - ex.: o ativo "Extrusora X" tem varios
+// PT-100 (canhao, zona 1, zona 2...), cada um com seu proprio ciclo de calibracao. Sem
+// isso, o unico jeito de rastrear datas diferentes seria cadastrar um ativo (TAG) para
+// cada sensor, o que lota a lista de ativos com o que na pratica e' uma coisa so.
+//
+// Cadastrado pelo cliente (o que precisa ser calibrado) ou pela OptiProcess; a calibracao
+// de verdade (valores medidos) acontece em CalibrationPoint, que pode linkar de volta aqui.
+model InstrumentCalibrationPoint {
+  id                         String     @id @default(uuid())
+  instrumentId               String
+  instrument                 Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  label                      String
+  measurementRange           String?
+  unit                       String?
+  // Sem periodicidade propria, herda a do ativo (calculado na hora de emitir o certificado).
+  calibrationFrequencyMonths Int?
+  lastCalibrationDate        DateTime?
+  nextDueDate                DateTime?
+  sortOrder                  Int        @default(0)
+  active                     Boolean    @default(true)
+  createdById                String?
+  createdAt                  DateTime   @default(now())
+  updatedAt                  DateTime   @updatedAt
+  deletedAt                  DateTime?
+
+  calibrationPoints CalibrationPoint[]
+
+  @@index([instrumentId])
+  @@index([nextDueDate])
+  @@map("instrument_calibration_points")
 }
 
 model Calibration {
@@ -580,18 +616,27 @@ model ReferenceStandardCertificate {
 }
 
 model CalibrationPoint {
-  id             String      @id @default(uuid())
-  calibrationId  String
-  calibration    Calibration @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
-  standardValue  Float
-  indicatedValue Float
-  error          Float
-  tolerance      Float
-  uncertainty    Float
-  result         PointResult
-  sortOrder      Int         @default(0)
+  id                           String                      @id @default(uuid())
+  calibrationId                String
+  calibration                  Calibration                 @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
+  // Identifica qual ponto fisico foi medido (ex.: "PT-100 - Zona 1 Canhao") quando o
+  // ativo tem mais de um. Texto livre porque tambem serve para uma calibracao avulsa,
+  // sem nenhum ponto pre-cadastrado no ativo.
+  label                        String?
+  standardValue                Float
+  indicatedValue               Float
+  error                        Float
+  tolerance                    Float
+  uncertainty                  Float
+  result                       PointResult
+  sortOrder                    Int                         @default(0)
+  // Se veio de um ponto pre-cadastrado no ativo, o link atualiza o proprio ponto
+  // (lastCalibrationDate/nextDueDate) quando o certificado e' emitido.
+  instrumentCalibrationPointId String?
+  instrumentCalibrationPoint   InstrumentCalibrationPoint? @relation(fields: [instrumentCalibrationPointId], references: [id])
 
   @@index([calibrationId])
+  @@index([instrumentCalibrationPointId])
   @@map("calibration_points")
 }
 

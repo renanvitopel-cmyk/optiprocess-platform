@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useForm, useFieldArray, Controller, type UseFormSetValue } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,10 +12,13 @@ import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
 import { createCalibration } from "../../../api/calibrations";
 import { listReferenceStandards, getReferenceStandard } from "../../../api/referenceStandards";
+import { listInstrumentCalibrationPoints } from "../../../api/instrumentCalibrationPoints";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 
 const pointSchema = z.object({
+  label: z.string().optional(),
+  instrumentCalibrationPointId: z.string().optional(),
   standardValue: z.coerce.number(),
   indicatedValue: z.coerce.number(),
   error: z.coerce.number(),
@@ -22,6 +26,8 @@ const pointSchema = z.object({
   uncertainty: z.coerce.number(),
   result: z.enum(["PASS", "FAIL"]),
 });
+
+const EMPTY_POINT = { label: "", instrumentCalibrationPointId: "", standardValue: 0, indicatedValue: 0, error: 0, tolerance: 0, uncertainty: 0, result: "PASS" as const };
 
 const standardSchema = z.object({
   description: z.string().min(1, "Descreva o padrao."),
@@ -86,18 +92,43 @@ export default function CalibrationForm() {
       instrumentId: searchParams.get("instrumentId") ?? "",
       result: "APPROVED",
       coverageFactorK: 2,
-      points: [{ standardValue: 0, indicatedValue: 0, error: 0, tolerance: 0, uncertainty: 0, result: "PASS" }],
+      points: [{ ...EMPTY_POINT }],
       standards: [{ ...EMPTY_STANDARD }],
     },
   });
 
-  const { fields, append, remove } = useFieldArray({ control, name: "points" });
+  const { fields, append, remove, replace } = useFieldArray({ control, name: "points" });
   const {
     fields: standardFields,
     append: appendStandard,
     remove: removeStandard,
   } = useFieldArray({ control, name: "standards" });
   const clientId = watch("clientId");
+  const instrumentId = watch("instrumentId");
+
+  // Se o ativo escolhido tem pontos de calibracao cadastrados (ex.: os 10 PT-100 de uma
+  // extrusora), a tabela de pontos ja abre com uma linha por ponto em vez de em branco -
+  // so troca quando o ativo muda de fato, pra nao apagar o que o tecnico ja preencheu.
+  const { data: registeredPoints } = useQuery({
+    queryKey: ["instrument-calibration-points-for-form", instrumentId],
+    queryFn: () => listInstrumentCalibrationPoints(instrumentId),
+    enabled: !!instrumentId,
+  });
+  const lastAppliedInstrumentId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!instrumentId || registeredPoints === undefined) return;
+    if (lastAppliedInstrumentId.current === instrumentId) return;
+    lastAppliedInstrumentId.current = instrumentId;
+    if (registeredPoints.length > 0) {
+      replace(
+        registeredPoints.map((p) => ({
+          ...EMPTY_POINT,
+          label: p.label,
+          instrumentCalibrationPointId: p.id,
+        })),
+      );
+    }
+  }, [instrumentId, registeredPoints, replace]);
 
   async function onSubmit(values: FormValues) {
     try {
@@ -224,17 +255,23 @@ export default function CalibrationForm() {
             <button
               type="button"
               className="btn-ghost btn-sm"
-              onClick={() => append({ standardValue: 0, indicatedValue: 0, error: 0, tolerance: 0, uncertainty: 0, result: "PASS" })}
+              onClick={() => append({ ...EMPTY_POINT })}
             >
               <Plus className="h-4 w-4" /> Adicionar ponto
             </button>
           </div>
           {errors.points?.message && <p className="field-error">{errors.points.message}</p>}
+          {registeredPoints && registeredPoints.length > 0 && (
+            <p className="text-xs text-graphite-500">
+              Pontos pre-cadastrados neste ativo - preenchidos automaticamente abaixo. Emitir o certificado atualiza a proxima data de calibracao de cada um.
+            </p>
+          )}
 
           <div className="table-shell">
             <table className="table-base">
               <thead>
                 <tr>
+                  <th>Ponto</th>
                   <th>Valor padrao</th>
                   <th>Valor indicado</th>
                   <th>Erro</th>
@@ -247,6 +284,14 @@ export default function CalibrationForm() {
               <tbody>
                 {fields.map((field, index) => (
                   <tr key={field.id}>
+                    <td>
+                      <input type="hidden" {...register(`points.${index}.instrumentCalibrationPointId`)} />
+                      <input
+                        className="input"
+                        placeholder="Ex.: PT-100 - Zona 1"
+                        {...register(`points.${index}.label`)}
+                      />
+                    </td>
                     <td><input className="input" type="number" step="any" {...register(`points.${index}.standardValue`)} /></td>
                     <td><input className="input" type="number" step="any" {...register(`points.${index}.indicatedValue`)} /></td>
                     <td><input className="input" type="number" step="any" {...register(`points.${index}.error`)} /></td>

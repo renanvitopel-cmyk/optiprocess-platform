@@ -12,6 +12,7 @@ import { Tabs } from "../../../components/Tabs";
 import { InstrumentFormModal } from "./InstrumentFormModal";
 import { AssetPhoto } from "../../../components/AssetPhoto";
 import { InstrumentAttachments } from "../../../components/InstrumentAttachments";
+import { InstrumentCalibrationPoints } from "../../../components/InstrumentCalibrationPoints";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { useAuth } from "../../../auth/AuthContext";
 import { useToast } from "../../../components/Toast";
@@ -21,6 +22,7 @@ import { EmptyState } from "../../../components/EmptyState";
 
 const TABS = [
   { id: "overview", label: "Visao geral" },
+  { id: "points", label: "Pontos de calibracao" },
   { id: "calibrations", label: "Calibracoes" },
   { id: "services", label: "Servicos externos" },
   { id: "documents", label: "Documentos" },
@@ -131,6 +133,8 @@ export default function InstrumentDetail() {
           </dl>
         </div>
       )}
+
+      {tab === "points" && <InstrumentCalibrationPoints instrumentId={instrument.id} canEdit={!!canManage} />}
 
       {tab === "calibrations" && (
         <div className="card p-5">

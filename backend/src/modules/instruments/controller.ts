@@ -13,9 +13,29 @@ import { getStorageProvider } from "../../lib/storage";
 import { assertInstrumentLimitNotExceeded } from "../../lib/planLimits";
 import type { AttachmentCategory } from "@prisma/client";
 
-function withDerivedStatus<T extends { status: InstrumentStatus; nextDueDate: Date | null }>(instrument: T) {
-  const derived = instrument.status === "IN_MAINTENANCE" ? "IN_MAINTENANCE" : deriveDueStatus(instrument.nextDueDate);
-  return { ...instrument, derivedStatus: derived };
+/** Quando o ativo tem pontos de calibracao cadastrados (ex.: os 10 PT-100 de uma
+ * extrusora), o status do ativo como um todo e' o pior entre os pontos ativos - um so
+ * vencido ja basta para o ativo pedir atencao, mesmo que os outros nove estejam em dia.
+ * Sem nenhum ponto cadastrado, continua valendo o nextDueDate do proprio ativo. */
+function withDerivedStatus<
+  T extends {
+    status: InstrumentStatus;
+    nextDueDate: Date | null;
+    instrumentCalibrationPoints?: { nextDueDate: Date | null; active?: boolean }[];
+  },
+>(instrument: T) {
+  if (instrument.status === "IN_MAINTENANCE") return { ...instrument, derivedStatus: "IN_MAINTENANCE" as const };
+
+  const pontosAtivos = (instrument.instrumentCalibrationPoints ?? []).filter((p) => p.active !== false);
+  if (pontosAtivos.length === 0) {
+    return { ...instrument, derivedStatus: deriveDueStatus(instrument.nextDueDate) };
+  }
+
+  const ORDEM_GRAVIDADE = { EXPIRED: 2, DUE_SOON: 1, VALID: 0 } as const;
+  const pior = pontosAtivos
+    .map((p) => deriveDueStatus(p.nextDueDate))
+    .reduce((a, b) => (ORDEM_GRAVIDADE[b] > ORDEM_GRAVIDADE[a] ? b : a), "VALID" as ReturnType<typeof deriveDueStatus>);
+  return { ...instrument, derivedStatus: pior };
 }
 
 /** Troca a chave de armazenamento por um link temporario que a tela consegue exibir.
@@ -66,6 +86,7 @@ export const listInstruments = asyncHandler(async (req: Request, res: Response) 
       ...toSkipTake(pageParams),
       include: {
         client: { select: { id: true, companyName: true, tradeName: true } },
+        instrumentCalibrationPoints: { where: { active: true, deletedAt: null }, select: { nextDueDate: true } },
       },
     }),
     prisma.instrument.count({ where }),
@@ -94,6 +115,10 @@ export const getInstrument = asyncHandler(async (req: Request, res: Response) =>
           visibleToClient: true,
           revisionNumber: true,
         },
+      },
+      instrumentCalibrationPoints: {
+        where: { deletedAt: null },
+        orderBy: { sortOrder: "asc" },
       },
     },
   });
@@ -377,4 +402,114 @@ export const getInstrumentAttachmentUrl = asyncHandler(async (req: Request, res:
 
   const url = await getStorageProvider().getSignedDownloadUrl(attachment.fileKey, attachment.fileName);
   res.json({ url });
+});
+
+// ---------------------------------------------------------------------------
+// Pontos de calibracao do ativo - ex.: os 10 PT-100 de uma extrusora. Cadastrado pelo
+// cliente (o que precisa ser calibrado) ou pela OptiProcess; cada ponto tem seu proprio
+// ciclo (lastCalibrationDate/nextDueDate), atualizado quando um certificado que o usa
+// e' emitido (ver issueCalibration em calibrations/controller.ts).
+// ---------------------------------------------------------------------------
+
+function withPointDerivedStatus<T extends { nextDueDate: Date | null }>(point: T) {
+  return { ...point, derivedStatus: deriveDueStatus(point.nextDueDate) };
+}
+
+export const listInstrumentCalibrationPoints = asyncHandler(async (req: Request, res: Response) => {
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!instrument) throw new NotFoundError("Ativo");
+
+  const points = await prisma.instrumentCalibrationPoint.findMany({
+    where: { instrumentId: instrument.id, deletedAt: null },
+    orderBy: { sortOrder: "asc" },
+  });
+  res.json(points.map(withPointDerivedStatus));
+});
+
+const calibrationPointSchema = z.object({
+  label: z.string().min(1, "Informe o nome do ponto (ex.: PT-100 - Zona 1 Canhao)."),
+  measurementRange: z.string().nullish(),
+  unit: z.string().nullish(),
+  calibrationFrequencyMonths: z.coerce.number().int().min(1).nullish(),
+  sortOrder: z.coerce.number().int().optional(),
+});
+
+export const createInstrumentCalibrationPoint = asyncHandler(async (req: Request, res: Response) => {
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!instrument) throw new NotFoundError("Ativo");
+
+  const data = calibrationPointSchema.parse(req.body);
+  const point = await prisma.instrumentCalibrationPoint.create({
+    data: { ...data, instrumentId: instrument.id, createdById: req.user?.sub },
+  });
+
+  await writeAuditLog({
+    userId: req.user?.sub,
+    action: "CREATE",
+    entityType: "InstrumentCalibrationPoint",
+    entityId: point.id,
+    description: `Ponto de calibracao "${point.label}" cadastrado`,
+  });
+
+  res.status(201).json(withPointDerivedStatus(point));
+});
+
+export const updateInstrumentCalibrationPoint = asyncHandler(async (req: Request, res: Response) => {
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!instrument) throw new NotFoundError("Ativo");
+
+  const existing = await prisma.instrumentCalibrationPoint.findFirst({
+    where: { id: req.params.pointId, instrumentId: instrument.id, deletedAt: null },
+  });
+  if (!existing) throw new NotFoundError("Ponto de calibracao");
+
+  const data = calibrationPointSchema.partial().extend({ active: z.boolean().optional() }).parse(req.body);
+  const point = await prisma.instrumentCalibrationPoint.update({ where: { id: existing.id }, data });
+
+  await writeAuditLog({
+    userId: req.user?.sub,
+    action: "UPDATE",
+    entityType: "InstrumentCalibrationPoint",
+    entityId: point.id,
+    description: `Ponto de calibracao "${point.label}" atualizado`,
+  });
+
+  res.json(withPointDerivedStatus(point));
+});
+
+export const deleteInstrumentCalibrationPoint = asyncHandler(async (req: Request, res: Response) => {
+  const instrument = await prisma.instrument.findFirst({
+    where: { id: req.params.id, deletedAt: null, ...clientScopeFilter(req) },
+    select: { id: true },
+  });
+  if (!instrument) throw new NotFoundError("Ativo");
+
+  const existing = await prisma.instrumentCalibrationPoint.findFirst({
+    where: { id: req.params.pointId, instrumentId: instrument.id, deletedAt: null },
+  });
+  if (!existing) throw new NotFoundError("Ponto de calibracao");
+
+  // Exclusao logica: certificados que ja calibraram este ponto mantem o vinculo (a
+  // linha em CalibrationPoint so' fica sem o link de volta se o FK for removido, o que
+  // nao acontece aqui).
+  await prisma.instrumentCalibrationPoint.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
+
+  await writeAuditLog({
+    userId: req.user?.sub,
+    action: "DELETE",
+    entityType: "InstrumentCalibrationPoint",
+    entityId: existing.id,
+    description: `Ponto de calibracao "${existing.label}" removido`,
+  });
+
+  res.status(204).send();
 });

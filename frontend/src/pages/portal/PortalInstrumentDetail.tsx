@@ -14,6 +14,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { PortalInstrumentFormModal } from "./PortalInstrumentFormModal";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { InstrumentAttachments } from "../../components/InstrumentAttachments";
+import { InstrumentCalibrationPoints } from "../../components/InstrumentCalibrationPoints";
 import { AssetPhoto } from "../../components/AssetPhoto";
 import { useToast } from "../../components/Toast";
 import { getApiErrorMessage } from "../../api/client";
@@ -73,6 +74,7 @@ export default function PortalInstrumentDetail() {
 
   const tabs = [
     { id: "overview", label: "Visao geral" },
+    { id: "points", label: "Pontos de calibracao" },
     { id: "certificates", label: "Certificados" },
     { id: "services", label: "Servicos externos" },
     { id: "documents", label: "Documentos" },
@@ -178,6 +180,8 @@ export default function PortalInstrumentDetail() {
           )}
         </div>
       )}
+
+      {tab === "points" && <InstrumentCalibrationPoints instrumentId={instrument.id} canEdit />}
 
       {tab === "documents" && <InstrumentAttachments instrumentId={instrument.id} canEdit />}
 

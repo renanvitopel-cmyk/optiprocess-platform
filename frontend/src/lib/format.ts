@@ -37,11 +37,14 @@ export function formatServiceCategory(value: string): string {
   return SERVICE_CATEGORY_LABELS[value] ?? value;
 }
 
-/** Opcoes de area de servico, usadas na ficha do cliente e nos filtros. */
-export const SERVICE_CATEGORY_OPTIONS = Object.entries(SERVICE_CATEGORY_LABELS).map(([value, label]) => ({
-  value,
-  label,
-}));
+/** Opcoes de area de servico, usadas na ficha do cliente e nos filtros. RLP Maintenance
+ * CMMS virou produto proprio (separado da OptiProcess) - fica fora da lista de opcoes
+ * para nao ser mais marcavel em clientes novos, mas o label continua em
+ * SERVICE_CATEGORY_LABELS para nao quebrar a exibicao de clientes antigos que ja tinham
+ * esse servico contratado. */
+export const SERVICE_CATEGORY_OPTIONS = Object.entries(SERVICE_CATEGORY_LABELS)
+  .filter(([value]) => value !== "CMMS_MAINTENANCE")
+  .map(([value, label]) => ({ value, label }));
 
 const TECHNICAL_REPORT_CATEGORY_LABELS: Record<string, string> = {
   ELECTRICAL_INSTALLATION: "Instalacoes eletricas",

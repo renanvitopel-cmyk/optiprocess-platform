@@ -10,7 +10,6 @@ const NAV_LINKS = [
   { to: "/", label: "Início" },
   { to: "/empresa", label: "Empresa" },
   { to: "/servicos", label: "Serviços" },
-  { to: "/servicos/rlp-maintenance-cmms", label: "Software de Manutenção" },
   { to: "/produtos", label: "Produtos" },
   { to: "/contato", label: "Contato" },
 ];

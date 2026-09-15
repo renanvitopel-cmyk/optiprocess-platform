@@ -104,33 +104,47 @@ export default function InstrumentDetail() {
       </div>
 
       {/* Cadastro rapido deixa o tipo pendente de proposito - aqui e' o lugar de lembrar
-          que a ficha ainda nao esta completa, sem impedir nada. */}
+          que a ficha ainda nao esta completa, sem impedir nada. O botao "Editar" ali em
+          cima ja resolve - nao duplicar a acao aqui. */}
       {instrument.type === "A definir" && canManage && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-safety-yellow/40 bg-safety-yellow/10 px-4 py-3">
+        <div className="mb-4 rounded-lg border border-safety-yellow/40 bg-safety-yellow/10 px-4 py-3">
           <p className="text-sm text-graphite-700">
-            Este ativo foi cadastrado pelo caminho rapido e ainda nao tem tipo definido.
+            Este ativo foi cadastrado pelo caminho rapido e ainda nao tem tipo definido. Use o
+            botao "Editar" acima para completar a ficha.
           </p>
-          <button className="btn-outline ml-auto text-sm" onClick={() => setEditOpen(true)}>
-            Completar ficha
-          </button>
         </div>
       )}
 
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
       {tab === "overview" && (
-        <div className="card p-5">
-          <dl className="grid gap-4 sm:grid-cols-3">
-            <Info label="Fabricante" value={instrument.manufacturer ?? "-"} />
-            <Info label="Numero de serie" value={instrument.serialNumber ?? "-"} />
-            <Info label="Faixa de medicao" value={instrument.measurementRange ?? "-"} />
-            <Info label="Resolucao" value={instrument.resolution ?? "-"} />
-            <Info label="Unidade" value={instrument.unit ?? "-"} />
-            <Info label="Local de instalacao" value={instrument.installationLocation ?? "-"} />
-            <Info label="Periodicidade" value={instrument.calibrationFrequencyMonths ? `${instrument.calibrationFrequencyMonths} meses` : "Nao rastreada"} />
-            <Info label="Ultima calibracao" value={formatDate(instrument.lastCalibrationDate)} />
-            <Info label="Proxima calibracao" value={formatDate(instrument.nextDueDate)} />
-          </dl>
+        <div className="space-y-4">
+          {/* Sem nenhum ponto cadastrado, nao da' pra calibrar este ativo - o aviso fica
+              logo na visao geral, nao escondido dentro da aba, senao ninguem acha. */}
+          {canManage && (!instrument.instrumentCalibrationPoints || instrument.instrumentCalibrationPoints.length === 0) && (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-safety-yellow/40 bg-safety-yellow/10 px-4 py-3">
+              <p className="text-sm text-graphite-700">
+                Este ativo ainda nao tem pontos de calibracao cadastrados - sem isso, nao e' possivel calibrar.
+              </p>
+              <button className="btn-primary btn-sm ml-auto" onClick={() => setTab("points")}>
+                Cadastrar pontos
+              </button>
+            </div>
+          )}
+
+          <div className="card p-5">
+            <dl className="grid gap-4 sm:grid-cols-3">
+              <Info label="Fabricante" value={instrument.manufacturer ?? "-"} />
+              <Info label="Numero de serie" value={instrument.serialNumber ?? "-"} />
+              <Info label="Faixa de medicao" value={instrument.measurementRange ?? "-"} />
+              <Info label="Resolucao" value={instrument.resolution ?? "-"} />
+              <Info label="Unidade" value={instrument.unit ?? "-"} />
+              <Info label="Local de instalacao" value={instrument.installationLocation ?? "-"} />
+              <Info label="Periodicidade" value={instrument.calibrationFrequencyMonths ? `${instrument.calibrationFrequencyMonths} meses` : "Nao rastreada"} />
+              <Info label="Ultima calibracao" value={formatDate(instrument.lastCalibrationDate)} />
+              <Info label="Proxima calibracao" value={formatDate(instrument.nextDueDate)} />
+            </dl>
+          </div>
         </div>
       )}
 

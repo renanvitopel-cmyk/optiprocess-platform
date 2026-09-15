@@ -123,16 +123,28 @@ export default function PortalInstrumentDetail() {
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
       {tab === "overview" && (
-        <div className="card p-5">
-          <dl className="grid gap-4 sm:grid-cols-3">
-            <Info label="Fabricante" value={instrument.manufacturer ?? "-"} />
-            <Info label="Numero de serie" value={instrument.serialNumber ?? "-"} />
-            <Info label="Faixa de medicao" value={instrument.measurementRange ?? "-"} />
-            <Info label="Local de instalacao" value={instrument.installationLocation ?? "-"} />
-            <Info label="Periodicidade" value={instrument.calibrationFrequencyMonths ? `${instrument.calibrationFrequencyMonths} meses` : "Nao rastreada"} />
-            <Info label="Ultima calibracao" value={formatDate(instrument.lastCalibrationDate)} />
-            <Info label="Proxima calibracao" value={formatDate(instrument.nextDueDate)} />
-          </dl>
+        <div className="space-y-4">
+          {(!instrument.instrumentCalibrationPoints || instrument.instrumentCalibrationPoints.length === 0) && (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-safety-yellow/40 bg-safety-yellow/10 px-4 py-3">
+              <p className="text-sm text-graphite-700">
+                Este ativo ainda nao tem pontos de calibracao cadastrados - sem isso, nao e' possivel calibrar.
+              </p>
+              <button className="btn-primary btn-sm ml-auto" onClick={() => setTab("points")}>
+                Cadastrar pontos
+              </button>
+            </div>
+          )}
+          <div className="card p-5">
+            <dl className="grid gap-4 sm:grid-cols-3">
+              <Info label="Fabricante" value={instrument.manufacturer ?? "-"} />
+              <Info label="Numero de serie" value={instrument.serialNumber ?? "-"} />
+              <Info label="Faixa de medicao" value={instrument.measurementRange ?? "-"} />
+              <Info label="Local de instalacao" value={instrument.installationLocation ?? "-"} />
+              <Info label="Periodicidade" value={instrument.calibrationFrequencyMonths ? `${instrument.calibrationFrequencyMonths} meses` : "Nao rastreada"} />
+              <Info label="Ultima calibracao" value={formatDate(instrument.lastCalibrationDate)} />
+              <Info label="Proxima calibracao" value={formatDate(instrument.nextDueDate)} />
+            </dl>
+          </div>
         </div>
       )}
 

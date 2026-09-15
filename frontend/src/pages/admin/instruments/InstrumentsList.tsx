@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Tags } from "lucide-react";
 import { listInstruments } from "../../../api/instruments";
+import { listClients } from "../../../api/clients";
 import type { InstrumentStatus } from "../../../api/types";
 import { PageHeader } from "../../../components/PageHeader";
 import { DataTable } from "../../../components/DataTable";
@@ -14,19 +15,27 @@ import { useAuth } from "../../../auth/AuthContext";
 export default function InstrumentsList() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const clientId = searchParams.get("clientId") ?? undefined;
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const canManage = user?.role === "ADMIN" || user?.role === "TECHNICIAN";
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<InstrumentStatus | "">("");
+  // Comeca com o cliente vindo da URL (ex.: link "Ver ativos" na ficha do cliente), mas
+  // o proprio usuario pode trocar depois pelo seletor - nao fica preso ao link de origem.
+  const [clientId, setClientId] = useState(searchParams.get("clientId") ?? "");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
 
+  const { data: clients } = useQuery({
+    queryKey: ["clients-picker"],
+    queryFn: () => listClients({ pageSize: 200 }),
+    staleTime: 60_000,
+  });
+
   const { data, isLoading } = useQuery({
     queryKey: ["instruments", search, status, page, clientId],
-    queryFn: () => listInstruments({ search: search || undefined, status: status || undefined, page, pageSize: 15, clientId }),
+    queryFn: () => listInstruments({ search: search || undefined, status: status || undefined, page, pageSize: 15, clientId: clientId || undefined }),
   });
 
   return (
@@ -61,6 +70,12 @@ export default function InstrumentsList() {
             }}
           />
         </div>
+        <select className="input sm:w-56" value={clientId} onChange={(e) => { setClientId(e.target.value); setPage(1); }}>
+          <option value="">Todos os clientes</option>
+          {(clients?.items ?? []).map((c) => (
+            <option key={c.id} value={c.id}>{c.tradeName || c.companyName}</option>
+          ))}
+        </select>
         <select className="input sm:w-56" value={status} onChange={(e) => { setStatus(e.target.value as InstrumentStatus | ""); setPage(1); }}>
           <option value="">Todos os status</option>
           <option value="VALID">Valido</option>

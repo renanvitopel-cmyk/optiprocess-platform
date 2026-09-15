@@ -1,7 +1,8 @@
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { useForm, useFieldArray, Controller, type UseFormSetValue } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
 import { TextInput, TextareaInput, SelectInput } from "../../../components/form/Field";
@@ -9,6 +10,7 @@ import { ClientPicker } from "../../../components/ClientPicker";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
 import { createCalibration } from "../../../api/calibrations";
+import { listReferenceStandards, getReferenceStandard } from "../../../api/referenceStandards";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 
@@ -29,6 +31,9 @@ const standardSchema = z.object({
   certificateNumber: z.string().optional(),
   certificateValidUntil: z.string().optional(),
   laboratory: z.string().optional(),
+  // Preenchido ao escolher um padrao do catalogo interno (Cadastros > Padroes de
+  // referencia) - os campos acima continuam sendo o snapshot que vale no laudo.
+  referenceStandardId: z.string().optional(),
 });
 
 const schema = z.object({
@@ -59,6 +64,7 @@ const EMPTY_STANDARD = {
   certificateNumber: "",
   certificateValidUntil: "",
   laboratory: "",
+  referenceStandardId: "",
 };
 
 export default function CalibrationForm() {
@@ -71,6 +77,7 @@ export default function CalibrationForm() {
     control,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -156,6 +163,8 @@ export default function CalibrationForm() {
                     </button>
                   )}
                 </div>
+                <input type="hidden" {...register(`standards.${index}.referenceStandardId`)} />
+                <ReferenceStandardFillSelect index={index} setValue={setValue} />
                 <div className="grid gap-4 sm:grid-cols-3">
                   <TextInput
                     label="Descricao do padrao"
@@ -298,6 +307,54 @@ export default function CalibrationForm() {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+/** Preenche uma linha de "padrao utilizado" a partir do catalogo interno (Cadastros >
+ * Padroes de referencia): puxa fabricante/modelo/serie e o certificado vigente do padrao
+ * escolhido, mas grava tudo como campos de texto normais - o laudo continua sendo o
+ * snapshot editavel, nao um link vivo para o catalogo. */
+function ReferenceStandardFillSelect({ index, setValue }: { index: number; setValue: UseFormSetValue<FormValues> }) {
+  const { data: standards } = useQuery({
+    queryKey: ["reference-standards-picker"],
+    queryFn: () => listReferenceStandards({ active: true }),
+    staleTime: 60_000,
+  });
+
+  async function onSelect(id: string) {
+    if (!id) return;
+    const full = await getReferenceStandard(id);
+    const latest = full.certificates?.[0];
+    setValue(`standards.${index}.referenceStandardId`, full.id);
+    setValue(`standards.${index}.description`, full.description);
+    setValue(`standards.${index}.manufacturer`, full.manufacturer ?? "");
+    setValue(`standards.${index}.model`, full.model ?? "");
+    setValue(`standards.${index}.serialNumber`, full.serialNumber ?? "");
+    if (latest) {
+      setValue(`standards.${index}.certificateNumber`, latest.certificateNumber ?? "");
+      setValue(`standards.${index}.certificateValidUntil`, latest.validUntil.slice(0, 10));
+      setValue(`standards.${index}.laboratory`, latest.laboratory ?? "");
+    }
+  }
+
+  return (
+    <div className="mb-3">
+      <label className="field-label">Preencher do catalogo</label>
+      <select
+        className="input"
+        defaultValue=""
+        onChange={(e) => onSelect(e.target.value)}
+      >
+        <option value="">Digitar manualmente</option>
+        {(standards ?? []).map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.description}{s.certificationStatus === "EXPIRED" ? " (certificado vencido)" : ""}
+            {s.certificationStatus === "NO_CERTIFICATE" ? " (sem certificado)" : ""}
+          </option>
+        ))}
+      </select>
+      <p className="field-hint">Opcional. Preenche os campos abaixo com um padrao ja cadastrado - continuam editaveis.</p>
     </div>
   );
 }

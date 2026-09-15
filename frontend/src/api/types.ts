@@ -212,6 +212,7 @@ export interface CalibrationStandard {
   certificateNumber?: string | null;
   certificateValidUntil?: string | null;
   laboratory?: string | null;
+  referenceStandardId?: string | null;
 }
 
 export type AttachmentCategory = "LOCATION" | "INSTRUMENT" | "STANDARD" | "MEASUREMENT" | "DOCUMENT" | "OTHER";

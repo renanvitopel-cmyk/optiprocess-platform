@@ -170,6 +170,10 @@ const standardSchema = z.object({
   certificateNumber: z.string().nullish(),
   certificateValidUntil: dataOpcional,
   laboratory: z.string().nullish(),
+  // Se veio do catalogo de Padroes de referencia, guarda o link de volta - o snapshot
+  // acima (fabricante, numero de serie, certificado) e' o que vale no laudo mesmo que o
+  // padrao seja recalibrado depois; o link e' so' rastreabilidade de onde veio.
+  referenceStandardId: z.string().uuid().nullish(),
 });
 
 const calibrationSchema = z.object({

@@ -39,6 +39,17 @@ function withDerivedStatus<T extends { certificates: CertificadoResumo[] }>(item
   return { ...item, certificationStatus: deriveCertificationStatus(latest ?? null) };
 }
 
+/** Recarrega o padrao com o que as telas sempre esperam (foto assinada + status derivado)
+ * - usado apos qualquer mutacao, pra resposta nunca sair "incompleta" comparada ao GET. */
+async function loadWithStatus(id: string) {
+  const item = await prisma.referenceStandard.findFirstOrThrow({
+    where: { id },
+    include: { certificates: { select: { calibrationDate: true, validUntil: true } } },
+  });
+  const [withPhoto] = await attachPhotoUrl([withDerivedStatus(item)]);
+  return withPhoto;
+}
+
 export const listReferenceStandards = asyncHandler(async (req: Request, res: Response) => {
   const { active, search } = req.query as { active?: string; search?: string };
   const items = await prisma.referenceStandard.findMany({
@@ -104,7 +115,7 @@ export const createReferenceStandard = asyncHandler(async (req: Request, res: Re
     description: `Padrao de referencia ${item.description} cadastrado`,
   });
 
-  res.status(201).json(item);
+  res.status(201).json(await loadWithStatus(item.id));
 });
 
 export const updateReferenceStandard = asyncHandler(async (req: Request, res: Response) => {
@@ -122,7 +133,7 @@ export const updateReferenceStandard = asyncHandler(async (req: Request, res: Re
     description: `Padrao de referencia ${item.description} atualizado`,
   });
 
-  res.json(item);
+  res.json(await loadWithStatus(item.id));
 });
 
 export const deleteReferenceStandard = asyncHandler(async (req: Request, res: Response) => {
@@ -157,14 +168,13 @@ export const uploadReferenceStandardPhoto = asyncHandler(async (req: Request, re
   await storage.upload(key, file.buffer, file.mimetype);
 
   const anterior = existing.photoKey;
-  const item = await prisma.referenceStandard.update({
+  await prisma.referenceStandard.update({
     where: { id: existing.id },
     data: { photoKey: key, photoFileName: file.originalname },
   });
   if (anterior) await storage.delete(anterior).catch(() => undefined);
 
-  const [comFoto] = await attachPhotoUrl([item]);
-  res.status(201).json(comFoto);
+  res.status(201).json(await loadWithStatus(existing.id));
 });
 
 export const deleteReferenceStandardPhoto = asyncHandler(async (req: Request, res: Response) => {

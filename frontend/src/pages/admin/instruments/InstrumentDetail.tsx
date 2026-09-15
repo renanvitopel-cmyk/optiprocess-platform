@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus, BadgeCheck } from "lucide-react";
 import { deleteInstrument, getInstrument } from "../../../api/instruments";
 import { listServiceOrders } from "../../../api/serviceOrders";
 import { listAuditLogs } from "../../../api/audit";
@@ -81,6 +81,14 @@ export default function InstrumentDetail() {
         actions={
           canManage && (
             <>
+              {(instrument.derivedStatus === "DUE_SOON" || instrument.derivedStatus === "EXPIRED") && (
+                <button
+                  className="btn-primary"
+                  onClick={() => navigate(`/gestao/calibracoes/novo?clientId=${instrument.clientId}&instrumentId=${instrument.id}`)}
+                >
+                  <BadgeCheck className="h-4 w-4" /> Gerar calibracao
+                </button>
+              )}
               <button className="btn-outline" onClick={() => setEditOpen(true)}>
                 <Pencil className="h-4 w-4" /> Editar
               </button>

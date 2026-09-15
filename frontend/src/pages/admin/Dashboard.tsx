@@ -27,11 +27,11 @@ export default function Dashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Clientes ativos" value={data.kpis.activeClients} icon={Building2} tone="navy" to="/gestao/clientes" />
         <StatCard
-          label="Calibracoes proximas do vencimento"
+          label="Ativos com calibracao proxima do vencimento"
           value={data.kpis.calibrationsDueSoon}
           icon={BadgeCheck}
           tone="yellow"
-          to="/gestao/calibracoes"
+          to="/gestao/instrumentos"
         />
         <StatCard
           label="Ordens de servico em aberto"

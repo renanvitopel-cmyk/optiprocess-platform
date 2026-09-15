@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Tags } from "lucide-react";
+import { Plus, Search, Tags, BadgeCheck } from "lucide-react";
 import { listInstruments } from "../../../api/instruments";
 import { listClients } from "../../../api/clients";
 import type { InstrumentStatus } from "../../../api/types";
@@ -114,6 +114,22 @@ export default function InstrumentsList() {
           { header: "Cliente", accessor: (i) => clientDisplayName(i.client) },
           { header: "Proxima calibracao", accessor: (i) => formatDate(i.nextDueDate) },
           { header: "Status", accessor: (i) => <StatusBadge status={i.derivedStatus ?? i.status} /> },
+          {
+            header: "",
+            accessor: (i) =>
+              canManage && (i.derivedStatus === "DUE_SOON" || i.derivedStatus === "EXPIRED") ? (
+                <button
+                  type="button"
+                  className="btn-ghost btn-sm whitespace-nowrap"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/gestao/calibracoes/novo?clientId=${i.clientId}&instrumentId=${i.id}`);
+                  }}
+                >
+                  <BadgeCheck className="h-4 w-4" /> Gerar calibracao
+                </button>
+              ) : null,
+          },
         ]}
       />
 

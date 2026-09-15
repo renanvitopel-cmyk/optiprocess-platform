@@ -5,6 +5,29 @@ import { ForbiddenError } from "../../utils/errors";
 
 const IN_30_DAYS = () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
+/** Quantos ATIVOS precisam de visita nos proximos 30 dias - nao quantos certificados
+ * vencem. Um ativo com pontos de calibracao cadastrados (ex.: os 10 PT-100 de uma
+ * extrusora) e' contado pela data do PONTO mais proximo do vencimento, nao pela data do
+ * proprio ativo (que so' serve quando ele nao tem pontos cadastrados) - senao um ativo
+ * com 9 pontos em dia e 1 vencendo nao aparecia aqui. */
+async function countInstrumentsDueSoon(now: Date, in30Days: Date): Promise<number> {
+  const instruments = await prisma.instrument.findMany({
+    where: { deletedAt: null, calibratable: true },
+    select: {
+      nextDueDate: true,
+      instrumentCalibrationPoints: { where: { active: true, deletedAt: null }, select: { nextDueDate: true } },
+    },
+  });
+
+  const emVencimento = (d: Date | null) => !!d && d >= now && d <= in30Days;
+
+  return instruments.filter((i) =>
+    i.instrumentCalibrationPoints.length > 0
+      ? i.instrumentCalibrationPoints.some((p) => emVencimento(p.nextDueDate))
+      : emVencimento(i.nextDueDate),
+  ).length;
+}
+
 export const getAdminDashboard = asyncHandler(async (_req: Request, res: Response) => {
   const now = new Date();
   const in30Days = IN_30_DAYS();
@@ -22,9 +45,7 @@ export const getAdminDashboard = asyncHandler(async (_req: Request, res: Respons
     serviceOrdersForChart,
   ] = await Promise.all([
     prisma.client.count({ where: { status: "ACTIVE", deletedAt: null } }),
-    prisma.calibration.count({
-      where: { deletedAt: null, status: "ISSUED", supersededBy: null, validUntil: { lte: in30Days, gte: now } },
-    }),
+    countInstrumentsDueSoon(now, in30Days),
     prisma.serviceOrder.count({
       where: { deletedAt: null, status: { in: ["BUDGET", "APPROVED", "SCHEDULED", "IN_PROGRESS"] } },
     }),

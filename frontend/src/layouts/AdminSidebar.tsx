@@ -2,14 +2,19 @@ import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
-import { ADMIN_NAV } from "./adminNav";
+import { ADMIN_NAV_GROUPS } from "./adminNav";
 import { Logo } from "../components/Logo";
 
 const COLLAPSE_KEY = "optiprocess-admin-sidebar-collapsed";
 
 export function AdminSidebar({ mobileOpen, onCloseMobile }: { mobileOpen: boolean; onCloseMobile: () => void }) {
   const { user } = useAuth();
-  const items = ADMIN_NAV.filter((item) => !user || item.roles.includes(user.role));
+  // Filtra por papel dentro de cada grupo, e descarta o grupo inteiro se ficar vazio -
+  // ex.: TECHNICIAN nao ve nenhum item de "Vendas", entao o cabecalho tambem some.
+  const groups = ADMIN_NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !user || item.roles.includes(user.role)),
+  })).filter((group) => group.items.length > 0);
   // Preferencia por dispositivo (aberto/fechado) - guardada so no navegador.
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -45,23 +50,32 @@ export function AdminSidebar({ mobileOpen, onCloseMobile }: { mobileOpen: boolea
             <X className="h-5 w-5" />
           </button>
         </div>
-        <nav className="flex flex-col gap-0.5 px-3 py-4">
-          {items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/gestao"}
-              onClick={onCloseMobile}
-              title={isCollapsed ? item.label : undefined}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${isCollapsed ? "justify-center" : ""} ${
-                  isActive ? "bg-navy-800 text-safety-yellow" : "text-navy-200 hover:bg-navy-800/60 hover:text-white"
-                }`
-              }
-            >
-              <item.icon className="h-4.5 w-4.5 shrink-0" />
-              {!isCollapsed && item.label}
-            </NavLink>
+        <nav className="flex flex-col gap-4 px-3 py-4">
+          {groups.map((group, i) => (
+            <div key={group.label ?? i} className="flex flex-col gap-0.5">
+              {group.label && !isCollapsed && (
+                <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-navy-400">
+                  {group.label}
+                </p>
+              )}
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === "/gestao"}
+                  onClick={onCloseMobile}
+                  title={isCollapsed ? item.label : undefined}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${isCollapsed ? "justify-center" : ""} ${
+                      isActive ? "bg-navy-800 text-safety-yellow" : "text-navy-200 hover:bg-navy-800/60 hover:text-white"
+                    }`
+                  }
+                >
+                  <item.icon className="h-4.5 w-4.5 shrink-0" />
+                  {!isCollapsed && item.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
       </>

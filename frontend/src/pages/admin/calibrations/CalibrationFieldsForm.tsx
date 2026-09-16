@@ -266,6 +266,47 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
     setValue("validUntil", data.toISOString().slice(0, 10));
   }, [calibrationDate, validUntil, instrumentId, instrumentDetail, registeredPoints, setValue]);
 
+  // Sugestoes automaticas por ponto, editaveis a qualquer momento:
+  // - Incerteza = desvio das leituras (repetibilidade) - simples, sem compor com incerteza
+  //   do padrao (nao cadastrada hoje).
+  // - Tolerancia = % cadastrado no ponto do ativo (tolerancePercent) x valor padrao.
+  // So' reaplica enquanto o campo continuar igual a ultima sugestao feita - se o tecnico
+  // editar a mao, para de sobrescrever.
+  const toleranceSuggestions = useRef<Record<number, number>>({});
+  const uncertaintySuggestions = useRef<Record<number, number>>({});
+  const watchedPoints = watch("points");
+  useEffect(() => {
+    watchedPoints.forEach((p, index) => {
+      if (p.performed === false) return;
+      const readings = (p.readings ?? []).map((r) => Number(r) || 0);
+      const standardValue = p.standardValue === undefined || p.standardValue === ("" as unknown) ? undefined : Number(p.standardValue);
+      const { desvio } = mediaErroDesvio(readings, standardValue);
+
+      if (desvio != null) {
+        const atual = Number(p.uncertainty) || 0;
+        const anterior = uncertaintySuggestions.current[index];
+        const semEdicao = anterior === undefined ? atual === 0 : Math.abs(atual - anterior) < 1e-9;
+        if (semEdicao) {
+          const sugestao = Number(desvio.toFixed(4));
+          if (Math.abs(atual - sugestao) > 1e-9) setValue(`points.${index}.uncertainty`, sugestao);
+          uncertaintySuggestions.current[index] = sugestao;
+        }
+      }
+
+      const registrado = registeredPoints?.find((rp) => rp.id === p.instrumentCalibrationPointId);
+      if (registrado?.tolerancePercent != null && standardValue != null) {
+        const atual = Number(p.tolerance) || 0;
+        const anterior = toleranceSuggestions.current[index];
+        const semEdicao = anterior === undefined ? atual === 0 : Math.abs(atual - anterior) < 1e-9;
+        if (semEdicao) {
+          const sugestao = Number((Math.abs(standardValue) * (registrado.tolerancePercent / 100)).toFixed(4));
+          if (Math.abs(atual - sugestao) > 1e-9) setValue(`points.${index}.tolerance`, sugestao);
+          toleranceSuggestions.current[index] = sugestao;
+        }
+      }
+    });
+  }, [watchedPoints, registeredPoints, setValue]);
+
   async function onSubmit(values: FormValues) {
     try {
       const saved = isEditing ? await updateCalibration(calibration.id, values) : await createCalibration(values);
@@ -411,8 +452,8 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
                 <th>Leituras (min. 3)</th>
                 <th>Erro</th>
                 <th>Desvio</th>
-                <th>Tolerancia</th>
-                <th>Incerteza</th>
+                <th>Tolerancia (sugerida)</th>
+                <th>Incerteza (sugerida)</th>
                 <th>Resultado</th>
                 <th />
               </tr>

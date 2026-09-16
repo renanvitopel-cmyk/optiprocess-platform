@@ -19,7 +19,10 @@ const detailInclude = {
   client: { select: { id: true, companyName: true, tradeName: true } },
   instrument: true,
   technician: { select: { id: true, name: true } },
-  points: { orderBy: { sortOrder: "asc" as const } },
+  points: {
+    orderBy: { sortOrder: "asc" as const },
+    include: { readings: { orderBy: { sortOrder: "asc" as const } } },
+  },
   standards: { orderBy: { sortOrder: "asc" as const } },
   pdfAttachment: { select: { id: true, fileName: true, mimeType: true, sizeBytes: true } },
   serviceOrder: { select: { id: true, number: true } },
@@ -171,8 +174,11 @@ const pointSchema = z
     performed: z.boolean().optional(),
     notes: z.string().nullish(),
     standardValue: z.coerce.number().nullish(),
-    indicatedValue: z.coerce.number().nullish(),
-    error: z.coerce.number().nullish(),
+    // Repetibilidade: no minimo 3 leituras por ponto, pra calcular media (valor indicado),
+    // erro e desvio padrao de verdade - nunca digitados soltos, sempre derivados daqui
+    // (ver mediaEDesvio). indicatedValue/error/deviation continuam gravados no ponto so'
+    // como resultado calculado, pra ficar facil de ler/mostrar no PDF sem recalcular.
+    readings: z.array(z.coerce.number()).optional(),
     tolerance: z.coerce.number().nullish(),
     uncertainty: z.coerce.number().nullish(),
     result: z.nativeEnum(PointResult).nullish(),
@@ -184,10 +190,13 @@ const pointSchema = z
       }
       return;
     }
+    if (point.standardValue == null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["standardValue"], message: "Valor padrao e obrigatorio quando o ponto foi calibrado." });
+    }
+    if (!point.readings || point.readings.length < 3) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["readings"], message: "Inclua pelo menos 3 medicoes para este ponto." });
+    }
     const camposObrigatorios: [keyof typeof point, string][] = [
-      ["standardValue", "Valor padrao"],
-      ["indicatedValue", "Valor indicado"],
-      ["error", "Erro"],
       ["tolerance", "Tolerancia"],
       ["uncertainty", "Incerteza"],
       ["result", "Resultado"],
@@ -198,6 +207,31 @@ const pointSchema = z
       }
     }
   });
+
+/** Media, erro (media - padrao) e desvio padrao AMOSTRAL (n-1, Bessel) das leituras de um
+ * ponto - nunca confia em indicatedValue/error digitado, sempre recalcula a partir das
+ * leituras de verdade. Com menos de 2 leituras nao da' pra calcular desvio (fica null). */
+function mediaEDesvio(readings: number[], standardValue: number | null | undefined) {
+  const n = readings.length;
+  const media = n > 0 ? readings.reduce((a, b) => a + b, 0) / n : null;
+  const erro = media != null && standardValue != null ? media - standardValue : null;
+  let desvio: number | null = null;
+  if (n > 1 && media != null) {
+    const variancia = readings.reduce((soma, v) => soma + (v - media) ** 2, 0) / (n - 1);
+    desvio = Math.sqrt(variancia);
+  }
+  return { indicatedValue: media, error: erro, deviation: desvio };
+}
+
+function pontoComCalculos<T extends { readings?: number[]; standardValue?: number | null }>(p: T) {
+  const { readings, ...resto } = p;
+  const calculados = readings?.length ? mediaEDesvio(readings, p.standardValue) : { indicatedValue: null, error: null, deviation: null };
+  return {
+    ...resto,
+    ...calculados,
+    readings: readings?.length ? { create: readings.map((value, index) => ({ value, sortOrder: index })) } : undefined,
+  };
+}
 
 const standardSchema = z.object({
   description: z.string().min(1, "Descreva o padrao utilizado."),
@@ -317,7 +351,7 @@ export const createCalibration = asyncHandler(async (req: Request, res: Response
       observations: data.observations,
       validUntil: data.validUntil,
       createdById: req.user?.sub,
-      points: { create: data.points.map((p, index) => ({ ...p, sortOrder: index })) },
+      points: { create: data.points.map((p, index) => ({ ...pontoComCalculos(p), sortOrder: index })) },
       standards: data.standards?.length
         ? { create: data.standards.map((s, index) => ({ ...s, sortOrder: index })) }
         : undefined,
@@ -356,7 +390,7 @@ export const updateCalibration = asyncHandler(async (req: Request, res: Response
         ? {
             points: {
               deleteMany: {},
-              create: points.map((p, index) => ({ ...p, sortOrder: index })),
+              create: points.map((p, index) => ({ ...pontoComCalculos(p), sortOrder: index })),
             },
           }
         : {}),
@@ -499,7 +533,10 @@ async function generateAndStoreCertificate(calibrationId: string, issuedAt: Date
       client: true,
       instrument: true,
       technician: { select: { id: true, name: true } },
-      points: { orderBy: { sortOrder: "asc" } },
+      points: {
+        orderBy: { sortOrder: "asc" },
+        include: { readings: { orderBy: { sortOrder: "asc" } } },
+      },
       standards: { orderBy: { sortOrder: "asc" } },
     },
   });
@@ -554,7 +591,7 @@ async function generateAndStoreCertificate(calibrationId: string, issuedAt: Date
 export const reviseCalibration = asyncHandler(async (req: Request, res: Response) => {
   const original = await prisma.calibration.findFirst({
     where: { id: req.params.id, deletedAt: null },
-    include: { points: true },
+    include: { points: { include: { readings: { orderBy: { sortOrder: "asc" } } } } },
   });
   if (!original) throw new NotFoundError("Certificado de calibracao");
   if (original.status !== "ISSUED") {
@@ -589,13 +626,22 @@ export const reviseCalibration = asyncHandler(async (req: Request, res: Response
       createdById: req.user?.sub,
       points: {
         create: original.points.map((p, index) => ({
+          label: p.label,
+          sensorTypeName: p.sensorTypeName,
+          instrumentCalibrationPointId: p.instrumentCalibrationPointId,
+          performed: p.performed,
+          notes: p.notes,
           standardValue: p.standardValue,
           indicatedValue: p.indicatedValue,
           error: p.error,
+          deviation: p.deviation,
           tolerance: p.tolerance,
           uncertainty: p.uncertainty,
           result: p.result,
           sortOrder: index,
+          readings: p.readings.length
+            ? { create: p.readings.map((r) => ({ value: r.value, sortOrder: r.sortOrder })) }
+            : undefined,
         })),
       },
     },

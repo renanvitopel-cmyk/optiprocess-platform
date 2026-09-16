@@ -227,11 +227,23 @@ export interface CalibrationPoint {
   performed?: boolean;
   notes?: string | null;
   standardValue?: number | null;
+  // Media, erro e desvio padrao das leituras abaixo - calculados no servidor, nunca
+  // digitados diretamente.
   indicatedValue?: number | null;
   error?: number | null;
+  deviation?: number | null;
+  readings?: CalibrationReading[];
   tolerance?: number | null;
   uncertainty?: number | null;
   result?: PointResult | null;
+}
+
+/** Uma leitura individual de repetibilidade de um ponto calibrado - no minimo 3 por
+ * ponto, usadas para calcular media/erro/desvio (ver CalibrationPoint). */
+export interface CalibrationReading {
+  id?: string;
+  value: number;
+  sortOrder?: number;
 }
 
 export interface CalibrationStandard {

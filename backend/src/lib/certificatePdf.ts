@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import type {
   Calibration,
   CalibrationPoint,
+  CalibrationReading,
   CalibrationStandard,
   Client,
   Instrument,
@@ -28,7 +29,7 @@ export interface CertificateData {
     client: Client;
     instrument: Instrument;
     technician: Pick<User, "id" | "name">;
-    points: CalibrationPoint[];
+    points: (CalibrationPoint & { readings: CalibrationReading[] })[];
     standards: CalibrationStandard[];
   };
   /** Fotos ja baixadas do storage, na ordem em que devem aparecer. */
@@ -346,26 +347,40 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
         `Valor padrão${unit}`,
         `Valor indicado${unit}`,
         `Erro${unit}`,
+        `Desvio${unit}`,
         `Tolerância${unit}`,
         `Incerteza${unit}`,
         "Resultado",
       ],
       cal.points.map((p) =>
         p.performed === false
-          ? [...(temPontosNomeados ? [rotuloDoPonto(p)] : []), "-", "-", "-", "-", "-", "Não realizado"]
+          ? [...(temPontosNomeados ? [rotuloDoPonto(p)] : []), "-", "-", "-", "-", "-", "-", "Não realizado"]
           : [
               ...(temPontosNomeados ? [rotuloDoPonto(p)] : []),
               num(p.standardValue),
               num(p.indicatedValue),
               num(p.error),
+              num(p.deviation),
               `± ${num(p.tolerance)}`,
               `± ${num(p.uncertainty)}`,
               p.result === "PASS" ? "Aprovado" : "Reprovado",
             ],
       ),
-      temPontosNomeados ? [16, 14, 14, 12, 14, 14, 16] : [17, 17, 15, 17, 17, 17],
+      temPontosNomeados ? [14, 12, 12, 10, 10, 12, 14, 16] : [15, 15, 13, 12, 15, 15, 15],
       (row) => (row[row.length - 1] === "Aprovado" ? GREEN : row[row.length - 1] === "Não realizado" ? GRAPHITE : RED),
     );
+
+    // Media (valor indicado), erro e desvio vem das leituras de repetibilidade - documenta
+    // os valores individuais de cada ponto, pra rastreabilidade de como a media saiu.
+    const pontosComLeituras = cal.points.filter((p) => p.readings.length > 0);
+    if (pontosComLeituras.length > 0) {
+      doc.moveDown(0.3);
+      doc.font(FONT).fontSize(7.5).fillColor(GRAPHITE);
+      for (const p of pontosComLeituras) {
+        const valores = p.readings.map((r) => num(r.value)).join(", ");
+        doc.text(`${p.label ? `${p.label}: ` : "Leituras: "}${valores} (n=${p.readings.length})`, { continued: false });
+      }
+    }
 
     // Pontos nao realizados sempre levam uma observacao (exigida no formulario) -
     // documentar o motivo no certificado, nao so' deixar "-" nas colunas.

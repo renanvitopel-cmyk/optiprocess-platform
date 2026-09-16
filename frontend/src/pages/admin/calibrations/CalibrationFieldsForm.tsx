@@ -3,7 +3,7 @@ import { useForm, useFieldArray, Controller, type UseFormSetValue } from "react-
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import { TextInput, TextareaInput, SelectInput } from "../../../components/form/Field";
 import { ClientPicker } from "../../../components/ClientPicker";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
@@ -27,8 +27,10 @@ const pointSchema = z
     performed: z.boolean(),
     notes: z.string().optional(),
     standardValue: z.coerce.number().optional(),
-    indicatedValue: z.coerce.number().optional(),
-    error: z.coerce.number().optional(),
+    // Repetibilidade: no minimo 3 leituras - valor indicado, erro e desvio sao calculados
+    // a partir delas (no servidor, pra garantir que o numero mostrado bate com as
+    // leituras de verdade), nunca digitados soltos.
+    readings: z.array(z.coerce.number()).optional(),
     tolerance: z.coerce.number().optional(),
     uncertainty: z.coerce.number().optional(),
     result: z.enum(["PASS", "FAIL"]).optional(),
@@ -41,8 +43,9 @@ const pointSchema = z
       return;
     }
     if (point.standardValue == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["standardValue"], message: "Obrigatorio." });
-    if (point.indicatedValue == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["indicatedValue"], message: "Obrigatorio." });
-    if (point.error == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["error"], message: "Obrigatorio." });
+    if (!point.readings || point.readings.length < 3) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["readings"], message: "Inclua pelo menos 3 medicoes." });
+    }
     if (point.tolerance == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["tolerance"], message: "Obrigatorio." });
     if (point.uncertainty == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["uncertainty"], message: "Obrigatorio." });
     if (!point.result) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["result"], message: "Obrigatorio." });
@@ -55,12 +58,23 @@ const EMPTY_POINT = {
   performed: true,
   notes: "",
   standardValue: 0,
-  indicatedValue: 0,
-  error: 0,
+  readings: [0, 0, 0],
   tolerance: 0,
   uncertainty: 0,
   result: "PASS" as const,
 };
+
+/** Media, erro (media - padrao) e desvio padrao amostral (n-1) das leituras de um ponto -
+ * mesmo calculo que o servidor faz ao salvar, so' que aqui e' so' pra mostrar em tempo
+ * real enquanto o tecnico digita; quem vale de verdade e' o que o backend recalcula. */
+function mediaErroDesvio(readings: number[], standardValue: number | undefined) {
+  const n = readings.length;
+  if (n === 0) return { media: null, erro: null, desvio: null };
+  const media = readings.reduce((a, b) => a + b, 0) / n;
+  const erro = standardValue != null ? media - Number(standardValue) : null;
+  const desvio = n > 1 ? Math.sqrt(readings.reduce((s, v) => s + (v - media) ** 2, 0) / (n - 1)) : null;
+  return { media, erro, desvio };
+}
 
 const standardSchema = z.object({
   description: z.string().min(1, "Descreva o padrao."),
@@ -130,8 +144,7 @@ function toFormValues(calibration: Calibration): FormValues {
           performed: p.performed ?? true,
           notes: p.notes ?? "",
           standardValue: p.standardValue ?? 0,
-          indicatedValue: p.indicatedValue ?? 0,
-          error: p.error ?? 0,
+          readings: p.readings?.length ? p.readings.map((r) => r.value) : [0, 0, 0],
           tolerance: p.tolerance ?? 0,
           uncertainty: p.uncertainty ?? 0,
           result: p.result ?? "PASS",
@@ -395,8 +408,9 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
                 <th>Ponto</th>
                 <th>Realizado</th>
                 <th>Valor padrao</th>
-                <th>Valor indicado</th>
+                <th>Leituras (min. 3)</th>
                 <th>Erro</th>
+                <th>Desvio</th>
                 <th>Tolerancia</th>
                 <th>Incerteza</th>
                 <th>Resultado</th>
@@ -406,6 +420,9 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
             <tbody>
               {fields.map((field, index) => {
                 const performed = watch(`points.${index}.performed`);
+                const standardValue = watch(`points.${index}.standardValue`);
+                const readings = watch(`points.${index}.readings`) ?? [];
+                const { erro, desvio } = mediaErroDesvio(readings.map(Number), standardValue);
                 return (
                   <tr key={field.id}>
                     <td>
@@ -423,8 +440,42 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
                     {performed ? (
                       <>
                         <td><input className="input" type="number" step="any" {...register(`points.${index}.standardValue`)} /></td>
-                        <td><input className="input" type="number" step="any" {...register(`points.${index}.indicatedValue`)} /></td>
-                        <td><input className="input" type="number" step="any" {...register(`points.${index}.error`)} /></td>
+                        <td>
+                          <div className="flex min-w-[140px] flex-col gap-1">
+                            {readings.map((_, leituraIndex) => (
+                              <div key={leituraIndex} className="flex items-center gap-1">
+                                <input
+                                  className="input"
+                                  type="number"
+                                  step="any"
+                                  {...register(`points.${index}.readings.${leituraIndex}`)}
+                                />
+                                {readings.length > 3 && (
+                                  <button
+                                    type="button"
+                                    className="shrink-0 text-graphite-400 hover:text-safety-red"
+                                    aria-label="Remover leitura"
+                                    onClick={() => setValue(`points.${index}.readings`, readings.filter((_, i) => i !== leituraIndex))}
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              className="text-left text-xs text-navy-600 hover:underline"
+                              onClick={() => setValue(`points.${index}.readings`, [...readings, 0])}
+                            >
+                              + leitura
+                            </button>
+                            {errors.points?.[index]?.readings?.message && (
+                              <p className="field-error">{errors.points[index]?.readings?.message}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="text-graphite-600">{erro != null ? erro.toFixed(3) : "-"}</td>
+                        <td className="text-graphite-600">{desvio != null ? desvio.toFixed(3) : "-"}</td>
                         <td><input className="input" type="number" step="any" {...register(`points.${index}.tolerance`)} /></td>
                         <td><input className="input" type="number" step="any" {...register(`points.${index}.uncertainty`)} /></td>
                         <td>
@@ -441,7 +492,7 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
                         </td>
                       </>
                     ) : (
-                      <td colSpan={6}>
+                      <td colSpan={7}>
                         <input
                           className="input"
                           placeholder="Por que este ponto nao foi calibrado (ex.: sensor quebrado, sem acesso)"

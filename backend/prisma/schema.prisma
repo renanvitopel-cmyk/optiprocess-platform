@@ -694,8 +694,12 @@ model CalibrationPoint {
   performed                    Boolean                     @default(true)
   notes                        String?
   standardValue                Float?
+  // indicatedValue, error e deviation sao calculados a partir de "readings" abaixo (media,
+  // media - padrao, desvio padrao amostral) - nunca digitados a mao, pra nao correr o risco
+  // de o numero mostrado nao bater com as leituras de verdade.
   indicatedValue               Float?
   error                        Float?
+  deviation                    Float?
   tolerance                    Float?
   uncertainty                  Float?
   result                       PointResult?
@@ -705,9 +709,25 @@ model CalibrationPoint {
   instrumentCalibrationPointId String?
   instrumentCalibrationPoint   InstrumentCalibrationPoint? @relation(fields: [instrumentCalibrationPointId], references: [id])
 
+  readings CalibrationReading[]
+
   @@index([calibrationId])
   @@index([instrumentCalibrationPointId])
   @@map("calibration_points")
+}
+
+// Cada leitura individual tomada num ponto calibrado - a norma pede repetibilidade (no
+// minimo 3 medicoes por ponto) para calcular media, erro e desvio padrao de verdade, em
+// vez de um unico valor digitado a mao.
+model CalibrationReading {
+  id                 String           @id @default(uuid())
+  calibrationPointId String
+  calibrationPoint   CalibrationPoint @relation(fields: [calibrationPointId], references: [id], onDelete: Cascade)
+  value              Float
+  sortOrder          Int              @default(0)
+
+  @@index([calibrationPointId])
+  @@map("calibration_readings")
 }
 
 // ---------------------------------------------------------------------------

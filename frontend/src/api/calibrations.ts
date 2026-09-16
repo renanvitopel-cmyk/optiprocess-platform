@@ -46,6 +46,13 @@ export async function getCalibrationHistory(id: string): Promise<CalibrationHist
   return data;
 }
 
+/** Payload de escrita de um ponto: leituras cruas (numeros), nao os objetos CalibrationReading
+ * devolvidos pelo servidor - media/erro/desvio sao sempre calculados la, nunca enviados. */
+export interface CalibrationPointInput
+  extends Omit<CalibrationPoint, "readings" | "indicatedValue" | "error" | "deviation"> {
+  readings?: number[];
+}
+
 export interface CalibrationInput {
   clientId: string;
   instrumentId: string;
@@ -64,7 +71,7 @@ export interface CalibrationInput {
   technicalConclusion: string;
   observations?: string | null;
   validUntil: string;
-  points: CalibrationPoint[];
+  points: CalibrationPointInput[];
   standards?: CalibrationStandard[];
 }
 

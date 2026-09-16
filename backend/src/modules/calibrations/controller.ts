@@ -235,6 +235,59 @@ const calibrationSchema = z.object({
   standards: z.array(standardSchema).optional(),
 });
 
+/** Quando um padrao veio do catalogo (Padroes de referencia) e ja tem um certificado com
+ * PDF anexado, copia esse arquivo para dentro do proprio certificado de calibracao
+ * (categoria "Padrao utilizado") - assim o certificado final ja sai com a rastreabilidade
+ * documental completa, sem o tecnico precisar anexar de novo a mao. Copia (nao reaproveita
+ * a mesma chave) porque excluir o anexo aqui nunca pode apagar o certificado original do
+ * padrao. Idempotente: nao duplica se ja foi copiado antes (marca o certificado de origem
+ * na legenda do anexo). */
+async function copiarCertificadosDePadroesUsados(
+  calibrationId: string,
+  standards: { referenceStandardId?: string | null }[],
+  uploadedById?: string,
+) {
+  const referenceStandardIds = [...new Set(standards.map((s) => s.referenceStandardId).filter((id): id is string => !!id))];
+  if (referenceStandardIds.length === 0) return;
+
+  const padroes = await prisma.referenceStandard.findMany({
+    where: { id: { in: referenceStandardIds } },
+    include: { certificates: { orderBy: { validUntil: "desc" }, take: 1 } },
+  });
+
+  const storage = getStorageProvider();
+  for (const padrao of padroes) {
+    const certificado = padrao.certificates[0];
+    if (!certificado?.fileKey) continue;
+
+    const marcador = `cert:${certificado.id}`;
+    const jaCopiado = await prisma.attachment.findFirst({
+      where: { entityType: "CALIBRATION", entityId: calibrationId, caption: { contains: marcador } },
+    });
+    if (jaCopiado) continue;
+
+    const fileName = certificado.fileFileName ?? "certificado-padrao.pdf";
+    const mimeType = /\.(png|jpe?g|webp)$/i.test(fileName) ? (fileName.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg") : "application/pdf";
+    const buffer = await storage.download(certificado.fileKey);
+    const key = `calibrations/${calibrationId}/padrao-${padrao.id}-${Date.now()}-${fileName}`;
+    await storage.upload(key, buffer, mimeType);
+
+    await prisma.attachment.create({
+      data: {
+        entityType: "CALIBRATION",
+        entityId: calibrationId,
+        category: "STANDARD",
+        caption: `Certificado do padrao ${padrao.description} (${marcador})`,
+        fileKey: key,
+        fileName,
+        mimeType,
+        sizeBytes: buffer.length,
+        uploadedById,
+      },
+    });
+  }
+}
+
 export const createCalibration = asyncHandler(async (req: Request, res: Response) => {
   const data = calibrationSchema.parse(req.body);
 
@@ -280,6 +333,8 @@ export const createCalibration = asyncHandler(async (req: Request, res: Response
     description: `Certificado ${calibration.certificateNumber} criado (rascunho)`,
   });
 
+  if (data.standards?.length) await copiarCertificadosDePadroesUsados(calibration.id, data.standards, req.user?.sub);
+
   res.status(201).json(calibration);
 });
 
@@ -324,6 +379,8 @@ export const updateCalibration = asyncHandler(async (req: Request, res: Response
     entityId: calibration.id,
     description: `Certificado ${calibration.certificateNumber} (rascunho) atualizado`,
   });
+
+  if (standards?.length) await copiarCertificadosDePadroesUsados(calibration.id, standards, req.user?.sub);
 
   res.json(calibration);
 });

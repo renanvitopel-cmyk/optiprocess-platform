@@ -18,6 +18,7 @@ import { getApiErrorMessage } from "../../../api/client";
 const pointSchema = z
   .object({
     label: z.string().optional(),
+    sensorTypeName: z.string().optional(),
     instrumentCalibrationPointId: z.string().optional(),
     // Nem sempre da' pra calibrar todos os pontos na mesma visita (sensor quebrado,
     // dificil acesso...) - desmarcado, so' pede a observacao, sem leituras, e o ponto
@@ -48,6 +49,7 @@ const pointSchema = z
 
 const EMPTY_POINT = {
   label: "",
+  sensorTypeName: "",
   instrumentCalibrationPointId: "",
   performed: true,
   notes: "",
@@ -122,6 +124,7 @@ function toFormValues(calibration: Calibration): FormValues {
     points: calibration.points.length
       ? calibration.points.map((p) => ({
           label: p.label ?? "",
+          sensorTypeName: p.sensorTypeName ?? "",
           instrumentCalibrationPointId: p.instrumentCalibrationPointId ?? "",
           performed: p.performed ?? true,
           notes: p.notes ?? "",
@@ -218,6 +221,7 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
         registeredPoints.map((p) => ({
           ...EMPTY_POINT,
           label: p.label,
+          sensorTypeName: p.sensorType?.name ?? "",
           instrumentCalibrationPointId: p.id,
         })),
       );
@@ -374,6 +378,7 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
                   <tr key={field.id}>
                     <td>
                       <input type="hidden" {...register(`points.${index}.instrumentCalibrationPointId`)} />
+                      <input type="hidden" {...register(`points.${index}.sensorTypeName`)} />
                       <input
                         className="input"
                         placeholder="Ex.: PT-100 - Zona 1"

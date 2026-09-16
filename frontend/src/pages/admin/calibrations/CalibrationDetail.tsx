@@ -236,7 +236,7 @@ export default function CalibrationDetail() {
                 <tbody>
                   {calibration.points.map((p, i) => (
                     <tr key={p.id ?? i}>
-                      <td>{p.label ?? "-"}</td>
+                      <td>{p.label ?? "-"}{p.sensorTypeName ? ` (${p.sensorTypeName})` : ""}</td>
                       {p.performed === false ? (
                         <td colSpan={5} className="text-graphite-500">Nao realizado{p.notes ? ` - ${p.notes}` : ""}</td>
                       ) : (

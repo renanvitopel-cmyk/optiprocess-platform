@@ -11,6 +11,7 @@ import {
   deleteInstrumentCalibrationPoint,
 } from "../api/instrumentCalibrationPoints";
 import { listMeasurementTypes } from "../api/measurementTypes";
+import { listSensorTypes } from "../api/sensorTypes";
 import type { InstrumentCalibrationPoint, MeasurementFieldProfile } from "../api/types";
 import { Modal } from "./Modal";
 import { TextInput, SelectInput } from "./form/Field";
@@ -29,6 +30,7 @@ const numeroOpcional = z.preprocess((v) => (v === "" || v === null || v === unde
 const schema = z.object({
   label: z.string().min(1, "Informe o nome do ponto."),
   measurementTypeId: z.string().optional(),
+  sensorTypeId: z.string().optional(),
   measurementRange: z.string().optional(),
   unit: z.string().optional(),
   targetTemperature: numeroOpcional,
@@ -81,11 +83,18 @@ export function InstrumentCalibrationPoints({ instrumentId, canEdit }: { instrum
   });
 
   const measurementTypeId = watch("measurementTypeId");
+  const sensorTypeId = watch("sensorTypeId");
   const fieldProfile: MeasurementFieldProfile =
     measurementTypes?.find((t) => t.id === measurementTypeId)?.fieldProfile ?? "GENERIC";
 
+  const { data: sensorTypes } = useQuery({
+    queryKey: ["sensor-types-picker", measurementTypeId],
+    queryFn: () => listSensorTypes({ measurementTypeId, active: true }),
+    enabled: !!measurementTypeId,
+  });
+
   function openCreate() {
-    reset({ label: "", measurementTypeId: "", measurementRange: "", unit: "" });
+    reset({ label: "", measurementTypeId: "", sensorTypeId: "", measurementRange: "", unit: "" });
     setEditing(null);
     setFormOpen(true);
   }
@@ -94,6 +103,7 @@ export function InstrumentCalibrationPoints({ instrumentId, canEdit }: { instrum
     reset({
       label: point.label,
       measurementTypeId: point.measurementTypeId ?? "",
+      sensorTypeId: point.sensorTypeId ?? "",
       measurementRange: point.measurementRange ?? "",
       unit: point.unit ?? "",
       targetTemperature: point.targetTemperature ?? undefined,
@@ -108,6 +118,7 @@ export function InstrumentCalibrationPoints({ instrumentId, canEdit }: { instrum
 
   function onMeasurementTypeChange(id: string) {
     setValue("measurementTypeId", id);
+    setValue("sensorTypeId", ""); // tipo de sensor e' proprio de cada grandeza, nao vale para a nova
     const tipo = measurementTypes?.find((t) => t.id === id);
     if (tipo?.defaultUnit) setValue("unit", tipo.defaultUnit);
   }
@@ -117,6 +128,7 @@ export function InstrumentCalibrationPoints({ instrumentId, canEdit }: { instrum
       const payload = {
         label: values.label,
         measurementTypeId: values.measurementTypeId || null,
+        sensorTypeId: values.sensorTypeId || null,
         measurementRange: values.measurementRange || null,
         unit: values.unit || null,
         targetTemperature: fieldProfile === "TEMPERATURE" ? values.targetTemperature ?? null : null,
@@ -184,7 +196,11 @@ export function InstrumentCalibrationPoints({ instrumentId, canEdit }: { instrum
                 <div className="min-w-0">
                   <p className="font-medium text-graphite-800">
                     {p.label}
-                    {p.measurementType && <span className="ml-2 text-xs font-normal text-graphite-400">{p.measurementType.name}</span>}
+                    {(p.measurementType || p.sensorType) && (
+                      <span className="ml-2 text-xs font-normal text-graphite-400">
+                        {[p.measurementType?.name, p.sensorType?.name].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
                   </p>
                   <p className="text-xs text-graphite-400">
                     {[p.measurementRange, p.unit].filter(Boolean).join(" ") || "Sem faixa definida"}
@@ -242,6 +258,17 @@ export function InstrumentCalibrationPoints({ instrumentId, canEdit }: { instrum
             value={measurementTypeId ?? ""}
             onChange={(e) => onMeasurementTypeChange(e.target.value)}
           />
+
+          {measurementTypeId && (
+            <SelectInput
+              label="Tipo de sensor"
+              placeholder="Nao especificar"
+              hint="Tecnologia do sensor (ex.: PT100, Termopar tipo K) - descreve o principio de medicao no certificado."
+              options={(sensorTypes ?? []).map((t) => ({ value: t.id, label: t.name }))}
+              value={sensorTypeId ?? ""}
+              onChange={(e) => setValue("sensorTypeId", e.target.value)}
+            />
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <TextInput label="Faixa de medicao" placeholder="Ex.: 0 a 300" {...register("measurementRange")} />

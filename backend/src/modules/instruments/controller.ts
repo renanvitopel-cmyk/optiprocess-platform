@@ -119,7 +119,7 @@ export const getInstrument = asyncHandler(async (req: Request, res: Response) =>
       instrumentCalibrationPoints: {
         where: { deletedAt: null },
         orderBy: { sortOrder: "asc" },
-        include: { measurementType: true },
+        include: { measurementType: true, sensorType: true },
       },
     },
   });
@@ -426,7 +426,7 @@ export const listInstrumentCalibrationPoints = asyncHandler(async (req: Request,
   const points = await prisma.instrumentCalibrationPoint.findMany({
     where: { instrumentId: instrument.id, deletedAt: null },
     orderBy: { sortOrder: "asc" },
-    include: { measurementType: true },
+    include: { measurementType: true, sensorType: true },
   });
   res.json(points.map(withPointDerivedStatus));
 });
@@ -435,6 +435,8 @@ const calibrationPointSchema = z.object({
   label: z.string().min(1, "Informe o nome do ponto (ex.: PT-100 - Zona 1 Canhao)."),
   // Grandeza (Temperatura, Balanca...) - decide os campos extras abaixo.
   measurementTypeId: uuidOpcional,
+  // Tecnologia do sensor dentro da grandeza (ex.: PT100, Termopar tipo K).
+  sensorTypeId: uuidOpcional,
   measurementRange: z.string().nullish(),
   unit: z.string().nullish(),
   // MeasurementFieldProfile.TEMPERATURE
@@ -457,7 +459,7 @@ export const createInstrumentCalibrationPoint = asyncHandler(async (req: Request
   const data = calibrationPointSchema.parse(req.body);
   const point = await prisma.instrumentCalibrationPoint.create({
     data: { ...data, instrumentId: instrument.id, createdById: req.user?.sub },
-    include: { measurementType: true },
+    include: { measurementType: true, sensorType: true },
   });
 
   await writeAuditLog({
@@ -487,7 +489,7 @@ export const updateInstrumentCalibrationPoint = asyncHandler(async (req: Request
   const point = await prisma.instrumentCalibrationPoint.update({
     where: { id: existing.id },
     data,
-    include: { measurementType: true },
+    include: { measurementType: true, sensorType: true },
   });
 
   await writeAuditLog({

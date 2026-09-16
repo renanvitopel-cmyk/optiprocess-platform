@@ -29,6 +29,7 @@ import { assetTypesRouter } from "./modules/assetTypes/routes";
 import { plansRouter } from "./modules/plans/routes";
 import { referenceStandardsRouter } from "./modules/referenceStandards/routes";
 import { measurementTypesRouter } from "./modules/measurementTypes/routes";
+import { sensorTypesRouter } from "./modules/sensorTypes/routes";
 
 export function createApp() {
   const app = express();
@@ -93,6 +94,7 @@ export function createApp() {
   app.use("/api/plans", plansRouter);
   app.use("/api/reference-standards", referenceStandardsRouter);
   app.use("/api/measurement-types", measurementTypesRouter);
+  app.use("/api/sensor-types", sensorTypesRouter);
 
   if (env.isProduction) {
     const frontendDist = path.resolve(__dirname, "../../frontend/dist");

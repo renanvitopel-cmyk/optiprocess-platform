@@ -478,6 +478,10 @@ model InstrumentCalibrationPoint {
   // campos extras aparecem no formulario deste ponto (ver MeasurementFieldProfile).
   measurementTypeId          String?
   measurementType            MeasurementType? @relation(fields: [measurementTypeId], references: [id])
+  // Tecnologia do sensor dentro da grandeza (ex.: PT100, Termopar tipo K, dentro de
+  // Temperatura) - o certificado descreve o principio de medicao a partir disso.
+  sensorTypeId               String?
+  sensorType                 SensorType?      @relation(fields: [sensorTypeId], references: [id])
   measurementRange           String?
   // Preenchido a partir do measurementType escolhido, mas continua editavel - mesmo
   // padrao de snapshot-editavel ja usado em padrao de referencia e calibration standard.
@@ -518,8 +522,26 @@ model MeasurementType {
   createdAt    DateTime                @default(now())
 
   calibrationPoints InstrumentCalibrationPoint[]
+  sensorTypes       SensorType[]
 
   @@map("measurement_types")
+}
+
+// Tecnologia do sensor calibrado dentro de uma grandeza - ex.: em Temperatura, PT100,
+// PT1000, Termopar tipo K... O certificado usa isso para descrever corretamente o
+// principio de medicao do sensor (o texto do procedimento varia por tecnologia).
+model SensorType {
+  id                String          @id @default(uuid())
+  measurementTypeId String
+  measurementType   MeasurementType @relation(fields: [measurementTypeId], references: [id], onDelete: Cascade)
+  name              String
+  active            Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+
+  calibrationPoints InstrumentCalibrationPoint[]
+
+  @@unique([measurementTypeId, name])
+  @@map("sensor_types")
 }
 
 model Calibration {
@@ -661,6 +683,10 @@ model CalibrationPoint {
   // ativo tem mais de um. Texto livre porque tambem serve para uma calibracao avulsa,
   // sem nenhum ponto pre-cadastrado no ativo.
   label                        String?
+  // Tecnologia do sensor (ex.: "PT100", "Termopar tipo K") - snapshot em texto, preenchido
+  // a partir do ponto pre-cadastrado no ativo quando existir; o certificado usa isso para
+  // descrever o principio de medicao corretamente.
+  sensorTypeName               String?
   // Nem sempre da' pra calibrar todos os pontos na mesma visita (sensor quebrado, dificil
   // acesso, equipamento parado...) - performed=false so' guarda uma observacao, sem
   // exigir leituras, e nao avanca a proxima data de calibracao desse ponto (emitir o

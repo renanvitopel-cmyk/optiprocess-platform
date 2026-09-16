@@ -37,6 +37,7 @@ const InstrumentsList = lazyPagina(() => import("./pages/admin/instruments/Instr
 const InstrumentDetail = lazyPagina(() => import("./pages/admin/instruments/InstrumentDetail"));
 const AssetTypesList = lazyPagina(() => import("./pages/admin/instruments/AssetTypesList"));
 const MeasurementTypesList = lazyPagina(() => import("./pages/admin/instruments/MeasurementTypesList"));
+const SensorTypesList = lazyPagina(() => import("./pages/admin/instruments/SensorTypesList"));
 const TechnicalCatalogsHub = lazyPagina(() => import("./pages/admin/instruments/TechnicalCatalogsHub"));
 const ReferenceStandardsList = lazyPagina(() => import("./pages/admin/referenceStandards/ReferenceStandardsList"));
 const ReferenceStandardDetail = lazyPagina(() => import("./pages/admin/referenceStandards/ReferenceStandardDetail"));
@@ -108,6 +109,7 @@ export default function App() {
                 <Route path="instrumentos" element={<InstrumentsList />} />
                 <Route path="instrumentos/tipos" element={<AssetTypesList />} />
                 <Route path="instrumentos/grandezas" element={<MeasurementTypesList />} />
+                <Route path="instrumentos/sensores" element={<SensorTypesList />} />
                 <Route path="instrumentos/cadastros" element={<TechnicalCatalogsHub />} />
                 <Route path="instrumentos/:id" element={<InstrumentDetail />} />
 

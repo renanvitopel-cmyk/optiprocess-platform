@@ -338,6 +338,8 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
     // So mostra a coluna "Ponto" quando faz sentido - ativo com um so ponto calibravel
     // nao precisa dessa coluna repetindo "-" em toda linha.
     const temPontosNomeados = cal.points.some((p) => p.label);
+    const rotuloDoPonto = (p: (typeof cal.points)[number]) =>
+      [p.label, p.sensorTypeName ? `(${p.sensorTypeName})` : null].filter(Boolean).join(" ") || "-";
     table(
       [
         ...(temPontosNomeados ? ["Ponto"] : []),
@@ -350,9 +352,9 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
       ],
       cal.points.map((p) =>
         p.performed === false
-          ? [...(temPontosNomeados ? [p.label || "-"] : []), "-", "-", "-", "-", "-", "Não realizado"]
+          ? [...(temPontosNomeados ? [rotuloDoPonto(p)] : []), "-", "-", "-", "-", "-", "Não realizado"]
           : [
-              ...(temPontosNomeados ? [p.label || "-"] : []),
+              ...(temPontosNomeados ? [rotuloDoPonto(p)] : []),
               num(p.standardValue),
               num(p.indicatedValue),
               num(p.error),

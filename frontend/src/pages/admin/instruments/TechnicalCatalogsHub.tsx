@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Tags, ChevronRight, Ruler } from "lucide-react";
+import { Tags, ChevronRight, Ruler, Thermometer } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
 import { useAuth } from "../../../auth/AuthContext";
 
@@ -25,6 +25,12 @@ export default function TechnicalCatalogsHub() {
                 icon: Ruler,
                 title: "Tipos de grandeza",
                 description: "Temperatura, balanca... e os campos que cada uma pede no ponto de calibracao",
+              },
+              {
+                to: `${base}/sensores`,
+                icon: Thermometer,
+                title: "Tipos de sensor",
+                description: "Tecnologia do sensor dentro de cada grandeza (ex.: PT100, Termopar tipo K)",
               },
             ]),
       ],

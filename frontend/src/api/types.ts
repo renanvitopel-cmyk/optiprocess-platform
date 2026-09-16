@@ -197,6 +197,8 @@ export interface InstrumentCalibrationPoint {
   label: string;
   measurementTypeId: string | null;
   measurementType?: MeasurementType | null;
+  sensorTypeId: string | null;
+  sensorType?: SensorType | null;
   measurementRange: string | null;
   unit: string | null;
   targetTemperature: number | null;
@@ -218,6 +220,7 @@ export type DocumentStatus = "DRAFT" | "ISSUED";
 export interface CalibrationPoint {
   id?: string;
   label?: string | null;
+  sensorTypeName?: string | null;
   instrumentCalibrationPointId?: string | null;
   // false = nao foi possivel calibrar este ponto na visita (sensor quebrado, dificil
   // acesso...) - so a observacao e' exigida, sem leituras, e a data dele nao avanca.
@@ -512,5 +515,14 @@ export interface MeasurementType {
   name: string;
   defaultUnit: string | null;
   fieldProfile: MeasurementFieldProfile;
+  active: boolean;
+}
+
+/** Tecnologia do sensor dentro de uma grandeza (ex.: PT100, Termopar tipo K, dentro de
+ * Temperatura) - usada para descrever o principio de medicao no certificado. */
+export interface SensorType {
+  id: string;
+  measurementTypeId: string;
+  name: string;
   active: boolean;
 }

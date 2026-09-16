@@ -158,6 +158,9 @@ const pointSchema = z
     // Identifica qual ponto fisico foi medido (ex.: "PT-100 - Zona 1 Canhao") quando o
     // ativo tem varios; livre para uma calibracao sem pontos pre-cadastrados.
     label: z.string().nullish(),
+    // Tecnologia do sensor (ex.: "PT100", "Termopar tipo K") - snapshot em texto, vem do
+    // ponto pre-cadastrado no ativo quando existir; usado na descricao tecnica do certificado.
+    sensorTypeName: z.string().nullish(),
     // Se veio de um ponto ja cadastrado no ativo (ver /instruments/:id/calibration-points),
     // emitir o certificado atualiza a proxima data de calibracao DESSE ponto especifico -
     // so' quando performed=true (ver issueCalibration).

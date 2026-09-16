@@ -9,6 +9,7 @@ import { ClientPicker } from "../../../components/ClientPicker";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
 import { createCalibration, updateCalibration } from "../../../api/calibrations";
+import { getInstrument } from "../../../api/instruments";
 import type { Calibration } from "../../../api/types";
 import { listReferenceStandards, getReferenceStandard } from "../../../api/referenceStandards";
 import { listInstrumentCalibrationPoints } from "../../../api/instrumentCalibrationPoints";
@@ -228,6 +229,30 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
     }
   }, [instrumentId, registeredPoints, replace]);
 
+  // Validade da calibracao segue a periodicidade cadastrada no ativo (ex.: a cada 6 meses
+  // -> validade de 6 meses) - da preferencia pra periodicidade do proprio ativo; sem ela,
+  // usa a menor entre os pontos cadastrados (o certificado so' vale ate o primeiro ponto
+  // vencer). So' sugere uma vez (nao sobrescreve o que o tecnico ja preencheu/editou).
+  const { data: instrumentDetail } = useQuery({
+    queryKey: ["instrument-for-validity", instrumentId],
+    queryFn: () => getInstrument(instrumentId),
+    enabled: !!instrumentId,
+  });
+  const calibrationDate = watch("calibrationDate");
+  const validUntil = watch("validUntil");
+  useEffect(() => {
+    if (!calibrationDate || validUntil || !instrumentId) return;
+    const frequenciasDosPontos = (registeredPoints ?? [])
+      .map((p) => p.calibrationFrequencyMonths)
+      .filter((f): f is number => f != null);
+    const frequencia =
+      instrumentDetail?.calibrationFrequencyMonths ?? (frequenciasDosPontos.length > 0 ? Math.min(...frequenciasDosPontos) : null);
+    if (!frequencia) return;
+    const data = new Date(`${calibrationDate}T00:00:00`);
+    data.setMonth(data.getMonth() + frequencia);
+    setValue("validUntil", data.toISOString().slice(0, 10));
+  }, [calibrationDate, validUntil, instrumentId, instrumentDetail, registeredPoints, setValue]);
+
   async function onSubmit(values: FormValues) {
     try {
       const saved = isEditing ? await updateCalibration(calibration.id, values) : await createCalibration(values);
@@ -251,7 +276,14 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
         <div className="grid gap-4 sm:grid-cols-3">
           <TextInput label="Data da calibracao" type="date" required error={errors.calibrationDate?.message} {...register("calibrationDate")} />
           <TextInput label="Local" required error={errors.location?.message} {...register("location")} />
-          <TextInput label="Validade ate" type="date" required error={errors.validUntil?.message} {...register("validUntil")} />
+          <TextInput
+            label="Validade ate"
+            type="date"
+            required
+            hint="Sugerida pela periodicidade do ativo - pode ajustar se o laboratorio definir outra."
+            error={errors.validUntil?.message}
+            {...register("validUntil")}
+          />
         </div>
       </div>
 

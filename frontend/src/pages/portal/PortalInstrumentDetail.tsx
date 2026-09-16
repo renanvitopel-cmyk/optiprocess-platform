@@ -193,7 +193,13 @@ export default function PortalInstrumentDetail() {
         </div>
       )}
 
-      {tab === "points" && <InstrumentCalibrationPoints instrumentId={instrument.id} canEdit />}
+      {tab === "points" && (
+        <InstrumentCalibrationPoints
+          instrumentId={instrument.id}
+          canEdit
+          instrumentCalibrationFrequencyMonths={instrument.calibrationFrequencyMonths}
+        />
+      )}
 
       {tab === "documents" && <InstrumentAttachments instrumentId={instrument.id} canEdit />}
 

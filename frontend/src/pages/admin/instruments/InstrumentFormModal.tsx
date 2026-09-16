@@ -14,6 +14,11 @@ import { useAuth } from "../../../auth/AuthContext";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 
+// Campo numerico opcional vindo de um <input type="number">: em branco manda "" (nao
+// undefined), e z.coerce.number() transformaria isso em 0 - trata "" como ausencia de
+// valor primeiro, mesmo padrao ja usado em outros formularios com campo numerico opcional.
+const numeroOpcional = z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), z.coerce.number().int().min(1).optional());
+
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
   tag: z.string().min(1, "Informe o TAG do ativo."),
@@ -30,6 +35,7 @@ const schema = z.object({
   measurementRange: z.string().optional(),
   resolution: z.string().optional(),
   unit: z.string().optional(),
+  calibrationFrequencyMonths: numeroOpcional,
   lastCalibrationDate: z.string().optional(),
   status: z.enum(["VALID", "DUE_SOON", "EXPIRED", "IN_MAINTENANCE"]).optional(),
 });
@@ -80,6 +86,7 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               measurementRange: instrument.measurementRange ?? "",
               resolution: instrument.resolution ?? "",
               unit: instrument.unit ?? "",
+              calibrationFrequencyMonths: instrument.calibrationFrequencyMonths ?? undefined,
               lastCalibrationDate: instrument.lastCalibrationDate?.slice(0, 10) ?? "",
               status: instrument.status,
             }
@@ -208,6 +215,13 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
           </p>
           <div className="grid gap-4 sm:grid-cols-3">
             <TextInput label="Ultima calibracao" type="date" {...register("lastCalibrationDate")} />
+            <TextInput
+              label="Periodicidade (meses)"
+              type="number"
+              hint="Ex.: 6 para calibrar a cada 6 meses, 12 para 1 ano."
+              error={errors.calibrationFrequencyMonths?.message}
+              {...register("calibrationFrequencyMonths")}
+            />
             {instrument && tracksCalibration && (
               <SelectInput
                 label="Status do certificado"

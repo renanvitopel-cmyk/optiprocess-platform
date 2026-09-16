@@ -59,7 +59,17 @@ function resumoDosCamposExtras(p: InstrumentCalibrationPoint): string | null {
  * Cada ponto tem seu proprio ciclo de calibracao, independente dos outros e do ativo
  * como um todo; e' o que o formulario de nova calibracao usa para pre-preencher a
  * tabela de pontos em vez de comecar em branco. */
-export function InstrumentCalibrationPoints({ instrumentId, canEdit }: { instrumentId: string; canEdit: boolean }) {
+export function InstrumentCalibrationPoints({
+  instrumentId,
+  canEdit,
+  instrumentCalibrationFrequencyMonths,
+}: {
+  instrumentId: string;
+  canEdit: boolean;
+  /** Periodicidade cadastrada no proprio ativo - novo ponto ja nasce com ela por padrao,
+   * mas continua editavel: cada ponto pode ter seu proprio ciclo se precisar. */
+  instrumentCalibrationFrequencyMonths?: number | null;
+}) {
   const queryClient = useQueryClient();
   const { notify } = useToast();
   const [formOpen, setFormOpen] = useState(false);
@@ -94,7 +104,14 @@ export function InstrumentCalibrationPoints({ instrumentId, canEdit }: { instrum
   });
 
   function openCreate() {
-    reset({ label: "", measurementTypeId: "", sensorTypeId: "", measurementRange: "", unit: "" });
+    reset({
+      label: "",
+      measurementTypeId: "",
+      sensorTypeId: "",
+      measurementRange: "",
+      unit: "",
+      calibrationFrequencyMonths: instrumentCalibrationFrequencyMonths ?? undefined,
+    });
     setEditing(null);
     setFormOpen(true);
   }
@@ -292,7 +309,7 @@ export function InstrumentCalibrationPoints({ instrumentId, canEdit }: { instrum
           <TextInput
             label="Periodicidade (meses)"
             type="number"
-            hint="Opcional. Sem valor, usa a periodicidade do ativo."
+            hint="Ja vem da periodicidade do ativo - mude aqui se este ponto precisar de um ciclo proprio."
             {...register("calibrationFrequencyMonths")}
           />
         </form>

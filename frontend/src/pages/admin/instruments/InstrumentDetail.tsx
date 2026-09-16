@@ -156,7 +156,13 @@ export default function InstrumentDetail() {
         </div>
       )}
 
-      {tab === "points" && <InstrumentCalibrationPoints instrumentId={instrument.id} canEdit={!!canManage} />}
+      {tab === "points" && (
+        <InstrumentCalibrationPoints
+          instrumentId={instrument.id}
+          canEdit={!!canManage}
+          instrumentCalibrationFrequencyMonths={instrument.calibrationFrequencyMonths}
+        />
+      )}
 
       {tab === "calibrations" && (
         <div className="card p-5">

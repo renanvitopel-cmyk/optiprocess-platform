@@ -240,10 +240,22 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
           />
         )}
 
+        {/* Ativo ja existente, calibrado antes de entrar na plataforma - registrar essa
+            data aqui (sem precisar editar depois) e' o que da a base para as proximas
+            calibracoes seguirem o ciclo certo, mesmo sem pontos cadastrados ainda. */}
+        {modoRapido && (
+          <TextInput
+            label="Ultima calibracao (se ja foi calibrado antes)"
+            type="date"
+            hint="Opcional. Preencha se este ativo ja tinha uma calibracao anterior, mesmo fora da plataforma."
+            {...register("lastCalibrationDate")}
+          />
+        )}
+
         {modoRapido && (
           <p className="rounded-lg bg-gray-50 px-4 py-3 text-xs text-graphite-500">
-            Tipo do ativo, ficha do fabricante e calibracao sao preenchidos depois, na ficha
-            deste ativo. Para cadastrar, basta o que esta acima.
+            Tipo do ativo, ficha do fabricante e demais dados de calibracao sao preenchidos
+            depois, na ficha deste ativo. Para cadastrar, basta o que esta acima.
           </p>
         )}
       </form>

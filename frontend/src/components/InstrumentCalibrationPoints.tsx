@@ -10,9 +10,10 @@ import {
   updateInstrumentCalibrationPoint,
   deleteInstrumentCalibrationPoint,
 } from "../api/instrumentCalibrationPoints";
-import type { InstrumentCalibrationPoint } from "../api/types";
+import { listMeasurementTypes } from "../api/measurementTypes";
+import type { InstrumentCalibrationPoint, MeasurementFieldProfile } from "../api/types";
 import { Modal } from "./Modal";
-import { TextInput } from "./form/Field";
+import { TextInput, SelectInput } from "./form/Field";
 import { StatusBadge } from "./StatusBadge";
 import { EmptyState } from "./EmptyState";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -20,13 +21,37 @@ import { useToast } from "./Toast";
 import { getApiErrorMessage } from "../api/client";
 import { formatDate } from "../lib/format";
 
+// Campo numerico opcional vindo de um <input type="number">: em branco manda "" (nao
+// undefined), e z.coerce.number() transformaria isso em 0 antes de chegar num literal("")
+// - trata "" como ausencia de valor primeiro, do mesmo jeito que dataOpcional no backend.
+const numeroOpcional = z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), z.coerce.number().optional());
+
 const schema = z.object({
   label: z.string().min(1, "Informe o nome do ponto."),
+  measurementTypeId: z.string().optional(),
   measurementRange: z.string().optional(),
   unit: z.string().optional(),
-  calibrationFrequencyMonths: z.coerce.number().int().min(1).optional().or(z.literal("")),
+  targetTemperature: numeroOpcional,
+  tolerancePercent: numeroOpcional,
+  zeroValue: numeroOpcional,
+  spanValue: numeroOpcional,
+  calibrationFrequencyMonths: numeroOpcional,
 });
 type FormValues = z.infer<typeof schema>;
+
+/** Resumo do que o ponto pede alem de faixa/unidade, pra mostrar na listagem sem abrir o
+ * formulario. */
+function resumoDosCamposExtras(p: InstrumentCalibrationPoint): string | null {
+  if (p.targetTemperature != null || p.tolerancePercent != null) {
+    const alvo = p.targetTemperature != null ? `${p.targetTemperature}${p.unit ?? ""}` : "-";
+    const tol = p.tolerancePercent != null ? ` ± ${p.tolerancePercent}%` : "";
+    return `Alvo: ${alvo}${tol}`;
+  }
+  if (p.zeroValue != null || p.spanValue != null) {
+    return `Zero: ${p.zeroValue ?? "-"} · Span: ${p.spanValue ?? "-"}`;
+  }
+  return null;
+}
 
 /** Pontos calibraveis dentro de um ativo maior - ex.: os 10 PT-100 de uma extrusora.
  * Cada ponto tem seu proprio ciclo de calibracao, independente dos outros e do ativo
@@ -45,12 +70,22 @@ export function InstrumentCalibrationPoints({ instrumentId, canEdit }: { instrum
     queryFn: () => listInstrumentCalibrationPoints(instrumentId),
   });
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { data: measurementTypes } = useQuery({
+    queryKey: ["measurement-types-picker"],
+    queryFn: () => listMeasurementTypes({ active: true }),
+    staleTime: 60_000,
+  });
+
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
   });
 
+  const measurementTypeId = watch("measurementTypeId");
+  const fieldProfile: MeasurementFieldProfile =
+    measurementTypes?.find((t) => t.id === measurementTypeId)?.fieldProfile ?? "GENERIC";
+
   function openCreate() {
-    reset({ label: "", measurementRange: "", unit: "", calibrationFrequencyMonths: "" });
+    reset({ label: "", measurementTypeId: "", measurementRange: "", unit: "" });
     setEditing(null);
     setFormOpen(true);
   }
@@ -58,21 +93,37 @@ export function InstrumentCalibrationPoints({ instrumentId, canEdit }: { instrum
   function openEdit(point: InstrumentCalibrationPoint) {
     reset({
       label: point.label,
+      measurementTypeId: point.measurementTypeId ?? "",
       measurementRange: point.measurementRange ?? "",
       unit: point.unit ?? "",
-      calibrationFrequencyMonths: point.calibrationFrequencyMonths ?? "",
+      targetTemperature: point.targetTemperature ?? undefined,
+      tolerancePercent: point.tolerancePercent ?? undefined,
+      zeroValue: point.zeroValue ?? undefined,
+      spanValue: point.spanValue ?? undefined,
+      calibrationFrequencyMonths: point.calibrationFrequencyMonths ?? undefined,
     });
     setEditing(point);
     setFormOpen(true);
+  }
+
+  function onMeasurementTypeChange(id: string) {
+    setValue("measurementTypeId", id);
+    const tipo = measurementTypes?.find((t) => t.id === id);
+    if (tipo?.defaultUnit) setValue("unit", tipo.defaultUnit);
   }
 
   async function onSubmit(values: FormValues) {
     try {
       const payload = {
         label: values.label,
+        measurementTypeId: values.measurementTypeId || null,
         measurementRange: values.measurementRange || null,
         unit: values.unit || null,
-        calibrationFrequencyMonths: values.calibrationFrequencyMonths || null,
+        targetTemperature: fieldProfile === "TEMPERATURE" ? values.targetTemperature ?? null : null,
+        tolerancePercent: fieldProfile === "TEMPERATURE" ? values.tolerancePercent ?? null : null,
+        zeroValue: fieldProfile === "SCALE" ? values.zeroValue ?? null : null,
+        spanValue: fieldProfile === "SCALE" ? values.spanValue ?? null : null,
+        calibrationFrequencyMonths: values.calibrationFrequencyMonths ?? null,
       };
       if (editing) {
         await updateInstrumentCalibrationPoint(instrumentId, editing.id, payload);
@@ -126,30 +177,37 @@ export function InstrumentCalibrationPoints({ instrumentId, canEdit }: { instrum
         />
       ) : (
         <ul className="divide-y divide-gray-100">
-          {points.map((p) => (
-            <li key={p.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-              <div className="min-w-0">
-                <p className="font-medium text-graphite-800">{p.label}</p>
-                <p className="text-xs text-graphite-400">
-                  {[p.measurementRange, p.unit].filter(Boolean).join(" ") || "Sem faixa definida"}
-                  {" · "}Proxima calibracao: {formatDate(p.nextDueDate)}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <StatusBadge status={p.derivedStatus ?? "VALID"} />
-                {canEdit && (
-                  <>
-                    <button type="button" className="text-graphite-400 hover:text-navy-700" aria-label="Editar ponto" onClick={() => openEdit(p)}>
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button type="button" className="text-graphite-400 hover:text-safety-red" aria-label="Remover ponto" onClick={() => setRemoving(p)}>
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </>
-                )}
-              </div>
-            </li>
-          ))}
+          {points.map((p) => {
+            const extras = resumoDosCamposExtras(p);
+            return (
+              <li key={p.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium text-graphite-800">
+                    {p.label}
+                    {p.measurementType && <span className="ml-2 text-xs font-normal text-graphite-400">{p.measurementType.name}</span>}
+                  </p>
+                  <p className="text-xs text-graphite-400">
+                    {[p.measurementRange, p.unit].filter(Boolean).join(" ") || "Sem faixa definida"}
+                    {extras ? ` · ${extras}` : ""}
+                    {" · "}Proxima calibracao: {formatDate(p.nextDueDate)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <StatusBadge status={p.derivedStatus ?? "VALID"} />
+                  {canEdit && (
+                    <>
+                      <button type="button" className="text-graphite-400 hover:text-navy-700" aria-label="Editar ponto" onClick={() => openEdit(p)}>
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button type="button" className="text-graphite-400 hover:text-safety-red" aria-label="Remover ponto" onClick={() => setRemoving(p)}>
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -175,10 +233,35 @@ export function InstrumentCalibrationPoints({ instrumentId, canEdit }: { instrum
             error={errors.label?.message}
             {...register("label")}
           />
+
+          <SelectInput
+            label="Grandeza"
+            placeholder="Nao especificar"
+            hint="Preenche a unidade sozinho e abre os campos especificos dessa grandeza."
+            options={(measurementTypes ?? []).map((t) => ({ value: t.id, label: t.name }))}
+            value={measurementTypeId ?? ""}
+            onChange={(e) => onMeasurementTypeChange(e.target.value)}
+          />
+
           <div className="grid gap-4 sm:grid-cols-2">
             <TextInput label="Faixa de medicao" placeholder="Ex.: 0 a 300" {...register("measurementRange")} />
             <TextInput label="Unidade" placeholder="Ex.: °C" {...register("unit")} />
           </div>
+
+          {fieldProfile === "TEMPERATURE" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextInput label="Temperatura a ser calibrada" type="number" step="any" {...register("targetTemperature")} />
+              <TextInput label="Tolerancia (%)" type="number" step="any" {...register("tolerancePercent")} />
+            </div>
+          )}
+
+          {fieldProfile === "SCALE" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextInput label="Zero" type="number" step="any" {...register("zeroValue")} />
+              <TextInput label="Span" type="number" step="any" {...register("spanValue")} />
+            </div>
+          )}
+
           <TextInput
             label="Periodicidade (meses)"
             type="number"

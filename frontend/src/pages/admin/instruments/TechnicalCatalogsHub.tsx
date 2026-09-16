@@ -1,12 +1,13 @@
 import { Link } from "react-router-dom";
-import { Tags, ChevronRight } from "lucide-react";
+import { Tags, ChevronRight, Ruler } from "lucide-react";
 import { PageHeader } from "../../../components/PageHeader";
 import { useAuth } from "../../../auth/AuthContext";
 
 /** Ponto unico de entrada dos cadastros de apoio dos Ativos. */
 export default function TechnicalCatalogsHub() {
   const { user } = useAuth();
-  const base = user?.role === "CLIENT" || user?.role === "CLIENT_PLANNER" ? "/portal/instrumentos" : "/gestao/instrumentos";
+  const isClientSide = user?.role === "CLIENT" || user?.role === "CLIENT_PLANNER";
+  const base = isClientSide ? "/portal/instrumentos" : "/gestao/instrumentos";
 
   const groups = [
     {
@@ -14,6 +15,18 @@ export default function TechnicalCatalogsHub() {
       description: "Catalogo usado no cadastro dos ativos.",
       items: [
         { to: `${base}/tipos`, icon: Tags, title: "Tipos de ativo", description: "Catalogo de tipos usado no cadastro do ativo" },
+        // So' a equipe interna mantem o catalogo de grandezas (o cliente so' escolhe
+        // entre elas ao cadastrar um ponto de calibracao, sem tela de gestao propria).
+        ...(isClientSide
+          ? []
+          : [
+              {
+                to: `${base}/grandezas`,
+                icon: Ruler,
+                title: "Tipos de grandeza",
+                description: "Temperatura, balanca... e os campos que cada uma pede no ponto de calibracao",
+              },
+            ]),
       ],
     },
   ];

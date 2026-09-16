@@ -28,6 +28,7 @@ import { localStorageRouter } from "./modules/localStorage/routes";
 import { assetTypesRouter } from "./modules/assetTypes/routes";
 import { plansRouter } from "./modules/plans/routes";
 import { referenceStandardsRouter } from "./modules/referenceStandards/routes";
+import { measurementTypesRouter } from "./modules/measurementTypes/routes";
 
 export function createApp() {
   const app = express();
@@ -91,6 +92,7 @@ export function createApp() {
   app.use("/api/asset-types", assetTypesRouter);
   app.use("/api/plans", plansRouter);
   app.use("/api/reference-standards", referenceStandardsRouter);
+  app.use("/api/measurement-types", measurementTypesRouter);
 
   if (env.isProduction) {
     const frontendDist = path.resolve(__dirname, "../../frontend/dist");

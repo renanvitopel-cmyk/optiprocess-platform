@@ -195,8 +195,14 @@ export interface InstrumentCalibrationPoint {
   id: string;
   instrumentId: string;
   label: string;
+  measurementTypeId: string | null;
+  measurementType?: MeasurementType | null;
   measurementRange: string | null;
   unit: string | null;
+  targetTemperature: number | null;
+  tolerancePercent: number | null;
+  zeroValue: number | null;
+  spanValue: number | null;
   calibrationFrequencyMonths: number | null;
   lastCalibrationDate: string | null;
   nextDueDate: string | null;
@@ -490,5 +496,17 @@ export interface AssetType {
   id: string;
   clientId: string | null;
   name: string;
+  active: boolean;
+}
+
+export type MeasurementFieldProfile = "GENERIC" | "TEMPERATURE" | "SCALE";
+
+/** Catalogo tecnico das grandezas calibradas (Temperatura, Balanca/Peso...) - decide a
+ * unidade padrao e quais campos extras o ponto de calibracao mostra. */
+export interface MeasurementType {
+  id: string;
+  name: string;
+  defaultUnit: string | null;
+  fieldProfile: MeasurementFieldProfile;
   active: boolean;
 }

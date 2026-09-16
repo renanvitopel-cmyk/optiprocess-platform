@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { dataOpcional } from "../../utils/zod";
+import { dataOpcional, uuidOpcional } from "../../utils/zod";
 import { InstrumentStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -119,6 +119,7 @@ export const getInstrument = asyncHandler(async (req: Request, res: Response) =>
       instrumentCalibrationPoints: {
         where: { deletedAt: null },
         orderBy: { sortOrder: "asc" },
+        include: { measurementType: true },
       },
     },
   });
@@ -425,14 +426,23 @@ export const listInstrumentCalibrationPoints = asyncHandler(async (req: Request,
   const points = await prisma.instrumentCalibrationPoint.findMany({
     where: { instrumentId: instrument.id, deletedAt: null },
     orderBy: { sortOrder: "asc" },
+    include: { measurementType: true },
   });
   res.json(points.map(withPointDerivedStatus));
 });
 
 const calibrationPointSchema = z.object({
   label: z.string().min(1, "Informe o nome do ponto (ex.: PT-100 - Zona 1 Canhao)."),
+  // Grandeza (Temperatura, Balanca...) - decide os campos extras abaixo.
+  measurementTypeId: uuidOpcional,
   measurementRange: z.string().nullish(),
   unit: z.string().nullish(),
+  // MeasurementFieldProfile.TEMPERATURE
+  targetTemperature: z.coerce.number().nullish(),
+  tolerancePercent: z.coerce.number().nullish(),
+  // MeasurementFieldProfile.SCALE (balanca)
+  zeroValue: z.coerce.number().nullish(),
+  spanValue: z.coerce.number().nullish(),
   calibrationFrequencyMonths: z.coerce.number().int().min(1).nullish(),
   sortOrder: z.coerce.number().int().optional(),
 });
@@ -447,6 +457,7 @@ export const createInstrumentCalibrationPoint = asyncHandler(async (req: Request
   const data = calibrationPointSchema.parse(req.body);
   const point = await prisma.instrumentCalibrationPoint.create({
     data: { ...data, instrumentId: instrument.id, createdById: req.user?.sub },
+    include: { measurementType: true },
   });
 
   await writeAuditLog({
@@ -473,7 +484,11 @@ export const updateInstrumentCalibrationPoint = asyncHandler(async (req: Request
   if (!existing) throw new NotFoundError("Ponto de calibracao");
 
   const data = calibrationPointSchema.partial().extend({ active: z.boolean().optional() }).parse(req.body);
-  const point = await prisma.instrumentCalibrationPoint.update({ where: { id: existing.id }, data });
+  const point = await prisma.instrumentCalibrationPoint.update({
+    where: { id: existing.id },
+    data,
+    include: { measurementType: true },
+  });
 
   await writeAuditLog({
     userId: req.user?.sub,

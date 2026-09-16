@@ -8,8 +8,13 @@ export async function listInstrumentCalibrationPoints(instrumentId: string): Pro
 
 export interface InstrumentCalibrationPointInput {
   label: string;
+  measurementTypeId?: string | null;
   measurementRange?: string | null;
   unit?: string | null;
+  targetTemperature?: number | null;
+  tolerancePercent?: number | null;
+  zeroValue?: number | null;
+  spanValue?: number | null;
   calibrationFrequencyMonths?: number | null;
 }
 

@@ -76,6 +76,16 @@ enum InstrumentStatus {
   IN_MAINTENANCE
 }
 
+// Decide quais campos extras o ponto de calibracao pede, alem de faixa/unidade -
+// GENERIC nao pede nada a mais, TEMPERATURE pede temperatura alvo + tolerancia, SCALE
+// (balanca) pede zero e span. Novas grandezas com campos proprios entram como um novo
+// valor aqui + o tratamento correspondente no formulario do ponto.
+enum MeasurementFieldProfile {
+  GENERIC
+  TEMPERATURE
+  SCALE
+}
+
 enum CalibrationResult {
   APPROVED
   APPROVED_WITH_RESTRICTION
@@ -460,21 +470,33 @@ model Instrument {
 // Cadastrado pelo cliente (o que precisa ser calibrado) ou pela OptiProcess; a calibracao
 // de verdade (valores medidos) acontece em CalibrationPoint, que pode linkar de volta aqui.
 model InstrumentCalibrationPoint {
-  id                         String     @id @default(uuid())
+  id                         String           @id @default(uuid())
   instrumentId               String
-  instrument                 Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  instrument                 Instrument       @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
   label                      String
+  // Grandeza calibrada (Temperatura, Balanca...) - decide a unidade padrao e quais
+  // campos extras aparecem no formulario deste ponto (ver MeasurementFieldProfile).
+  measurementTypeId          String?
+  measurementType            MeasurementType? @relation(fields: [measurementTypeId], references: [id])
   measurementRange           String?
+  // Preenchido a partir do measurementType escolhido, mas continua editavel - mesmo
+  // padrao de snapshot-editavel ja usado em padrao de referencia e calibration standard.
   unit                       String?
+  // Especificos de MeasurementFieldProfile.TEMPERATURE.
+  targetTemperature          Float?
+  tolerancePercent           Float?
+  // Especificos de MeasurementFieldProfile.SCALE (balanca).
+  zeroValue                  Float?
+  spanValue                  Float?
   // Sem periodicidade propria, herda a do ativo (calculado na hora de emitir o certificado).
   calibrationFrequencyMonths Int?
   lastCalibrationDate        DateTime?
   nextDueDate                DateTime?
-  sortOrder                  Int        @default(0)
-  active                     Boolean    @default(true)
+  sortOrder                  Int              @default(0)
+  active                     Boolean          @default(true)
   createdById                String?
-  createdAt                  DateTime   @default(now())
-  updatedAt                  DateTime   @updatedAt
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
   deletedAt                  DateTime?
 
   calibrationPoints CalibrationPoint[]
@@ -482,6 +504,22 @@ model InstrumentCalibrationPoint {
   @@index([instrumentId])
   @@index([nextDueDate])
   @@map("instrument_calibration_points")
+}
+
+// Catalogo tecnico das grandezas calibradas (Temperatura, Balanca/Peso, Pressao...) -
+// cadastro interno da OptiProcess (nao por cliente), usado ao cadastrar um ponto de
+// calibracao para decidir a unidade padrao e os campos extras do formulario.
+model MeasurementType {
+  id           String                  @id @default(uuid())
+  name         String                  @unique
+  defaultUnit  String?
+  fieldProfile MeasurementFieldProfile @default(GENERIC)
+  active       Boolean                 @default(true)
+  createdAt    DateTime                @default(now())
+
+  calibrationPoints InstrumentCalibrationPoint[]
+
+  @@map("measurement_types")
 }
 
 model Calibration {

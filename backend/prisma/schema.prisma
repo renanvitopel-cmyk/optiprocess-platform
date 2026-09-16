@@ -661,12 +661,18 @@ model CalibrationPoint {
   // ativo tem mais de um. Texto livre porque tambem serve para uma calibracao avulsa,
   // sem nenhum ponto pre-cadastrado no ativo.
   label                        String?
-  standardValue                Float
-  indicatedValue               Float
-  error                        Float
-  tolerance                    Float
-  uncertainty                  Float
-  result                       PointResult
+  // Nem sempre da' pra calibrar todos os pontos na mesma visita (sensor quebrado, dificil
+  // acesso, equipamento parado...) - performed=false so' guarda uma observacao, sem
+  // exigir leituras, e nao avanca a proxima data de calibracao desse ponto (emitir o
+  // certificado deixa esse ponto especifico como estava, continua vencido/pendente).
+  performed                    Boolean                     @default(true)
+  notes                        String?
+  standardValue                Float?
+  indicatedValue               Float?
+  error                        Float?
+  tolerance                    Float?
+  uncertainty                  Float?
+  result                       PointResult?
   sortOrder                    Int                         @default(0)
   // Se veio de um ponto pre-cadastrado no ativo, o link atualiza o proprio ponto
   // (lastCalibrationDate/nextDueDate) quando o certificado e' emitido.

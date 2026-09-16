@@ -153,20 +153,48 @@ export const getCalibrationHistory = asyncHandler(async (req: Request, res: Resp
   res.json(chain);
 });
 
-const pointSchema = z.object({
-  // Identifica qual ponto fisico foi medido (ex.: "PT-100 - Zona 1 Canhao") quando o
-  // ativo tem varios; livre para uma calibracao sem pontos pre-cadastrados.
-  label: z.string().nullish(),
-  // Se veio de um ponto ja cadastrado no ativo (ver /instruments/:id/calibration-points),
-  // emitir o certificado atualiza a proxima data de calibracao DESSE ponto especifico.
-  instrumentCalibrationPointId: uuidOpcional,
-  standardValue: z.coerce.number(),
-  indicatedValue: z.coerce.number(),
-  error: z.coerce.number(),
-  tolerance: z.coerce.number(),
-  uncertainty: z.coerce.number(),
-  result: z.nativeEnum(PointResult),
-});
+const pointSchema = z
+  .object({
+    // Identifica qual ponto fisico foi medido (ex.: "PT-100 - Zona 1 Canhao") quando o
+    // ativo tem varios; livre para uma calibracao sem pontos pre-cadastrados.
+    label: z.string().nullish(),
+    // Se veio de um ponto ja cadastrado no ativo (ver /instruments/:id/calibration-points),
+    // emitir o certificado atualiza a proxima data de calibracao DESSE ponto especifico -
+    // so' quando performed=true (ver issueCalibration).
+    instrumentCalibrationPointId: uuidOpcional,
+    // Nem sempre da' pra calibrar todos os pontos na mesma visita (sensor quebrado,
+    // dificil acesso...). Com performed=false, so' a observacao e' exigida - sem leituras,
+    // e o ponto continua vencido (a data dele nao avanca ao emitir o certificado).
+    performed: z.boolean().optional(),
+    notes: z.string().nullish(),
+    standardValue: z.coerce.number().nullish(),
+    indicatedValue: z.coerce.number().nullish(),
+    error: z.coerce.number().nullish(),
+    tolerance: z.coerce.number().nullish(),
+    uncertainty: z.coerce.number().nullish(),
+    result: z.nativeEnum(PointResult).nullish(),
+  })
+  .superRefine((point, ctx) => {
+    if (point.performed === false) {
+      if (!point.notes?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["notes"], message: "Explique por que este ponto nao foi calibrado." });
+      }
+      return;
+    }
+    const camposObrigatorios: [keyof typeof point, string][] = [
+      ["standardValue", "Valor padrao"],
+      ["indicatedValue", "Valor indicado"],
+      ["error", "Erro"],
+      ["tolerance", "Tolerancia"],
+      ["uncertainty", "Incerteza"],
+      ["result", "Resultado"],
+    ];
+    for (const [campo, rotulo] of camposObrigatorios) {
+      if (point[campo] == null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: `${rotulo} e obrigatorio quando o ponto foi calibrado.` });
+      }
+    }
+  });
 
 const standardSchema = z.object({
   description: z.string().min(1, "Descreva o padrao utilizado."),
@@ -323,10 +351,16 @@ export const issueCalibration = asyncHandler(async (req: Request, res: Response)
     ? computeNextDueDate(existing.calibrationDate, instrument.calibrationFrequencyMonths)
     : null;
 
+  // Ponto marcado como nao realizado (sensor quebrado, dificil acesso...) so' guarda a
+  // observacao - nao avanca data nenhuma, nem do ponto nem do ativo, porque na pratica
+  // continua vencido/pendente.
+  const performedPoints = existing.points.filter((p) => p.performed !== false);
+  const algumRealizado = performedPoints.length > 0;
+
   // Pontos pre-cadastrados no ativo (ex.: um dos 10 PT-100 da extrusora) usados nesta
   // calibracao ganham sua propria proxima data - cada um pode vencer numa data diferente
   // do resto do ativo, entao nao basta atualizar so o Instrument acima.
-  const linkedPointIds = [...new Set(existing.points.map((p) => p.instrumentCalibrationPointId).filter((id): id is string => !!id))];
+  const linkedPointIds = [...new Set(performedPoints.map((p) => p.instrumentCalibrationPointId).filter((id): id is string => !!id))];
   const linkedPoints = linkedPointIds.length
     ? await prisma.instrumentCalibrationPoint.findMany({ where: { id: { in: linkedPointIds } } })
     : [];
@@ -347,10 +381,14 @@ export const issueCalibration = asyncHandler(async (req: Request, res: Response)
       data: { status: "ISSUED", issuedAt, pdfAttachmentId: pdfAttachment.id },
       include: detailInclude,
     }),
-    prisma.instrument.update({
-      where: { id: existing.instrumentId },
-      data: { lastCalibrationDate: existing.calibrationDate, nextDueDate, status: "VALID" },
-    }),
+    ...(algumRealizado
+      ? [
+          prisma.instrument.update({
+            where: { id: existing.instrumentId },
+            data: { lastCalibrationDate: existing.calibrationDate, nextDueDate, status: "VALID" },
+          }),
+        ]
+      : []),
     ...pointUpdates,
   ]);
 

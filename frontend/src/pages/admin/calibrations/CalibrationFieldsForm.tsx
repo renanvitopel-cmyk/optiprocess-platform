@@ -15,18 +15,49 @@ import { listInstrumentCalibrationPoints } from "../../../api/instrumentCalibrat
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 
-const pointSchema = z.object({
-  label: z.string().optional(),
-  instrumentCalibrationPointId: z.string().optional(),
-  standardValue: z.coerce.number(),
-  indicatedValue: z.coerce.number(),
-  error: z.coerce.number(),
-  tolerance: z.coerce.number(),
-  uncertainty: z.coerce.number(),
-  result: z.enum(["PASS", "FAIL"]),
-});
+const pointSchema = z
+  .object({
+    label: z.string().optional(),
+    instrumentCalibrationPointId: z.string().optional(),
+    // Nem sempre da' pra calibrar todos os pontos na mesma visita (sensor quebrado,
+    // dificil acesso...) - desmarcado, so' pede a observacao, sem leituras, e o ponto
+    // continua vencido (a data dele nao avanca ao emitir o certificado).
+    performed: z.boolean(),
+    notes: z.string().optional(),
+    standardValue: z.coerce.number().optional(),
+    indicatedValue: z.coerce.number().optional(),
+    error: z.coerce.number().optional(),
+    tolerance: z.coerce.number().optional(),
+    uncertainty: z.coerce.number().optional(),
+    result: z.enum(["PASS", "FAIL"]).optional(),
+  })
+  .superRefine((point, ctx) => {
+    if (!point.performed) {
+      if (!point.notes?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["notes"], message: "Explique por que este ponto nao foi calibrado." });
+      }
+      return;
+    }
+    if (point.standardValue == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["standardValue"], message: "Obrigatorio." });
+    if (point.indicatedValue == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["indicatedValue"], message: "Obrigatorio." });
+    if (point.error == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["error"], message: "Obrigatorio." });
+    if (point.tolerance == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["tolerance"], message: "Obrigatorio." });
+    if (point.uncertainty == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["uncertainty"], message: "Obrigatorio." });
+    if (!point.result) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["result"], message: "Obrigatorio." });
+  });
 
-const EMPTY_POINT = { label: "", instrumentCalibrationPointId: "", standardValue: 0, indicatedValue: 0, error: 0, tolerance: 0, uncertainty: 0, result: "PASS" as const };
+const EMPTY_POINT = {
+  label: "",
+  instrumentCalibrationPointId: "",
+  performed: true,
+  notes: "",
+  standardValue: 0,
+  indicatedValue: 0,
+  error: 0,
+  tolerance: 0,
+  uncertainty: 0,
+  result: "PASS" as const,
+};
 
 const standardSchema = z.object({
   description: z.string().min(1, "Descreva o padrao."),
@@ -92,12 +123,14 @@ function toFormValues(calibration: Calibration): FormValues {
       ? calibration.points.map((p) => ({
           label: p.label ?? "",
           instrumentCalibrationPointId: p.instrumentCalibrationPointId ?? "",
-          standardValue: p.standardValue,
-          indicatedValue: p.indicatedValue,
-          error: p.error,
-          tolerance: p.tolerance,
-          uncertainty: p.uncertainty,
-          result: p.result,
+          performed: p.performed ?? true,
+          notes: p.notes ?? "",
+          standardValue: p.standardValue ?? 0,
+          indicatedValue: p.indicatedValue ?? 0,
+          error: p.error ?? 0,
+          tolerance: p.tolerance ?? 0,
+          uncertainty: p.uncertainty ?? 0,
+          result: p.result ?? "PASS",
         }))
       : [{ ...EMPTY_POINT }],
     standards: calibration.standards.length
@@ -324,6 +357,7 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
             <thead>
               <tr>
                 <th>Ponto</th>
+                <th>Realizado</th>
                 <th>Valor padrao</th>
                 <th>Valor indicado</th>
                 <th>Erro</th>
@@ -334,42 +368,63 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
               </tr>
             </thead>
             <tbody>
-              {fields.map((field, index) => (
-                <tr key={field.id}>
-                  <td>
-                    <input type="hidden" {...register(`points.${index}.instrumentCalibrationPointId`)} />
-                    <input
-                      className="input"
-                      placeholder="Ex.: PT-100 - Zona 1"
-                      {...register(`points.${index}.label`)}
-                    />
-                  </td>
-                  <td><input className="input" type="number" step="any" {...register(`points.${index}.standardValue`)} /></td>
-                  <td><input className="input" type="number" step="any" {...register(`points.${index}.indicatedValue`)} /></td>
-                  <td><input className="input" type="number" step="any" {...register(`points.${index}.error`)} /></td>
-                  <td><input className="input" type="number" step="any" {...register(`points.${index}.tolerance`)} /></td>
-                  <td><input className="input" type="number" step="any" {...register(`points.${index}.uncertainty`)} /></td>
-                  <td>
-                    <Controller
-                      control={control}
-                      name={`points.${index}.result`}
-                      render={({ field: f }) => (
-                        <select className="input" {...f}>
-                          <option value="PASS">Aprovado</option>
-                          <option value="FAIL">Reprovado</option>
-                        </select>
-                      )}
-                    />
-                  </td>
-                  <td>
-                    {fields.length > 1 && (
-                      <button type="button" onClick={() => remove(index)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover ponto">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+              {fields.map((field, index) => {
+                const performed = watch(`points.${index}.performed`);
+                return (
+                  <tr key={field.id}>
+                    <td>
+                      <input type="hidden" {...register(`points.${index}.instrumentCalibrationPointId`)} />
+                      <input
+                        className="input"
+                        placeholder="Ex.: PT-100 - Zona 1"
+                        {...register(`points.${index}.label`)}
+                      />
+                    </td>
+                    <td className="text-center">
+                      <input type="checkbox" className="h-4 w-4" {...register(`points.${index}.performed`)} />
+                    </td>
+                    {performed ? (
+                      <>
+                        <td><input className="input" type="number" step="any" {...register(`points.${index}.standardValue`)} /></td>
+                        <td><input className="input" type="number" step="any" {...register(`points.${index}.indicatedValue`)} /></td>
+                        <td><input className="input" type="number" step="any" {...register(`points.${index}.error`)} /></td>
+                        <td><input className="input" type="number" step="any" {...register(`points.${index}.tolerance`)} /></td>
+                        <td><input className="input" type="number" step="any" {...register(`points.${index}.uncertainty`)} /></td>
+                        <td>
+                          <Controller
+                            control={control}
+                            name={`points.${index}.result`}
+                            render={({ field: f }) => (
+                              <select className="input" {...f} value={f.value ?? "PASS"}>
+                                <option value="PASS">Aprovado</option>
+                                <option value="FAIL">Reprovado</option>
+                              </select>
+                            )}
+                          />
+                        </td>
+                      </>
+                    ) : (
+                      <td colSpan={6}>
+                        <input
+                          className="input"
+                          placeholder="Por que este ponto nao foi calibrado (ex.: sensor quebrado, sem acesso)"
+                          {...register(`points.${index}.notes`)}
+                        />
+                        {errors.points?.[index]?.notes?.message && (
+                          <p className="field-error">{errors.points[index]?.notes?.message}</p>
+                        )}
+                      </td>
                     )}
-                  </td>
-                </tr>
-              ))}
+                    <td>
+                      {fields.length > 1 && (
+                        <button type="button" onClick={() => remove(index)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover ponto">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

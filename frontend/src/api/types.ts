@@ -219,12 +219,16 @@ export interface CalibrationPoint {
   id?: string;
   label?: string | null;
   instrumentCalibrationPointId?: string | null;
-  standardValue: number;
-  indicatedValue: number;
-  error: number;
-  tolerance: number;
-  uncertainty: number;
-  result: PointResult;
+  // false = nao foi possivel calibrar este ponto na visita (sensor quebrado, dificil
+  // acesso...) - so a observacao e' exigida, sem leituras, e a data dele nao avanca.
+  performed?: boolean;
+  notes?: string | null;
+  standardValue?: number | null;
+  indicatedValue?: number | null;
+  error?: number | null;
+  tolerance?: number | null;
+  uncertainty?: number | null;
+  result?: PointResult | null;
 }
 
 export interface CalibrationStandard {

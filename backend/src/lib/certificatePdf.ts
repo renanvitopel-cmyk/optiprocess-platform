@@ -348,18 +348,33 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
         `Incerteza${unit}`,
         "Resultado",
       ],
-      cal.points.map((p) => [
-        ...(temPontosNomeados ? [p.label || "-"] : []),
-        num(p.standardValue),
-        num(p.indicatedValue),
-        num(p.error),
-        `± ${num(p.tolerance)}`,
-        `± ${num(p.uncertainty)}`,
-        p.result === "PASS" ? "Aprovado" : "Reprovado",
-      ]),
+      cal.points.map((p) =>
+        p.performed === false
+          ? [...(temPontosNomeados ? [p.label || "-"] : []), "-", "-", "-", "-", "-", "Não realizado"]
+          : [
+              ...(temPontosNomeados ? [p.label || "-"] : []),
+              num(p.standardValue),
+              num(p.indicatedValue),
+              num(p.error),
+              `± ${num(p.tolerance)}`,
+              `± ${num(p.uncertainty)}`,
+              p.result === "PASS" ? "Aprovado" : "Reprovado",
+            ],
+      ),
       temPontosNomeados ? [16, 14, 14, 12, 14, 14, 16] : [17, 17, 15, 17, 17, 17],
-      (row) => (row[row.length - 1] === "Aprovado" ? GREEN : RED),
+      (row) => (row[row.length - 1] === "Aprovado" ? GREEN : row[row.length - 1] === "Não realizado" ? GRAPHITE : RED),
     );
+
+    // Pontos nao realizados sempre levam uma observacao (exigida no formulario) -
+    // documentar o motivo no certificado, nao so' deixar "-" nas colunas.
+    const pontosComObservacao = cal.points.filter((p) => p.notes);
+    if (pontosComObservacao.length > 0) {
+      doc.moveDown(0.3);
+      doc.font(FONT).fontSize(8).fillColor(GRAPHITE);
+      for (const p of pontosComObservacao) {
+        doc.text(`${p.label ? `${p.label}: ` : ""}${p.notes}`, { continued: false });
+      }
+    }
 
     doc.font(FONT).fontSize(7.5).fillColor(GRAPHITE);
     const kText =

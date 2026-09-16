@@ -110,11 +110,23 @@ export default function PortalCertificateDetail() {
                 <tbody>
                   {calibration.points.map((p, i) => (
                     <tr key={p.id ?? i}>
-                      <td>{p.standardValue}</td>
-                      <td>{p.indicatedValue}</td>
-                      <td>{p.error}</td>
-                      <td>{p.tolerance}</td>
-                      <td><StatusBadge status={p.result} /></td>
+                      {p.performed === false ? (
+                        <td colSpan={4} className="text-graphite-500">Nao realizado{p.notes ? ` - ${p.notes}` : ""}</td>
+                      ) : (
+                        <>
+                          <td>{p.standardValue}</td>
+                          <td>{p.indicatedValue}</td>
+                          <td>{p.error}</td>
+                          <td>{p.tolerance}</td>
+                        </>
+                      )}
+                      <td>
+                        {p.performed === false ? (
+                          <StatusBadge status="NOT_PERFORMED" label="Nao realizado" />
+                        ) : (
+                          <StatusBadge status={p.result ?? "PASS"} />
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

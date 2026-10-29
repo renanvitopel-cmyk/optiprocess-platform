@@ -36,4 +36,8 @@ export const env = {
   },
 
   whatsappNumber: process.env.WHATSAPP_NUMBER ?? "",
+
+  // Liga a pagina "Site em manutencao" no lugar do site publico (variavel no Render).
+  // Login, gestao, portal e a validacao de certificado continuam funcionando.
+  siteEmManutencao: process.env.SITE_EM_MANUTENCAO === "true",
 };

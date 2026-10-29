@@ -9,7 +9,7 @@ import { getStorageProvider } from "../../lib/storage";
 import { env } from "../../config/env";
 
 export const getPublicConfig = asyncHandler(async (_req: Request, res: Response) => {
-  res.json({ whatsappNumber: env.whatsappNumber });
+  res.json({ whatsappNumber: env.whatsappNumber, maintenance: env.siteEmManutencao });
 });
 
 type CertificateWithRelations = Prisma.CalibrationGetPayload<{ include: { client: true; instrument: true } }>;

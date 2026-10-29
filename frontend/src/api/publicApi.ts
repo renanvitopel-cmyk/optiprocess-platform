@@ -1,8 +1,14 @@
 import { api } from "./client";
 import type { QuoteSource, ServiceCategory } from "./types";
 
-export async function getPublicConfig(): Promise<{ whatsappNumber: string }> {
-  const { data } = await api.get<{ whatsappNumber: string }>("/public/config");
+export interface PublicConfig {
+  whatsappNumber: string;
+  /** Site publico em manutencao (variavel SITE_EM_MANUTENCAO no servidor). */
+  maintenance?: boolean;
+}
+
+export async function getPublicConfig(): Promise<PublicConfig> {
+  const { data } = await api.get<PublicConfig>("/public/config");
   return data;
 }
 

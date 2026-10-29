@@ -41,6 +41,15 @@ export default {
       fontFamily: {
         sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
       },
+      keyframes: {
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+      },
+      animation: {
+        "fade-in": "fade-in 0.5s ease-out",
+      },
       boxShadow: {
         card: "0 1px 2px 0 rgb(11 23 41 / 0.06), 0 1px 3px 0 rgb(11 23 41 / 0.08)",
       },

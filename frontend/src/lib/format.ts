@@ -3,10 +3,24 @@ export function formatCurrency(value: number | null | undefined): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+/** Datas sem hora (calibracao, validade, vencimento) vem de um <input type="date"> e
+ * ficam gravadas a meia-noite UTC. Formatadas no fuso de Brasilia (UTC-3) elas caiam no
+ * dia anterior - um certificado de 20/10 aparecia como 19/10. Meia-noite UTC exata e'
+ * tratada como data pura e formatada em UTC; um horario real nunca cai nesse instante. */
+export function isDateOnly(date: Date): boolean {
+  return (
+    date.getUTCHours() === 0 &&
+    date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 &&
+    date.getUTCMilliseconds() === 0
+  );
+}
+
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return "-";
   const date = typeof value === "string" ? new Date(value) : value;
-  return date.toLocaleDateString("pt-BR");
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("pt-BR", isDateOnly(date) ? { timeZone: "UTC" } : undefined);
 }
 
 export function formatDateTime(value: string | Date | null | undefined): string {

@@ -109,9 +109,15 @@ const CATEGORY_LABELS: Record<string, string> = {
   OTHER: "Registro",
 };
 
+/** Datas sem hora (calibracao, validade) chegam de um campo de data e ficam a meia-noite
+ * UTC; no fuso de Sao Paulo isso caia no dia anterior. Meia-noite UTC exata e' data pura
+ * e sai em UTC; um horario real (ex.: issuedAt) continua no fuso de Sao Paulo. */
 function fmtDate(d: Date | null | undefined): string {
   if (!d) return "-";
-  return new Date(d).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  const date = new Date(d);
+  const dateOnly =
+    date.getUTCHours() === 0 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0;
+  return date.toLocaleDateString("pt-BR", { timeZone: dateOnly ? "UTC" : "America/Sao_Paulo" });
 }
 
 function num(v: number | null | undefined, digits = 3): string {
@@ -216,15 +222,19 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
       const total = widths.reduce((a, b) => a + b, 0);
       const w = widths.map((x) => (x / total) * CONTENT_W);
 
+      // Altura do cabecalho pela celula mais alta: com altura fixa, "VALOR PADRAO (BAR)"
+      // quebrava em duas linhas e a segunda ficava escondida atras da primeira linha da tabela.
+      doc.font(FONT_BOLD).fontSize(7.5);
+      const headerH = Math.max(16, ...headers.map((h, i) => doc.heightOfString(h.toUpperCase(), { width: w[i] - 8 }) + 9));
       const drawHeader = () => {
-        doc.rect(MARGIN, y, CONTENT_W, 16).fillColor(NAVY).fill();
+        doc.rect(MARGIN, y, CONTENT_W, headerH).fillColor(NAVY).fill();
         doc.font(FONT_BOLD).fontSize(7.5).fillColor("#ffffff");
         let x = MARGIN;
         headers.forEach((h, i) => {
           doc.text(h.toUpperCase(), x + 5, y + 4.5, { width: w[i] - 8 });
           x += w[i];
         });
-        y += 16;
+        y += headerH;
       };
 
       drawHeader();
@@ -372,25 +382,38 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
 
     // Media (valor indicado), erro e desvio vem das leituras de repetibilidade - documenta
     // os valores individuais de cada ponto, pra rastreabilidade de como a media saiu.
+    // Sempre com x e y explicitos: sem eles o PDFKit continua de onde parou a ultima celula
+    // (a coluna "Resultado"), e as leituras saiam espremidas ali, por cima do texto seguinte.
+    const linhaDeNota = (text: string, size: number) => {
+      doc.font(FONT).fontSize(size).fillColor(GRAPHITE);
+      const h = doc.heightOfString(text, { width: CONTENT_W });
+      if (y + h > 780) {
+        doc.addPage();
+        y = MARGIN;
+      }
+      doc.text(text, MARGIN, y, { width: CONTENT_W });
+      y += h + 2;
+    };
     const pontosComLeituras = cal.points.filter((p) => p.readings.length > 0);
     if (pontosComLeituras.length > 0) {
-      doc.moveDown(0.3);
-      doc.font(FONT).fontSize(7.5).fillColor(GRAPHITE);
-      for (const p of pontosComLeituras) {
-        const valores = p.readings.map((r) => num(r.value)).join(", ");
-        doc.text(`${p.label ? `${p.label}: ` : "Leituras: "}${valores} (n=${p.readings.length})`, { continued: false });
-      }
+      const leituras = pontosComLeituras
+        .map((p) => {
+          const ponto = p.label ? rotuloDoPonto(p) : num(p.standardValue);
+          return `${ponto}: ${p.readings.map((r) => num(r.value)).join("; ")} (n=${p.readings.length})`;
+        })
+        .join("   |   ");
+      linhaDeNota(`Leituras individuais por ponto${unit} - o valor indicado é a média:   ${leituras}`, 7.5);
+      y += 6;
     }
 
     // Pontos nao realizados sempre levam uma observacao (exigida no formulario) -
     // documentar o motivo no certificado, nao so' deixar "-" nas colunas.
     const pontosComObservacao = cal.points.filter((p) => p.notes);
     if (pontosComObservacao.length > 0) {
-      doc.moveDown(0.3);
-      doc.font(FONT).fontSize(8).fillColor(GRAPHITE);
       for (const p of pontosComObservacao) {
-        doc.text(`${p.label ? `${p.label}: ` : ""}${p.notes}`, { continued: false });
+        linhaDeNota(`${p.label ? `${p.label}: ` : ""}${p.notes}`, 8);
       }
+      y += 6;
     }
 
     doc.font(FONT).fontSize(7.5).fillColor(GRAPHITE);
@@ -399,6 +422,10 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
       `padrão combinada multiplicada pelo fator de abrangência k = ${num(cal.coverageFactorK ?? 2, 2)}, ` +
       `para um nível de confiança de aproximadamente 95%. Os resultados referem-se exclusivamente ao item ` +
       `calibrado, nas condições indicadas neste certificado.`;
+    if (y + doc.heightOfString(kText, { width: CONTENT_W }) > 780) {
+      doc.addPage();
+      y = MARGIN;
+    }
     doc.text(kText, MARGIN, y, { width: CONTENT_W, align: "justify" });
     y += doc.heightOfString(kText, { width: CONTENT_W }) + 14;
 

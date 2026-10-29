@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { UncertaintyMode } from "@prisma/client";
+import { numeroOpcional } from "../../utils/zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { NotFoundError, ValidationError } from "../../utils/errors";
@@ -196,6 +198,11 @@ const certificateSchema = z.object({
   laboratory: z.string().nullish(),
   calibrationDate: z.coerce.date(),
   validUntil: z.coerce.date(),
+  // Incerteza expandida declarada pelo laboratorio - entra no calculo da incerteza de cada
+  // ponto das calibracoes feitas com este padrao.
+  expandedUncertainty: numeroOpcional.optional(),
+  uncertaintyMode: z.preprocess((v) => (v === "" ? null : v), z.nativeEnum(UncertaintyMode).nullish()),
+  uncertaintyK: numeroOpcional.optional(),
   notes: z.string().nullish(),
 });
 

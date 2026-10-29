@@ -6,6 +6,7 @@ import { Camera, X } from "lucide-react";
 import { SecaoRecolhivel } from "../../../components/SecaoRecolhivel";
 import { Modal } from "../../../components/Modal";
 import { TextInput, SelectInput, CheckboxInput } from "../../../components/form/Field";
+import { parseDecimal } from "../../../components/form/UncertaintyFields";
 import { ClientPicker } from "../../../components/ClientPicker";
 import { AssetTypeInput } from "../../../components/AssetTypeInput";
 import { createInstrument, updateInstrument, uploadInstrumentPhoto, deleteInstrumentPhoto } from "../../../api/instruments";
@@ -18,6 +19,11 @@ import { getApiErrorMessage } from "../../../api/client";
 // undefined), e z.coerce.number() transformaria isso em 0 - trata "" como ausencia de
 // valor primeiro, mesmo padrao ja usado em outros formularios com campo numerico opcional.
 const numeroOpcional = z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), z.coerce.number().int().min(1).optional());
+
+/** Numero gravado -> texto do campo, com virgula decimal ("0,2"). */
+function decimalParaTexto(v: number | null | undefined): string {
+  return v == null ? "" : String(v).replace(".", ",");
+}
 
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
@@ -38,6 +44,14 @@ const schema = z.object({
   calibrationFrequencyMonths: numeroOpcional,
   lastCalibrationDate: z.string().optional(),
   status: z.enum(["VALID", "DUE_SOON", "EXPIRED", "IN_MAINTENANCE"]).optional(),
+  // Dados para os calculos da calibracao - em texto no formulario (aceitam virgula) e
+  // convertidos com parseDecimal ao salvar.
+  rangeMin: z.string().optional(),
+  rangeMax: z.string().optional(),
+  resolutionValue: z.string().optional(),
+  accuracyClass: z.string().optional(),
+  toleranceMode: z.enum(["", "PERCENT_FULL_SCALE", "PERCENT_READING", "ABSOLUTE"]).optional(),
+  toleranceValue: z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -89,6 +103,12 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
               calibrationFrequencyMonths: instrument.calibrationFrequencyMonths ?? undefined,
               lastCalibrationDate: instrument.lastCalibrationDate?.slice(0, 10) ?? "",
               status: instrument.status,
+              rangeMin: decimalParaTexto(instrument.rangeMin),
+              rangeMax: decimalParaTexto(instrument.rangeMax),
+              resolutionValue: decimalParaTexto(instrument.resolutionValue),
+              accuracyClass: instrument.accuracyClass ?? "",
+              toleranceMode: instrument.toleranceMode ?? "",
+              toleranceValue: decimalParaTexto(instrument.toleranceValue),
             }
           : {
               clientId: initialClientId ?? "",
@@ -106,6 +126,12 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
         manufacturer: values.manufacturer || null,
         model: values.model || null,
         serialNumber: values.serialNumber || null,
+        rangeMin: parseDecimal(values.rangeMin),
+        rangeMax: parseDecimal(values.rangeMax),
+        resolutionValue: parseDecimal(values.resolutionValue),
+        accuracyClass: values.accuracyClass || null,
+        toleranceMode: values.toleranceMode || null,
+        toleranceValue: parseDecimal(values.toleranceValue),
       };
       let saved = instrument ? await updateInstrument(instrument.id, payload) : await createInstrument(payload);
 
@@ -236,9 +262,55 @@ export function InstrumentFormModal({ open, onClose, onSaved, instrument, initia
             )}
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
-            <TextInput label="Faixa de medicao" {...register("measurementRange")} />
-            <TextInput label="Resolucao" {...register("resolution")} />
+            <TextInput label="Faixa de medicao" hint="Como sai no certificado. Ex.: 0 a 10 bar" {...register("measurementRange")} />
+            <TextInput label="Resolucao" hint="Como sai no certificado. Ex.: 0,2 bar" {...register("resolution")} />
             <TextInput label="Unidade" {...register("unit")} />
+          </div>
+
+          {/* O que faz a calibracao calcular sozinha tolerancia, incerteza e resultado:
+              cadastrado uma vez aqui, em vez de digitado ponto a ponto em cada calibracao. */}
+          <div className="rounded-lg border border-navy-100 bg-navy-50/40 p-4">
+            <h3 className="text-sm font-semibold text-navy-900">Critério de aceitação e dados para cálculo</h3>
+            <p className="mt-1 text-xs text-graphite-500">
+              Com isto preenchido, a calibração gera os pontos pela faixa e calcula tolerância, incerteza e resultado de
+              cada ponto - o técnico só digita o valor padrão e as leituras.
+            </p>
+            <div className="mt-3 grid gap-4 sm:grid-cols-3">
+              <TextInput label="Faixa - mínimo" inputMode="decimal" placeholder="0" {...register("rangeMin")} />
+              <TextInput label="Faixa - máximo" inputMode="decimal" placeholder="Ex.: 10" {...register("rangeMax")} />
+              <TextInput
+                label="Resolução (número)"
+                inputMode="decimal"
+                placeholder="Ex.: 0,2"
+                hint="Menor divisão ou dígito do instrumento."
+                {...register("resolutionValue")}
+              />
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <SelectInput
+                label="Tolerância expressa em"
+                options={[
+                  { value: "", label: "Não definida" },
+                  { value: "PERCENT_FULL_SCALE", label: "% do fundo de escala" },
+                  { value: "PERCENT_READING", label: "% do valor medido" },
+                  { value: "ABSOLUTE", label: "Valor fixo (± na unidade)" },
+                ]}
+                {...register("toleranceMode")}
+              />
+              <TextInput
+                label="Valor da tolerância"
+                inputMode="decimal"
+                placeholder={watch("toleranceMode") === "ABSOLUTE" ? "Ex.: 0,5" : "Ex.: 2"}
+                hint={watch("toleranceMode") === "ABSOLUTE" ? "Na unidade do instrumento." : "Em %."}
+                {...register("toleranceValue")}
+              />
+              <TextInput
+                label="Classe de exatidão"
+                placeholder="Ex.: B - 2%"
+                hint="Opcional. Só o rótulo que sai no certificado."
+                {...register("accuracyClass")}
+              />
+            </div>
           </div>
         </SecaoRecolhivel>
         </>

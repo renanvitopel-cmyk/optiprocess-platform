@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Paperclip } from "lucide-react";
 import { Modal } from "../../../components/Modal";
 import { TextInput, TextareaInput } from "../../../components/form/Field";
+import { UncertaintyFields, parseDecimal } from "../../../components/form/UncertaintyFields";
 import { createReferenceStandardCertificate } from "../../../api/referenceStandards";
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
@@ -14,6 +15,9 @@ const schema = z.object({
   laboratory: z.string().optional(),
   calibrationDate: z.string().min(1, "Informe a data da calibracao."),
   validUntil: z.string().min(1, "Informe a validade."),
+  expandedUncertainty: z.string().optional(),
+  uncertaintyMode: z.enum(["ABSOLUTE", "PERCENT_READING"]).optional(),
+  uncertaintyK: z.string().optional(),
   notes: z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
@@ -37,13 +41,21 @@ export function ReferenceStandardCertificateModal({ open, onClose, onSaved, refe
   useEffect(() => {
     if (open) {
       setFile(null);
-      reset({ certificateNumber: "", laboratory: "", calibrationDate: "", validUntil: "", notes: "" });
+      reset({
+        certificateNumber: "", laboratory: "", calibrationDate: "", validUntil: "", notes: "",
+        expandedUncertainty: "", uncertaintyMode: "ABSOLUTE", uncertaintyK: "2",
+      });
     }
   }, [open, reset]);
 
   async function onSubmit(values: FormValues) {
     try {
-      await createReferenceStandardCertificate(referenceStandardId, { ...values, file });
+      await createReferenceStandardCertificate(referenceStandardId, {
+        ...values,
+        expandedUncertainty: parseDecimal(values.expandedUncertainty),
+        uncertaintyK: parseDecimal(values.uncertaintyK),
+        file,
+      });
       notify("success", "Certificado cadastrado.");
       onSaved();
     } catch (error) {
@@ -87,6 +99,11 @@ export function ReferenceStandardCertificateModal({ open, onClose, onSaved, refe
             {...register("validUntil")}
           />
         </div>
+        <UncertaintyFields
+          expanded={register("expandedUncertainty")}
+          mode={register("uncertaintyMode")}
+          k={register("uncertaintyK")}
+        />
         <TextareaInput label="Observacoes" {...register("notes")} />
 
         <div>

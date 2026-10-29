@@ -127,6 +127,15 @@ export default function ReferenceStandardDetail() {
                   </p>
                   <p className="text-xs text-graphite-400">
                     Calibrado em {formatDate(c.calibrationDate)} · Valido ate {formatDate(c.validUntil)}
+                    {c.expandedUncertainty != null ? (
+                      <>
+                        {" · "}U = {c.expandedUncertainty.toLocaleString("pt-BR")}
+                        {c.uncertaintyMode === "PERCENT_READING" ? "% da leitura" : standard.unit ? ` ${standard.unit}` : ""}
+                        {` (k = ${(c.uncertaintyK ?? 2).toLocaleString("pt-BR")})`}
+                      </>
+                    ) : (
+                      <span className="text-safety-yellow-dark"> · sem incerteza cadastrada</span>
+                    )}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">

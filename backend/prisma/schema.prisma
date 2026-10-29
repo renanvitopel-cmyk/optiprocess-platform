@@ -97,6 +97,26 @@ enum PointResult {
   FAIL
 }
 
+// Como a tolerancia (erro maximo admissivel) do ativo e' expressa. A tolerancia de cada
+// ponto sai daqui na calibracao, em vez de ser digitada ponto a ponto.
+enum ToleranceMode {
+  PERCENT_FULL_SCALE // % do fundo de escala (ex.: manometro classe B = 2% FE)
+  PERCENT_READING // % do valor medido
+  ABSOLUTE // valor fixo na unidade do ativo (ex.: ± 0,5 °C)
+}
+
+// Como o laboratorio do padrao declarou a incerteza expandida no certificado dele.
+enum UncertaintyMode {
+  ABSOLUTE // na unidade do padrao (ex.: U = 0,02 bar)
+  PERCENT_READING // % do valor medido (ex.: U = 0,05% da leitura)
+}
+
+// Regra para decidir aprovado/reprovado em cada ponto.
+enum DecisionRule {
+  SIMPLE // |erro| <= tolerancia
+  GUARD_BAND // |erro| + U <= tolerancia (mais rigida: a incerteza conta contra o instrumento)
+}
+
 enum DocumentStatus {
   DRAFT
   ISSUED
@@ -432,6 +452,17 @@ model Instrument {
   resolution                 String?
   unit                       String?
   installationLocation       String?
+  // Dados metrologicos numericos - "measurementRange"/"resolution" acima sao texto livre
+  // para o certificado; estes alimentam os calculos da calibracao (pontos sugeridos,
+  // tolerancia por ponto e a parcela de resolucao da incerteza).
+  rangeMin                   Float?
+  rangeMax                   Float?
+  resolutionValue            Float?
+  // Criterio de aceitacao (erro maximo admissivel). accuracyClass e' so o rotulo que vai
+  // no certificado ("B - 2%"); o calculo usa toleranceMode + toleranceValue.
+  accuracyClass              String?
+  toleranceMode              ToleranceMode?
+  toleranceValue             Float?
   // Foto do ativo: uma so, para reconhecer o equipamento de relance nas listas e na ficha.
   // Fica direto aqui (e nao em Attachment) porque e' a imagem principal, nao um anexo entre
   // varios - o album completo continua nos anexos.
@@ -564,6 +595,9 @@ model Calibration {
   procedure           String?
   // Fator de abrangencia da incerteza declarada (k=2 => ~95% de confianca).
   coverageFactorK     Float?            @default(2)
+  // Regra usada para aprovar/reprovar cada ponto - gravada na calibracao para o certificado
+  // continuar coerente mesmo se o padrao do laboratorio mudar depois.
+  decisionRule        DecisionRule      @default(SIMPLE)
   ambientTemperature  Float?
   ambientHumidity     Float?
   environmentalNotes  String?
@@ -609,6 +643,11 @@ model CalibrationStandard {
   certificateNumber     String?
   certificateValidUntil DateTime?
   laboratory            String?
+  // Incerteza expandida declarada no certificado do padrao (snapshot, como os campos
+  // acima). E' a principal parcela da incerteza calculada em cada ponto.
+  expandedUncertainty   Float?
+  uncertaintyMode       UncertaintyMode?
+  uncertaintyK          Float?
   sortOrder             Int                @default(0)
   // Aponta para o padrao do catalogo interno (Cadastros > Padroes de referencia) que deu
   // origem a este registro, quando preenchido a partir dele. O snapshot acima (fabricante,
@@ -664,6 +703,10 @@ model ReferenceStandardCertificate {
   // Validade do certificado - normalmente 1 ano apos a calibracao, mas digitada e nao
   // calculada, porque o laboratorio emissor e' quem define o ciclo real.
   validUntil          DateTime
+  // Incerteza expandida (U) e fator k informados pelo laboratorio que calibrou o padrao.
+  expandedUncertainty Float?
+  uncertaintyMode     UncertaintyMode?
+  uncertaintyK        Float?
   fileKey             String?
   fileFileName        String?
   notes               String?
@@ -701,7 +744,17 @@ model CalibrationPoint {
   error                        Float?
   deviation                    Float?
   tolerance                    Float?
+  // Incerteza expandida U do ponto. Calculada (GUM) quando ha incerteza do padrao; senao,
+  // digitada pelo tecnico - uncertaintyCalculated diz qual dos dois.
   uncertainty                  Float?
+  // Memoria de calculo da incerteza (incertezas-padrao de cada parcela e a combinada) -
+  // e' o que um auditor pede para conferir de onde saiu o U do certificado.
+  uStandard                    Float?
+  uResolution                  Float?
+  uRepeatability               Float?
+  uCombined                    Float?
+  uncertaintyCalculated        Boolean                     @default(false)
+  toleranceCalculated          Boolean                     @default(false)
   result                       PointResult?
   sortOrder                    Int                         @default(0)
   // Se veio de um ponto pre-cadastrado no ativo, o link atualiza o proprio ponto

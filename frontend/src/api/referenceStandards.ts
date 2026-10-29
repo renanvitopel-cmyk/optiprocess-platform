@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { UncertaintyMode } from "./types";
 
 export type CertificationStatus = "VALID" | "DUE_SOON" | "EXPIRED" | "NO_CERTIFICATE";
 
@@ -9,6 +10,10 @@ export interface ReferenceStandardCertificate {
   laboratory: string | null;
   calibrationDate: string;
   validUntil: string;
+  /** Incerteza expandida (U) e k declarados pelo laboratorio que calibrou o padrao. */
+  expandedUncertainty: number | null;
+  uncertaintyMode: UncertaintyMode | null;
+  uncertaintyK: number | null;
   fileKey: string | null;
   fileFileName: string | null;
   notes: string | null;
@@ -86,6 +91,9 @@ export interface ReferenceStandardCertificateInput {
   laboratory?: string | null;
   calibrationDate: string;
   validUntil: string;
+  expandedUncertainty?: number | null;
+  uncertaintyMode?: UncertaintyMode | null;
+  uncertaintyK?: number | null;
   notes?: string | null;
   file?: File | null;
 }
@@ -104,6 +112,9 @@ export async function createReferenceStandardCertificate(
   if (input.laboratory) form.append("laboratory", input.laboratory);
   form.append("calibrationDate", input.calibrationDate);
   form.append("validUntil", input.validUntil);
+  if (input.expandedUncertainty != null) form.append("expandedUncertainty", String(input.expandedUncertainty));
+  if (input.uncertaintyMode) form.append("uncertaintyMode", input.uncertaintyMode);
+  if (input.uncertaintyK != null) form.append("uncertaintyK", String(input.uncertaintyK));
   if (input.notes) form.append("notes", input.notes);
   if (input.file) form.append("file", input.file);
   const { data } = await api.post<ReferenceStandardCertificate>(`/reference-standards/${id}/certificates`, form);

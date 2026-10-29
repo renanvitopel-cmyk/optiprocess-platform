@@ -1,10 +1,12 @@
-import { useEffect, useRef } from "react";
-import { useForm, useFieldArray, Controller, type UseFormSetValue } from "react-hook-form";
+import { useCallback, useEffect, useRef } from "react";
+import { useForm, useFieldArray, FormProvider, type UseFormSetValue } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { TextInput, TextareaInput, SelectInput } from "../../../components/form/Field";
+import { UncertaintyFields, parseDecimal } from "../../../components/form/UncertaintyFields";
+import { CalibrationPointsEditor, EMPTY_POINT, type ResumoDosPontos } from "./CalibrationPointsEditor";
 import { ClientPicker } from "../../../components/ClientPicker";
 import { InstrumentPicker } from "../../../components/InstrumentPicker";
 import { UserPicker } from "../../../components/UserPicker";
@@ -16,6 +18,9 @@ import { listInstrumentCalibrationPoints } from "../../../api/instrumentCalibrat
 import { useToast } from "../../../components/Toast";
 import { getApiErrorMessage } from "../../../api/client";
 
+// Valores numericos dos pontos ficam como texto no formulario (aceitam virgula e podem
+// estar em branco - "" nunca pode virar 0, que e' uma leitura valida e errada). Viram
+// numero so' no envio, em toPayload.
 const pointSchema = z
   .object({
     label: z.string().optional(),
@@ -26,14 +31,14 @@ const pointSchema = z
     // continua vencido (a data dele nao avanca ao emitir o certificado).
     performed: z.boolean(),
     notes: z.string().optional(),
-    standardValue: z.coerce.number().optional(),
-    // Repetibilidade: no minimo 3 leituras - valor indicado, erro e desvio sao calculados
-    // a partir delas (no servidor, pra garantir que o numero mostrado bate com as
-    // leituras de verdade), nunca digitados soltos.
-    readings: z.array(z.coerce.number()).optional(),
-    tolerance: z.coerce.number().optional(),
-    uncertainty: z.coerce.number().optional(),
-    result: z.enum(["PASS", "FAIL"]).optional(),
+    standardValue: z.string().optional(),
+    // Repetibilidade: no minimo 3 leituras - media, erro, desvio, tolerancia, incerteza e
+    // resultado saem delas (ver CalibrationPointsEditor e o recalculo no servidor).
+    readings: z.array(z.string()),
+    // So' digitados quando faltar cadastro para calcular (ativo sem criterio de aceitacao,
+    // padrao sem incerteza) - o editor so' mostra o campo nesse caso.
+    tolerance: z.string().optional(),
+    uncertainty: z.string().optional(),
   })
   .superRefine((point, ctx) => {
     if (!point.performed) {
@@ -42,39 +47,16 @@ const pointSchema = z
       }
       return;
     }
-    if (point.standardValue == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["standardValue"], message: "Obrigatorio." });
-    if (!point.readings || point.readings.length < 3) {
+    if (parseDecimal(point.standardValue) == null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["standardValue"], message: "Obrigatorio." });
+    }
+    point.readings.forEach((r, i) => {
+      if (parseDecimal(r) == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["readings", i], message: "Obrigatorio." });
+    });
+    if (point.readings.length < 3) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["readings"], message: "Inclua pelo menos 3 medicoes." });
     }
-    if (point.tolerance == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["tolerance"], message: "Obrigatorio." });
-    if (point.uncertainty == null) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["uncertainty"], message: "Obrigatorio." });
-    if (!point.result) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["result"], message: "Obrigatorio." });
   });
-
-const EMPTY_POINT = {
-  label: "",
-  sensorTypeName: "",
-  instrumentCalibrationPointId: "",
-  performed: true,
-  notes: "",
-  standardValue: 0,
-  readings: [0, 0, 0],
-  tolerance: 0,
-  uncertainty: 0,
-  result: "PASS" as const,
-};
-
-/** Media, erro (media - padrao) e desvio padrao amostral (n-1) das leituras de um ponto -
- * mesmo calculo que o servidor faz ao salvar, so' que aqui e' so' pra mostrar em tempo
- * real enquanto o tecnico digita; quem vale de verdade e' o que o backend recalcula. */
-function mediaErroDesvio(readings: number[], standardValue: number | undefined) {
-  const n = readings.length;
-  if (n === 0) return { media: null, erro: null, desvio: null };
-  const media = readings.reduce((a, b) => a + b, 0) / n;
-  const erro = standardValue != null ? media - Number(standardValue) : null;
-  const desvio = n > 1 ? Math.sqrt(readings.reduce((s, v) => s + (v - media) ** 2, 0) / (n - 1)) : null;
-  return { media, erro, desvio };
-}
 
 const standardSchema = z.object({
   description: z.string().min(1, "Descreva o padrao."),
@@ -84,10 +66,20 @@ const standardSchema = z.object({
   certificateNumber: z.string().optional(),
   certificateValidUntil: z.string().optional(),
   laboratory: z.string().optional(),
+  // Incerteza declarada no certificado do padrao - a parcela principal da incerteza
+  // calculada em cada ponto.
+  expandedUncertainty: z.string().optional(),
+  uncertaintyMode: z.enum(["ABSOLUTE", "PERCENT_READING"]).optional(),
+  uncertaintyK: z.string().optional(),
   // Preenchido ao escolher um padrao do catalogo interno (Cadastros > Padroes de
   // referencia) - os campos acima continuam sendo o snapshot que vale no laudo.
   referenceStandardId: z.string().optional(),
 });
+
+/** Numero gravado -> texto do campo, com virgula decimal. */
+function paraTexto(v: number | null | undefined): string {
+  return v == null ? "" : String(v).replace(".", ",");
+}
 
 const schema = z.object({
   clientId: z.string().uuid("Selecione o cliente."),
@@ -97,6 +89,7 @@ const schema = z.object({
   location: z.string().min(1, "Informe o local."),
   procedure: z.string().optional(),
   coverageFactorK: z.coerce.number().optional(),
+  decisionRule: z.enum(["SIMPLE", "GUARD_BAND"]),
   ambientTemperature: z.coerce.number().optional(),
   ambientHumidity: z.coerce.number().optional(),
   environmentalNotes: z.string().optional(),
@@ -107,7 +100,7 @@ const schema = z.object({
   points: z.array(pointSchema).min(1, "Inclua ao menos um ponto calibrado."),
   standards: z.array(standardSchema).min(1, "Informe ao menos um padrao utilizado."),
 });
-type FormValues = z.infer<typeof schema>;
+export type FormValues = z.infer<typeof schema>;
 
 const EMPTY_STANDARD = {
   description: "",
@@ -117,8 +110,30 @@ const EMPTY_STANDARD = {
   certificateNumber: "",
   certificateValidUntil: "",
   laboratory: "",
+  expandedUncertainty: "",
+  uncertaintyMode: "ABSOLUTE" as const,
+  uncertaintyK: "2",
   referenceStandardId: "",
 };
+
+/** Texto do formulario -> corpo da API (numeros de verdade, null onde ficou em branco). */
+function toPayload(values: FormValues) {
+  return {
+    ...values,
+    points: values.points.map((p) => ({
+      ...p,
+      standardValue: parseDecimal(p.standardValue),
+      readings: p.performed ? p.readings.map((r) => parseDecimal(r) ?? 0) : [],
+      tolerance: parseDecimal(p.tolerance),
+      uncertainty: parseDecimal(p.uncertainty),
+    })),
+    standards: values.standards.map((s) => ({
+      ...s,
+      expandedUncertainty: parseDecimal(s.expandedUncertainty),
+      uncertaintyK: parseDecimal(s.uncertaintyK),
+    })),
+  };
+}
 
 function toFormValues(calibration: Calibration): FormValues {
   return {
@@ -129,6 +144,7 @@ function toFormValues(calibration: Calibration): FormValues {
     location: calibration.location,
     procedure: calibration.procedure ?? "",
     coverageFactorK: calibration.coverageFactorK ?? 2,
+    decisionRule: calibration.decisionRule ?? "SIMPLE",
     ambientTemperature: calibration.ambientTemperature ?? undefined,
     ambientHumidity: calibration.ambientHumidity ?? undefined,
     environmentalNotes: calibration.environmentalNotes ?? "",
@@ -143,11 +159,12 @@ function toFormValues(calibration: Calibration): FormValues {
           instrumentCalibrationPointId: p.instrumentCalibrationPointId ?? "",
           performed: p.performed ?? true,
           notes: p.notes ?? "",
-          standardValue: p.standardValue ?? 0,
-          readings: p.readings?.length ? p.readings.map((r) => r.value) : [0, 0, 0],
-          tolerance: p.tolerance ?? 0,
-          uncertainty: p.uncertainty ?? 0,
-          result: p.result ?? "PASS",
+          standardValue: paraTexto(p.standardValue),
+          readings: p.readings?.length ? p.readings.map((r) => paraTexto(r.value)) : ["", "", ""],
+          // So' os valores digitados a mao voltam para o campo; os calculados o editor
+          // recalcula na tela.
+          tolerance: p.toleranceCalculated ? "" : paraTexto(p.tolerance),
+          uncertainty: p.uncertaintyCalculated ? "" : paraTexto(p.uncertainty),
         }))
       : [{ ...EMPTY_POINT }],
     standards: calibration.standards.length
@@ -159,6 +176,9 @@ function toFormValues(calibration: Calibration): FormValues {
           certificateNumber: s.certificateNumber ?? "",
           certificateValidUntil: s.certificateValidUntil?.slice(0, 10) ?? "",
           laboratory: s.laboratory ?? "",
+          expandedUncertainty: paraTexto(s.expandedUncertainty),
+          uncertaintyMode: s.uncertaintyMode ?? "ABSOLUTE",
+          uncertaintyK: paraTexto(s.uncertaintyK ?? 2),
           referenceStandardId: s.referenceStandardId ?? "",
         }))
       : [{ ...EMPTY_STANDARD }],
@@ -184,15 +204,7 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
   const { notify } = useToast();
   const isEditing = !!calibration;
 
-  const {
-    register,
-    control,
-    handleSubmit,
-    watch,
-    setValue,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
+  const methods = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: calibration
       ? toFormValues(calibration)
@@ -201,12 +213,21 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
           instrumentId: initialInstrumentId ?? "",
           result: "APPROVED",
           coverageFactorK: 2,
+          decisionRule: "SIMPLE",
           points: [{ ...EMPTY_POINT }],
           standards: [{ ...EMPTY_STANDARD }],
         },
   });
+  const {
+    register,
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    formState: { errors, isSubmitting },
+  } = methods;
 
-  const { fields, append, remove, replace } = useFieldArray({ control, name: "points" });
   const {
     fields: standardFields,
     append: appendStandard,
@@ -215,37 +236,19 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
   const clientId = watch("clientId");
   const instrumentId = watch("instrumentId");
 
-  // Se o ativo escolhido tem pontos de calibracao cadastrados (ex.: os 10 PT-100 de uma
-  // extrusora), a tabela de pontos ja abre com uma linha por ponto em vez de em branco -
-  // so troca quando o ativo muda de fato, pra nao apagar o que o tecnico ja preencheu.
-  // Num rascunho existente, os pontos ja salvos (mesmo sem instrumentCalibrationPointId,
-  // ex.: calibracao antiga) contam como "ja aplicado" - nao reescreve por cima.
+  // Pontos pre-cadastrados no ativo (ex.: os 10 PT-100 de uma extrusora) - o editor de
+  // pontos abre com uma linha por ponto; aqui servem tambem para a validade sugerida.
   const { data: registeredPoints } = useQuery({
     queryKey: ["instrument-calibration-points-for-form", instrumentId],
     queryFn: () => listInstrumentCalibrationPoints(instrumentId),
     enabled: !!instrumentId,
   });
-  const lastAppliedInstrumentId = useRef<string | null>(calibration?.instrumentId ?? null);
-  useEffect(() => {
-    if (!instrumentId || registeredPoints === undefined) return;
-    if (lastAppliedInstrumentId.current === instrumentId) return;
-    lastAppliedInstrumentId.current = instrumentId;
-    if (registeredPoints.length > 0) {
-      replace(
-        registeredPoints.map((p) => ({
-          ...EMPTY_POINT,
-          label: p.label,
-          sensorTypeName: p.sensorType?.name ?? "",
-          instrumentCalibrationPointId: p.id,
-        })),
-      );
-    }
-  }, [instrumentId, registeredPoints, replace]);
 
   // Validade da calibracao segue a periodicidade cadastrada no ativo (ex.: a cada 6 meses
   // -> validade de 6 meses) - da preferencia pra periodicidade do proprio ativo; sem ela,
   // usa a menor entre os pontos cadastrados (o certificado so' vale ate o primeiro ponto
   // vencer). So' sugere uma vez (nao sobrescreve o que o tecnico ja preencheu/editou).
+  // A ficha do ativo tambem traz o criterio de aceitacao usado nos calculos dos pontos.
   const { data: instrumentDetail } = useQuery({
     queryKey: ["instrument-for-validity", instrumentId],
     queryFn: () => getInstrument(instrumentId),
@@ -266,50 +269,24 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
     setValue("validUntil", data.toISOString().slice(0, 10));
   }, [calibrationDate, validUntil, instrumentId, instrumentDetail, registeredPoints, setValue]);
 
-  // Sugestoes automaticas por ponto, editaveis a qualquer momento:
-  // - Incerteza = desvio das leituras (repetibilidade) - simples, sem compor com incerteza
-  //   do padrao (nao cadastrada hoje).
-  // - Tolerancia = % cadastrado no ponto do ativo (tolerancePercent) x valor padrao.
-  // So' reaplica enquanto o campo continuar igual a ultima sugestao feita - se o tecnico
-  // editar a mao, para de sobrescrever.
-  const toleranceSuggestions = useRef<Record<number, number>>({});
-  const uncertaintySuggestions = useRef<Record<number, number>>({});
-  const watchedPoints = watch("points");
-  useEffect(() => {
-    watchedPoints.forEach((p, index) => {
-      if (p.performed === false) return;
-      const readings = (p.readings ?? []).map((r) => Number(r) || 0);
-      const standardValue = p.standardValue === undefined || p.standardValue === ("" as unknown) ? undefined : Number(p.standardValue);
-      const { desvio } = mediaErroDesvio(readings, standardValue);
-
-      if (desvio != null) {
-        const atual = Number(p.uncertainty) || 0;
-        const anterior = uncertaintySuggestions.current[index];
-        const semEdicao = anterior === undefined ? atual === 0 : Math.abs(atual - anterior) < 1e-9;
-        if (semEdicao) {
-          const sugestao = Number(desvio.toFixed(4));
-          if (Math.abs(atual - sugestao) > 1e-9) setValue(`points.${index}.uncertainty`, sugestao);
-          uncertaintySuggestions.current[index] = sugestao;
-        }
-      }
-
-      const registrado = registeredPoints?.find((rp) => rp.id === p.instrumentCalibrationPointId);
-      if (registrado?.tolerancePercent != null && standardValue != null) {
-        const atual = Number(p.tolerance) || 0;
-        const anterior = toleranceSuggestions.current[index];
-        const semEdicao = anterior === undefined ? atual === 0 : Math.abs(atual - anterior) < 1e-9;
-        if (semEdicao) {
-          const sugestao = Number((Math.abs(standardValue) * (registrado.tolerancePercent / 100)).toFixed(4));
-          if (Math.abs(atual - sugestao) > 1e-9) setValue(`points.${index}.tolerance`, sugestao);
-          toleranceSuggestions.current[index] = sugestao;
-        }
-      }
-    });
-  }, [watchedPoints, registeredPoints, setValue]);
+  // Resultado final sugerido pelos pontos (todos aprovados -> Aprovado; algum reprovado ->
+  // Reprovado; algum nao realizado -> Aprovado com ressalva). So' enquanto o tecnico nao
+  // escolher outro a mao - a decisao final continua sendo dele.
+  const resultadoEscolhidoAMao = useRef(isEditing);
+  const { getValues } = methods;
+  const onResumoDosPontos = useCallback(
+    (resumo: ResumoDosPontos) => {
+      if (resultadoEscolhidoAMao.current || !resumo.completo) return;
+      const sugerido = resumo.reprovados > 0 ? "REJECTED" : resumo.naoRealizados > 0 ? "APPROVED_WITH_RESTRICTION" : "APPROVED";
+      if (getValues("result") !== sugerido) setValue("result", sugerido);
+    },
+    [getValues, setValue],
+  );
 
   async function onSubmit(values: FormValues) {
     try {
-      const saved = isEditing ? await updateCalibration(calibration.id, values) : await createCalibration(values);
+      const payload = toPayload(values);
+      const saved = isEditing ? await updateCalibration(calibration.id, payload) : await createCalibration(payload);
       if (isEditing) reset(toFormValues(saved));
       notify("success", isEditing ? "Alteracoes salvas." : `Certificado ${saved.certificateNumber} criado como rascunho.`);
       onSaved(saved);
@@ -319,6 +296,7 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
   }
 
   return (
+    <FormProvider {...methods}>
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
       <div className="card space-y-4 p-5">
         <h2 className="font-semibold text-navy-900">Identificacao</h2>
@@ -400,6 +378,12 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
                   {...register(`standards.${index}.laboratory`)}
                 />
               </div>
+              <UncertaintyFields
+                className="mt-4"
+                expanded={register(`standards.${index}.expandedUncertainty`)}
+                mode={register(`standards.${index}.uncertaintyMode`)}
+                k={register(`standards.${index}.uncertaintyK`)}
+              />
             </div>
           ))}
         </div>
@@ -421,6 +405,15 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
             {...register("coverageFactorK")}
           />
         </div>
+        <SelectInput
+          label="Regra de aprovação de cada ponto"
+          options={[
+            { value: "SIMPLE", label: "|erro| ≤ tolerância (incerteza declarada à parte)" },
+            { value: "GUARD_BAND", label: "|erro| + incerteza ≤ tolerância (mais rígida)" },
+          ]}
+          hint="A mais usada fora da RBC é a primeira. Sai descrita no certificado."
+          {...register("decisionRule")}
+        />
         <div className="grid gap-4 sm:grid-cols-3">
           <TextInput label="Temperatura ambiente (°C)" type="number" step="0.1" {...register("ambientTemperature")} />
           <TextInput label="Umidade relativa (%)" type="number" step="0.1" {...register("ambientHumidity")} />
@@ -428,136 +421,12 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
         </div>
       </div>
 
-      <div className="card space-y-3 p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-navy-900">Pontos calibrados</h2>
-          <button type="button" className="btn-ghost btn-sm" onClick={() => append({ ...EMPTY_POINT })}>
-            <Plus className="h-4 w-4" /> Adicionar ponto
-          </button>
-        </div>
-        {errors.points?.message && <p className="field-error">{errors.points.message}</p>}
-        {registeredPoints && registeredPoints.length > 0 && (
-          <p className="text-xs text-graphite-500">
-            Pontos pre-cadastrados neste ativo - preenchidos automaticamente abaixo. Emitir o certificado atualiza a proxima data de calibracao de cada um.
-          </p>
-        )}
-
-        <div className="table-shell">
-          <table className="table-base">
-            <thead>
-              <tr>
-                <th>Ponto</th>
-                <th>Realizado</th>
-                <th>Valor padrao</th>
-                <th>Leituras (min. 3)</th>
-                <th>Erro</th>
-                <th>Desvio</th>
-                <th>Tolerancia (sugerida)</th>
-                <th>Incerteza (sugerida)</th>
-                <th>Resultado</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {fields.map((field, index) => {
-                const performed = watch(`points.${index}.performed`);
-                const standardValue = watch(`points.${index}.standardValue`);
-                const readings = watch(`points.${index}.readings`) ?? [];
-                const { erro, desvio } = mediaErroDesvio(readings.map(Number), standardValue);
-                return (
-                  <tr key={field.id}>
-                    <td>
-                      <input type="hidden" {...register(`points.${index}.instrumentCalibrationPointId`)} />
-                      <input type="hidden" {...register(`points.${index}.sensorTypeName`)} />
-                      <input
-                        className="input"
-                        placeholder="Ex.: PT-100 - Zona 1"
-                        {...register(`points.${index}.label`)}
-                      />
-                    </td>
-                    <td className="text-center">
-                      <input type="checkbox" className="h-4 w-4" {...register(`points.${index}.performed`)} />
-                    </td>
-                    {performed ? (
-                      <>
-                        <td><input className="input" type="number" step="any" {...register(`points.${index}.standardValue`)} /></td>
-                        <td>
-                          <div className="flex min-w-[140px] flex-col gap-1">
-                            {readings.map((_, leituraIndex) => (
-                              <div key={leituraIndex} className="flex items-center gap-1">
-                                <input
-                                  className="input"
-                                  type="number"
-                                  step="any"
-                                  {...register(`points.${index}.readings.${leituraIndex}`)}
-                                />
-                                {readings.length > 3 && (
-                                  <button
-                                    type="button"
-                                    className="shrink-0 text-graphite-400 hover:text-safety-red"
-                                    aria-label="Remover leitura"
-                                    onClick={() => setValue(`points.${index}.readings`, readings.filter((_, i) => i !== leituraIndex))}
-                                  >
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                            <button
-                              type="button"
-                              className="text-left text-xs text-navy-600 hover:underline"
-                              onClick={() => setValue(`points.${index}.readings`, [...readings, 0])}
-                            >
-                              + leitura
-                            </button>
-                            {errors.points?.[index]?.readings?.message && (
-                              <p className="field-error">{errors.points[index]?.readings?.message}</p>
-                            )}
-                          </div>
-                        </td>
-                        <td className="text-graphite-600">{erro != null ? erro.toFixed(3) : "-"}</td>
-                        <td className="text-graphite-600">{desvio != null ? desvio.toFixed(3) : "-"}</td>
-                        <td><input className="input" type="number" step="any" {...register(`points.${index}.tolerance`)} /></td>
-                        <td><input className="input" type="number" step="any" {...register(`points.${index}.uncertainty`)} /></td>
-                        <td>
-                          <Controller
-                            control={control}
-                            name={`points.${index}.result`}
-                            render={({ field: f }) => (
-                              <select className="input" {...f} value={f.value ?? "PASS"}>
-                                <option value="PASS">Aprovado</option>
-                                <option value="FAIL">Reprovado</option>
-                              </select>
-                            )}
-                          />
-                        </td>
-                      </>
-                    ) : (
-                      <td colSpan={7}>
-                        <input
-                          className="input"
-                          placeholder="Por que este ponto nao foi calibrado (ex.: sensor quebrado, sem acesso)"
-                          {...register(`points.${index}.notes`)}
-                        />
-                        {errors.points?.[index]?.notes?.message && (
-                          <p className="field-error">{errors.points[index]?.notes?.message}</p>
-                        )}
-                      </td>
-                    )}
-                    <td>
-                      {fields.length > 1 && (
-                        <button type="button" onClick={() => remove(index)} className="text-graphite-400 hover:text-safety-red" aria-label="Remover ponto">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <CalibrationPointsEditor
+        instrument={instrumentDetail}
+        registeredPoints={registeredPoints}
+        savedInstrumentId={calibration?.instrumentId ?? null}
+        onResumo={onResumoDosPontos}
+      />
 
       <div className="card space-y-4 p-5">
         <h2 className="font-semibold text-navy-900">Resultado</h2>
@@ -570,7 +439,12 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
             { value: "REJECTED", label: "Reprovado" },
           ]}
           error={errors.result?.message}
-          {...register("result")}
+          hint="Sugerido pelos resultados dos pontos - pode trocar."
+          {...register("result", {
+            onChange: () => {
+              resultadoEscolhidoAMao.current = true;
+            },
+          })}
         />
         <TextareaInput label="Conclusao tecnica" required rows={4} error={errors.technicalConclusion?.message} {...register("technicalConclusion")} />
         <TextareaInput
@@ -590,6 +464,7 @@ export function CalibrationFieldsForm({ calibration, initialClientId, initialIns
         </button>
       </div>
     </form>
+    </FormProvider>
   );
 }
 
@@ -617,6 +492,10 @@ function ReferenceStandardFillSelect({ index, setValue }: { index: number; setVa
       setValue(`standards.${index}.certificateNumber`, latest.certificateNumber ?? "");
       setValue(`standards.${index}.certificateValidUntil`, latest.validUntil.slice(0, 10));
       setValue(`standards.${index}.laboratory`, latest.laboratory ?? "");
+      // A incerteza do certificado vigente do padrao e' o que alimenta o calculo dos pontos.
+      setValue(`standards.${index}.expandedUncertainty`, paraTexto(latest.expandedUncertainty));
+      setValue(`standards.${index}.uncertaintyMode`, latest.uncertaintyMode ?? "ABSOLUTE");
+      setValue(`standards.${index}.uncertaintyK`, paraTexto(latest.uncertaintyK ?? 2));
     }
   }
 

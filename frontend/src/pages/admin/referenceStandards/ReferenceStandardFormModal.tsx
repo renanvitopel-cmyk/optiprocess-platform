@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Camera, Paperclip, X } from "lucide-react";
 import { Modal } from "../../../components/Modal";
 import { TextInput } from "../../../components/form/Field";
+import { UncertaintyFields, parseDecimal } from "../../../components/form/UncertaintyFields";
 import {
   createReferenceStandard,
   updateReferenceStandard,
@@ -34,6 +35,9 @@ const schema = z
     laboratory: z.string().optional(),
     calibrationDate: z.string().optional(),
     validUntil: z.string().optional(),
+    expandedUncertainty: z.string().optional(),
+    uncertaintyMode: z.enum(["ABSOLUTE", "PERCENT_READING"]).optional(),
+    uncertaintyK: z.string().optional(),
   })
   .superRefine((values, ctx) => {
     const temAlgumCampoDoCertificado = !!(values.certificateNumber || values.laboratory || values.calibrationDate || values.validUntil);
@@ -83,8 +87,10 @@ export function ReferenceStandardFormModal({ open, onClose, onSaved, standard }:
               measurementRange: standard.measurementRange ?? "",
               resolution: standard.resolution ?? "",
               unit: standard.unit ?? "",
+              uncertaintyMode: "ABSOLUTE",
+              uncertaintyK: "2",
             }
-          : { description: "" },
+          : { description: "", uncertaintyMode: "ABSOLUTE", uncertaintyK: "2" },
       );
     }
   }, [open, standard, reset]);
@@ -93,6 +99,7 @@ export function ReferenceStandardFormModal({ open, onClose, onSaved, standard }:
     try {
       const {
         certificateNumber, laboratory, calibrationDate, validUntil,
+        expandedUncertainty, uncertaintyMode, uncertaintyK,
         ...padraoValues
       } = values;
 
@@ -109,6 +116,9 @@ export function ReferenceStandardFormModal({ open, onClose, onSaved, standard }:
           laboratory: laboratory || null,
           calibrationDate,
           validUntil,
+          expandedUncertainty: parseDecimal(expandedUncertainty),
+          uncertaintyMode: uncertaintyMode ?? null,
+          uncertaintyK: parseDecimal(uncertaintyK),
           file: certificadoArquivo,
         });
       }
@@ -218,6 +228,12 @@ export function ReferenceStandardFormModal({ open, onClose, onSaved, standard }:
               {...register("validUntil")}
             />
           </div>
+          <UncertaintyFields
+            className="mt-4"
+            expanded={register("expandedUncertainty")}
+            mode={register("uncertaintyMode")}
+            k={register("uncertaintyK")}
+          />
           <div className="mt-4">
             <label className="btn-outline inline-flex cursor-pointer items-center gap-2 text-sm">
               <Paperclip className="h-4 w-4" />

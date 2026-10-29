@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { dataOpcional, uuidOpcional } from "../../utils/zod";
-import { InstrumentStatus } from "@prisma/client";
+import { dataOpcional, numeroOpcional, uuidOpcional } from "../../utils/zod";
+import { InstrumentStatus, ToleranceMode } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -155,6 +155,13 @@ const instrumentSchema = z.object({
   calibrationFrequencyMonths: z.coerce.number().int().min(1).nullish(),
   lastCalibrationDate: dataOpcional,
   status: z.nativeEnum(InstrumentStatus).optional(),
+  // Dados metrologicos: alimentam os calculos da calibracao (ver lib/metrology.ts).
+  rangeMin: numeroOpcional.optional(),
+  rangeMax: numeroOpcional.optional(),
+  resolutionValue: numeroOpcional.optional(),
+  accuracyClass: z.string().nullish(),
+  toleranceMode: z.preprocess((v) => (v === "" ? null : v), z.nativeEnum(ToleranceMode).nullish()),
+  toleranceValue: numeroOpcional.optional(),
 });
 
 /** TAG e o identificador do ativo dentro da empresa cliente - nao pode repetir na mesma

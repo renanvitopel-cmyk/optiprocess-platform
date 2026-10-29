@@ -14,6 +14,18 @@ export const dataOpcional = z.preprocess(
 );
 
 /**
+ * Numero opcional que aceita campo vazio.
+ *
+ * z.coerce.number() transforma "" em 0 - um campo de incerteza ou tolerancia deixado em
+ * branco viraria "zero", que e' um valor valido e errado. Aqui "" continua sendo nada.
+ * Aceita virgula decimal ("0,05"), que e' como se digita no Brasil.
+ */
+export const numeroOpcional = z.preprocess(
+  (v) => (v === "" || v === null || v === undefined ? null : typeof v === "string" ? v.replace(",", ".") : v),
+  z.coerce.number().nullable(),
+);
+
+/**
  * UUID opcional que aceita campo vazio.
  *
  * Mesma armadilha do dataOpcional acima: um campo escondido de formulario (ex.:

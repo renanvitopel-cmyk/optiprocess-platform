@@ -1,7 +1,9 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { dataOpcional, uuidOpcional } from "../../utils/zod";
-import { CalibrationResult, PointResult, DocumentStatus, AttachmentCategory } from "@prisma/client";
+import { dataOpcional, numeroOpcional, uuidOpcional } from "../../utils/zod";
+import { CalibrationResult, PointResult, DocumentStatus, AttachmentCategory, DecisionRule, UncertaintyMode } from "@prisma/client";
+import type { Instrument } from "@prisma/client";
+import { pointResult, pointTolerance, readingStats, round, uncertaintyBudget, type StandardUncertainty } from "../../lib/metrology";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parsePageParams, toSkipTake, buildPagedResult } from "../../utils/pagination";
@@ -179,9 +181,10 @@ const pointSchema = z
     // (ver mediaEDesvio). indicatedValue/error/deviation continuam gravados no ponto so'
     // como resultado calculado, pra ficar facil de ler/mostrar no PDF sem recalcular.
     readings: z.array(z.coerce.number()).optional(),
+    // So' sao lidos quando o sistema nao consegue calcular (ativo sem criterio de aceitacao,
+    // padrao sem incerteza cadastrada) - ver pontoComCalculos. O resultado nunca e' digitado.
     tolerance: z.coerce.number().nullish(),
     uncertainty: z.coerce.number().nullish(),
-    result: z.nativeEnum(PointResult).nullish(),
   })
   .superRefine((point, ctx) => {
     if (point.performed === false) {
@@ -196,40 +199,107 @@ const pointSchema = z
     if (!point.readings || point.readings.length < 3) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["readings"], message: "Inclua pelo menos 3 medicoes para este ponto." });
     }
-    const camposObrigatorios: [keyof typeof point, string][] = [
-      ["tolerance", "Tolerancia"],
-      ["uncertainty", "Incerteza"],
-      ["result", "Resultado"],
-    ];
-    for (const [campo, rotulo] of camposObrigatorios) {
-      if (point[campo] == null) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [campo], message: `${rotulo} e obrigatorio quando o ponto foi calibrado.` });
-      }
-    }
   });
 
-/** Media, erro (media - padrao) e desvio padrao AMOSTRAL (n-1, Bessel) das leituras de um
- * ponto - nunca confia em indicatedValue/error digitado, sempre recalcula a partir das
- * leituras de verdade. Com menos de 2 leituras nao da' pra calcular desvio (fica null). */
-function mediaEDesvio(readings: number[], standardValue: number | null | undefined) {
-  const n = readings.length;
-  const media = n > 0 ? readings.reduce((a, b) => a + b, 0) / n : null;
-  const erro = media != null && standardValue != null ? media - standardValue : null;
-  let desvio: number | null = null;
-  if (n > 1 && media != null) {
-    const variancia = readings.reduce((soma, v) => soma + (v - media) ** 2, 0) / (n - 1);
-    desvio = Math.sqrt(variancia);
-  }
-  return { indicatedValue: media, error: erro, deviation: desvio };
+type PontoEntrada = z.infer<typeof pointSchema>;
+
+/** O que o calculo de cada ponto precisa saber da calibracao como um todo. */
+interface ContextoDoCalculo {
+  instrument: Pick<Instrument, "toleranceMode" | "toleranceValue" | "rangeMin" | "rangeMax" | "resolutionValue">;
+  /** % de tolerancia de cada ponto pre-cadastrado no ativo, por id. */
+  toleranciaDoPontoCadastrado: Map<string, number | null>;
+  standards: StandardUncertainty[];
+  k: number;
+  decisionRule: DecisionRule;
 }
 
-function pontoComCalculos<T extends { readings?: number[]; standardValue?: number | null }>(p: T) {
-  const { readings, ...resto } = p;
-  const calculados = readings?.length ? mediaEDesvio(readings, p.standardValue) : { indicatedValue: null, error: null, deviation: null };
+async function montarContexto(
+  instrumentId: string,
+  points: PontoEntrada[],
+  standards: StandardUncertainty[],
+  k: number | null | undefined,
+  decisionRule: DecisionRule | null | undefined,
+): Promise<ContextoDoCalculo> {
+  const instrument = await prisma.instrument.findFirst({ where: { id: instrumentId, deletedAt: null } });
+  if (!instrument) throw new NotFoundError("Instrumento");
+  const ids = [...new Set(points.map((p) => p.instrumentCalibrationPointId).filter((id): id is string => !!id))];
+  const cadastrados = ids.length
+    ? await prisma.instrumentCalibrationPoint.findMany({ where: { id: { in: ids } }, select: { id: true, tolerancePercent: true } })
+    : [];
   return {
+    instrument,
+    toleranciaDoPontoCadastrado: new Map(cadastrados.map((c) => [c.id, c.tolerancePercent])),
+    standards,
+    k: k && k > 0 ? k : 2,
+    decisionRule: decisionRule ?? "SIMPLE",
+  };
+}
+
+/**
+ * Grava o ponto com tudo o que e' derivado calculado aqui, nunca confiando no que veio da
+ * tela: media/erro/desvio das leituras, tolerancia pelo criterio do ativo, incerteza
+ * expandida pelo GUM (com a memoria de calculo) e o resultado pela regra de decisao.
+ * Tolerancia e incerteza so' sao aceitas digitadas quando faltar cadastro para calcular.
+ */
+function pontoComCalculos(p: PontoEntrada, index: number, ctx: ContextoDoCalculo) {
+  const { readings, tolerance: toleranciaDigitada, uncertainty: incertezaDigitada, ...resto } = p;
+  const nome = p.label ? `"${p.label}"` : `${index + 1}`;
+  const base = {
     ...resto,
-    ...calculados,
-    readings: readings?.length ? { create: readings.map((value, index) => ({ value, sortOrder: index })) } : undefined,
+    sortOrder: index,
+    readings: readings?.length ? { create: readings.map((value, i) => ({ value, sortOrder: i })) } : undefined,
+  };
+  if (p.performed === false) {
+    return {
+      ...base,
+      indicatedValue: null, error: null, deviation: null, tolerance: null, uncertainty: null,
+      uStandard: null, uResolution: null, uRepeatability: null, uCombined: null,
+      uncertaintyCalculated: false, toleranceCalculated: false, result: null,
+    };
+  }
+
+  const stats = readingStats(readings ?? [], p.standardValue);
+  const toleranciaCalculada = pointTolerance(
+    ctx.instrument,
+    p.standardValue,
+    p.instrumentCalibrationPointId ? ctx.toleranciaDoPontoCadastrado.get(p.instrumentCalibrationPointId) : null,
+  );
+  const tolerance = toleranciaCalculada ?? toleranciaDigitada ?? null;
+  if (tolerance == null) {
+    throw new ValidationError(
+      `Ponto ${nome}: informe a tolerancia - ou cadastre o criterio de aceitacao no ativo para ela ser calculada.`,
+    );
+  }
+
+  const budget = uncertaintyBudget({
+    standards: ctx.standards,
+    standardValue: p.standardValue,
+    resolution: ctx.instrument.resolutionValue,
+    deviation: stats.deviation,
+    n: stats.n,
+    k: ctx.k,
+  });
+  const uncertainty = budget?.expanded ?? incertezaDigitada ?? null;
+  if (uncertainty == null) {
+    throw new ValidationError(
+      `Ponto ${nome}: informe a incerteza - ou cadastre a incerteza do certificado do padrao para ela ser calculada.`,
+    );
+  }
+
+  return {
+    ...base,
+    indicatedValue: stats.mean,
+    error: stats.error,
+    deviation: stats.deviation,
+    tolerance: round(tolerance),
+    uncertainty: round(uncertainty),
+    uStandard: budget ? round(budget.uStandard) : null,
+    uResolution: budget ? round(budget.uResolution) : null,
+    uRepeatability: budget ? round(budget.uRepeatability) : null,
+    uCombined: budget ? round(budget.uCombined) : null,
+    uncertaintyCalculated: budget != null,
+    toleranceCalculated: toleranciaCalculada != null,
+    result: pointResult(stats.error, tolerance, uncertainty, ctx.decisionRule) as PointResult | null,
   };
 }
 
@@ -241,6 +311,9 @@ const standardSchema = z.object({
   certificateNumber: z.string().nullish(),
   certificateValidUntil: dataOpcional,
   laboratory: z.string().nullish(),
+  expandedUncertainty: numeroOpcional.optional(),
+  uncertaintyMode: z.preprocess((v) => (v === "" ? null : v), z.nativeEnum(UncertaintyMode).nullish()),
+  uncertaintyK: numeroOpcional.optional(),
   // Se veio do catalogo de Padroes de referencia, guarda o link de volta - o snapshot
   // acima (fabricante, numero de serie, certificado) e' o que vale no laudo mesmo que o
   // padrao seja recalibrado depois; o link e' so' rastreabilidade de onde veio.
@@ -258,6 +331,7 @@ const calibrationSchema = z.object({
   traceability: z.string().nullish(),
   procedure: z.string().nullish(),
   coverageFactorK: z.coerce.number().nullish(),
+  decisionRule: z.nativeEnum(DecisionRule).optional(),
   ambientTemperature: z.coerce.number().nullish(),
   ambientHumidity: z.coerce.number().nullish(),
   environmentalNotes: z.string().nullish(),
@@ -325,8 +399,8 @@ async function copiarCertificadosDePadroesUsados(
 export const createCalibration = asyncHandler(async (req: Request, res: Response) => {
   const data = calibrationSchema.parse(req.body);
 
-  const instrument = await prisma.instrument.findFirst({ where: { id: data.instrumentId, deletedAt: null } });
-  if (!instrument) throw new NotFoundError("Instrumento");
+  const ctx = await montarContexto(data.instrumentId, data.points, data.standards ?? [], data.coverageFactorK, data.decisionRule);
+  const points = data.points.map((p, index) => pontoComCalculos(p, index, ctx));
 
   const certificateNumber = await nextDocumentNumber("calibration", data.calibrationDate);
 
@@ -343,6 +417,7 @@ export const createCalibration = asyncHandler(async (req: Request, res: Response
       traceability: data.traceability,
       procedure: data.procedure,
       coverageFactorK: data.coverageFactorK ?? 2,
+      decisionRule: ctx.decisionRule,
       ambientTemperature: data.ambientTemperature ?? null,
       ambientHumidity: data.ambientHumidity ?? null,
       environmentalNotes: data.environmentalNotes,
@@ -351,7 +426,7 @@ export const createCalibration = asyncHandler(async (req: Request, res: Response
       observations: data.observations,
       validUntil: data.validUntil,
       createdById: req.user?.sub,
-      points: { create: data.points.map((p, index) => ({ ...pontoComCalculos(p), sortOrder: index })) },
+      points: { create: points },
       standards: data.standards?.length
         ? { create: data.standards.map((s, index) => ({ ...s, sortOrder: index })) }
         : undefined,
@@ -382,15 +457,30 @@ export const updateCalibration = asyncHandler(async (req: Request, res: Response
   const data = calibrationSchema.partial().parse(req.body);
   const { points, standards, ...rest } = data;
 
+  // Os pontos dependem de padroes, k, regra e ativo: se o pedido trouxer os pontos sem
+  // algum desses, vale o que ja esta gravado na calibracao.
+  let pontosCalculados: ReturnType<typeof pontoComCalculos>[] | undefined;
+  if (points) {
+    const padroes = standards ?? (await prisma.calibrationStandard.findMany({ where: { calibrationId: existing.id } }));
+    const ctx = await montarContexto(
+      data.instrumentId ?? existing.instrumentId,
+      points,
+      padroes,
+      data.coverageFactorK ?? existing.coverageFactorK,
+      data.decisionRule ?? existing.decisionRule,
+    );
+    pontosCalculados = points.map((p, index) => pontoComCalculos(p, index, ctx));
+  }
+
   const calibration = await prisma.calibration.update({
     where: { id: existing.id },
     data: {
       ...rest,
-      ...(points
+      ...(pontosCalculados
         ? {
             points: {
               deleteMany: {},
-              create: points.map((p, index) => ({ ...pontoComCalculos(p), sortOrder: index })),
+              create: pontosCalculados,
             },
           }
         : {}),
@@ -591,7 +681,10 @@ async function generateAndStoreCertificate(calibrationId: string, issuedAt: Date
 export const reviseCalibration = asyncHandler(async (req: Request, res: Response) => {
   const original = await prisma.calibration.findFirst({
     where: { id: req.params.id, deletedAt: null },
-    include: { points: { include: { readings: { orderBy: { sortOrder: "asc" } } } } },
+    include: {
+      points: { include: { readings: { orderBy: { sortOrder: "asc" } } } },
+      standards: { orderBy: { sortOrder: "asc" } },
+    },
   });
   if (!original) throw new NotFoundError("Certificado de calibracao");
   if (original.status !== "ISSUED") {
@@ -615,11 +708,17 @@ export const reviseCalibration = asyncHandler(async (req: Request, res: Response
       technicianId: original.technicianId,
       standardUsed: original.standardUsed,
       traceability: original.traceability,
+      // A revisao antes saia sem procedimento, k, observacoes e sem os padroes - ou seja,
+      // sem a rastreabilidade do certificado que ela corrige.
+      procedure: original.procedure,
+      coverageFactorK: original.coverageFactorK,
+      decisionRule: original.decisionRule,
       ambientTemperature: original.ambientTemperature,
       ambientHumidity: original.ambientHumidity,
       environmentalNotes: original.environmentalNotes,
       result: original.result,
       technicalConclusion: original.technicalConclusion,
+      observations: original.observations,
       validUntil: original.validUntil,
       revisionNumber,
       previousRevisionId: original.id,
@@ -637,6 +736,12 @@ export const reviseCalibration = asyncHandler(async (req: Request, res: Response
           deviation: p.deviation,
           tolerance: p.tolerance,
           uncertainty: p.uncertainty,
+          uStandard: p.uStandard,
+          uResolution: p.uResolution,
+          uRepeatability: p.uRepeatability,
+          uCombined: p.uCombined,
+          uncertaintyCalculated: p.uncertaintyCalculated,
+          toleranceCalculated: p.toleranceCalculated,
           result: p.result,
           sortOrder: index,
           readings: p.readings.length
@@ -644,6 +749,11 @@ export const reviseCalibration = asyncHandler(async (req: Request, res: Response
             : undefined,
         })),
       },
+      standards: original.standards.length
+        ? {
+            create: original.standards.map(({ id: _id, calibrationId: _calibrationId, ...s }) => s),
+          }
+        : undefined,
     },
     include: detailInclude,
   });

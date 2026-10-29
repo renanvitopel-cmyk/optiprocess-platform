@@ -331,6 +331,10 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
         instrument.calibrationFrequencyMonths ? `${instrument.calibrationFrequencyMonths} meses` : "Não aplicável",
       ],
     ];
+    if (instrument.accuracyClass) {
+      left.push(["Classe de exatidão:", instrument.accuracyClass]);
+      right.push(["", ""]);
+    }
     const pad = 10;
     const colW = (CONTENT_W - pad * 3) / 2;
     const boxTop = y;
@@ -390,6 +394,18 @@ export function buildCertificatePdf(data: CertificateData): Promise<Buffer> {
     bullet(
       `A incerteza expandida de medição declarada corresponde à incerteza padrão combinada multiplicada pelo fator ` +
         `de abrangência k = ${num(cal.coverageFactorK ?? 2, 2)}, para um nível de confiança de aproximadamente 95%.`,
+    );
+    if (cal.points.some((p) => p.uncertaintyCalculated)) {
+      bullet(
+        "A incerteza de cada ponto foi estimada conforme o GUM, combinando a incerteza do padrão (conforme seu " +
+          "certificado), a resolução do instrumento e a repetibilidade das leituras.",
+      );
+    }
+    // Por extenso: o Roboto embutido nao tem o glifo "≤" (saia um quadrado no lugar).
+    bullet(
+      cal.decisionRule === "GUARD_BAND"
+        ? "Critério de aprovação de cada ponto: |erro| + incerteza expandida menor ou igual à tolerância."
+        : "Critério de aprovação de cada ponto: |erro| menor ou igual à tolerância; a incerteza expandida é declarada para cada ponto.",
     );
     bullet("Os resultados referem-se exclusivamente ao item calibrado, nas condições indicadas neste certificado.");
     // Media (valor indicado), erro e desvio vem das leituras de repetibilidade - documenta

@@ -178,6 +178,14 @@ export interface Instrument {
   resolution: string | null;
   unit: string | null;
   installationLocation: string | null;
+  /** Dados metrologicos numericos - alimentam os calculos da calibracao (lib/metrology). */
+  rangeMin?: number | null;
+  rangeMax?: number | null;
+  resolutionValue?: number | null;
+  /** Rotulo do certificado ("B - 2%"); o calculo usa toleranceMode + toleranceValue. */
+  accuracyClass?: string | null;
+  toleranceMode?: ToleranceMode | null;
+  toleranceValue?: number | null;
   /** Foto principal do ativo - link temporario gerado pelo backend, nao a chave crua. */
   photoUrl?: string | null;
   photoFileName?: string | null;
@@ -215,6 +223,9 @@ export interface InstrumentCalibrationPoint {
 
 export type CalibrationResult = "APPROVED" | "APPROVED_WITH_RESTRICTION" | "REJECTED";
 export type PointResult = "PASS" | "FAIL";
+export type ToleranceMode = "PERCENT_FULL_SCALE" | "PERCENT_READING" | "ABSOLUTE";
+export type UncertaintyMode = "ABSOLUTE" | "PERCENT_READING";
+export type DecisionRule = "SIMPLE" | "GUARD_BAND";
 export type DocumentStatus = "DRAFT" | "ISSUED";
 
 export interface CalibrationPoint {
@@ -235,6 +246,13 @@ export interface CalibrationPoint {
   readings?: CalibrationReading[];
   tolerance?: number | null;
   uncertainty?: number | null;
+  /** Memoria de calculo da incerteza (incertezas-padrao), quando calculada pelo sistema. */
+  uStandard?: number | null;
+  uResolution?: number | null;
+  uRepeatability?: number | null;
+  uCombined?: number | null;
+  uncertaintyCalculated?: boolean;
+  toleranceCalculated?: boolean;
   result?: PointResult | null;
 }
 
@@ -255,6 +273,9 @@ export interface CalibrationStandard {
   certificateNumber?: string | null;
   certificateValidUntil?: string | null;
   laboratory?: string | null;
+  expandedUncertainty?: number | null;
+  uncertaintyMode?: UncertaintyMode | null;
+  uncertaintyK?: number | null;
   referenceStandardId?: string | null;
 }
 
@@ -298,6 +319,7 @@ export interface Calibration {
   traceability: string | null;
   procedure: string | null;
   coverageFactorK: number | null;
+  decisionRule?: DecisionRule;
   ambientTemperature: number | null;
   ambientHumidity: number | null;
   environmentalNotes: string | null;

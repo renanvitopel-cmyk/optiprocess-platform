@@ -70,16 +70,16 @@ const SLIDES: Slide[] = [
     icon: Zap,
     badge: "Manutenção elétrica",
     title: "Manutenção elétrica preventiva e corretiva",
-    text: "Atendimento predial e industrial com laudos técnicos e registro de cada serviço executado na sua planta.",
-    chips: ["Predial e industrial", "Laudos técnicos", "Ordens de serviço"],
+    text: "Atendimento predial, comercial e industrial: painéis elétricos, QGBT, CCM e carregador veicular WEG, com registro de cada serviço.",
+    chips: ["Painéis elétricos", "QGBT e CCM", "Carregador WEG"],
   },
   {
-    tab: "Manutenção",
+    tab: "Laudos",
     icon: Wrench,
-    badge: "RLP Maintenance CMMS",
-    title: "Gestão da manutenção da sua fábrica",
-    text: "Planos preventivos, ordens de serviço, almoxarifado e indicadores de MTTR, MTBF e disponibilidade.",
-    chips: ["Planos preventivos", "Almoxarifado", "Indicadores"],
+    badge: "Inspeção e laudos",
+    title: "Inspeção e laudos técnicos",
+    text: "Instalações elétricas, aterramento, termografia, banco de capacitores, motores CA/CC, subestação e transformadores.",
+    chips: ["Termografia", "Aterramento", "Subestação"],
   },
 ];
 

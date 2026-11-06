@@ -11,15 +11,12 @@ import { useAuth } from "../../auth/AuthContext";
 import type { ServiceCategory } from "../../api/types";
 
 const SERVICE_OPTIONS: { value: ServiceCategory; label: string }[] = [
-  { value: "ELECTRICAL_MAINTENANCE", label: "Manutenção elétrica predial/industrial" },
-  { value: "PANEL_MAINTENANCE", label: "Painéis elétricos (QGBT, CCM, automação)" },
-  { value: "MOTOR_MAINTENANCE", label: "Manutenção de motores CA/CC" },
-  { value: "TECHNICAL_REPORT", label: "Laudo técnico" },
-  { value: "CALIBRATION", label: "Calibração de ativos" },
-  { value: "TECHNICAL_ASSISTANCE", label: "Assistência técnica em inversores/eletrônicos" },
-  { value: "EV_CHARGER", label: "Carregador para veículo elétrico" },
-  { value: "CMMS_MAINTENANCE", label: "RLP Maintenance CMMS - gestão de manutenção" },
-  { value: "OTHER", label: "Outro" },
+  { value: "ELECTRICAL_MAINTENANCE", label: "Instalação e manutenção elétrica predial, comercial e industrial" },
+  { value: "PANEL_MAINTENANCE", label: "Painéis elétricos (distribuição, comando, automação, inversores, QGBT, CCM)" },
+  { value: "EV_CHARGER", label: "Carregador elétrico veicular – integrador WEG" },
+  { value: "CALIBRATION", label: "Calibração e instrumentação (temperatura, pressão, tempo)" },
+  { value: "TECHNICAL_REPORT", label: "Inspeção / laudo técnico" },
+  { value: "OTHER", label: "Outro (mão de obra H/H, material elétrico...)" },
 ];
 
 const schema = z.object({

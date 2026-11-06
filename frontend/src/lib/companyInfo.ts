@@ -6,7 +6,7 @@ export const company = {
   name: "OptiProcess",
   fullName: "OptiProcess Instalação, Manutenção Elétrica, Eletrônica e Instrumentação",
   address: "Rua Cuba, 212 - Vila Barcelona - Sorocaba/SP - CEP 18025-540",
-  phoneDisplay: "(15) 99784-7299",
+  phoneDisplay: "(15) 99119-8557",
   email: "contatooptprocess@gmail.com",
   mission:
     "Prover soluções inovadoras em serviços elétricos, instrumentação, manutenção elétrica preventiva e corretiva, assegurando a máxima disponibilidade e segurança das instalações industriais e comerciais, com foco na excelência técnica e na satisfação do cliente.",
@@ -56,34 +56,31 @@ export interface ServiceLine {
   serviceCategory: string;
   // Texto do botao de orcamento especifico deste servico (em vez do generico "Solicitar orcamento").
   ctaLabel: string;
-  // Campos extras (opcionais) para servicos que sao plataforma/assinatura, nao so
-  // execucao pontual - so o CMMS usa por enquanto, os outros continuam so com "items".
-  subtitle?: string;
-  benefits?: { title: string; description: string }[];
-  integrations?: string[];
-  controls?: string[];
+  // Destino do botao quando nao e' o formulario de orcamento (ex.: material vai pro catalogo).
+  ctaTo?: string;
 }
 
+// Somente as frentes da descricao padrao da empresa (OPTI_Descricao_Padrao.docx, 05/11/2026).
+// Assistencia tecnica, SPDA e o RLP Maintenance CMMS sairam do site por decisao da empresa.
 export const serviceLines: ServiceLine[] = [
   {
     slug: "manutencao-eletrica",
-    title: "Manutenção Elétrica",
-    shortDescription: "Instalação e manutenção elétrica predial e industrial, painéis e motores.",
+    title: "Instalação e Manutenção Elétrica",
+    shortDescription: "Instalação e manutenção elétrica predial, comercial e industrial.",
     serviceCategory: "ELECTRICAL_MAINTENANCE",
     ctaLabel: "Orçar manutenção elétrica",
     items: [
-      "Instalação e manutenção elétrica predial e industrial",
-      "Instalação e montagem de painéis elétricos: distribuição, comando, automação, inversores",
-      "Manutenção corretiva e preventiva de QGBT, CCM e banco de capacitores",
-      "Manutenção preventiva em motores CA/CC: isolação, inspeção, reaperto e limpeza",
-      "Instalação e comércio de carregadores para carros elétricos",
-      "Mão de obra especializada por hora-homem",
+      "Instalação e manutenção elétrica predial, comercial e industrial",
+      "Instalação, montagem e manutenção corretiva e preventiva em painéis elétricos de distribuição, comando, automação e acionamento/inversores",
+      "Painéis QGBT e CCM",
+      "Instalação de carregador elétrico veicular – Integrador WEG",
+      "Mão de obra especializada elétrica e eletrônica (H/H)",
     ],
   },
   {
     slug: "calibracao-instrumentacao",
     title: "Calibração e Instrumentação",
-    shortDescription: "Calibração de temperatura, pressão e tempo com certificado rastreável.",
+    shortDescription: "Calibração e instrumentação industrial e comercial: temperatura, pressão e tempo.",
     serviceCategory: "CALIBRATION",
     ctaLabel: "Orçar calibração",
     items: [
@@ -91,100 +88,36 @@ export const serviceLines: ServiceLine[] = [
       "Calibração de pressão",
       "Calibração de tempo",
       "Certificados com cadeia de rastreabilidade metrológica e QR Code de validação pública",
-      "Mão de obra técnica especializada por hora-homem",
     ],
   },
   {
     slug: "laudos-tecnicos",
-    title: "Laudos Técnicos",
-    shortDescription: "Laudos de instalações elétricas, termografia, aterramento e SPDA.",
+    title: "Inspeção e Laudos",
+    shortDescription: "Inspeção e laudos de instalações elétricas, aterramento, termografia, subestação e mais.",
     serviceCategory: "TECHNICAL_REPORT",
-    ctaLabel: "Solicitar laudo técnico",
+    ctaLabel: "Solicitar inspeção ou laudo",
     items: [
-      "Laudo de instalações elétricas",
-      "Laudo de termografia infravermelha",
-      "Laudo de aterramento elétrico",
-      "Laudo de SPDA (sistema de proteção contra descargas atmosféricas - para-raios)",
+      "Instalações elétricas",
+      "Aterramento elétrico",
+      "Termografia",
+      "Banco de capacitores",
+      "Motores elétricos CA/CC",
+      "Subestação",
+      "Transformadores",
     ],
   },
   {
-    slug: "assistencia-tecnica",
-    title: "Assistência Técnica",
-    shortDescription: "Assistência técnica em equipamentos eletrônicos e inversores das principais marcas.",
-    serviceCategory: "TECHNICAL_ASSISTANCE",
-    ctaLabel: "Falar sobre assistência técnica",
+    slug: "material-eletrico",
+    title: "Material Elétrico e Instrumentação",
+    shortDescription: "Material elétrico, eletrônico, de automação e de instrumentação.",
+    serviceCategory: "OTHER",
+    ctaLabel: "Ver catálogo de produtos",
+    ctaTo: "/produtos",
     items: [
-      "Inversores Siemens",
-      "Inversores WEG",
-      "Equipamentos Fanuc",
-      "Equipamentos Mitsubishi",
-      "Equipamentos Bosch/Rexroth",
-    ],
-  },
-  {
-    slug: "rlp-maintenance-cmms",
-    title: "RLP Maintenance CMMS",
-    subtitle: "Software de gestão de manutenção por assinatura",
-    shortDescription: "Plataforma completa para planejar, executar e controlar o custo da manutenção dos seus ativos.",
-    serviceCategory: "CMMS_MAINTENANCE",
-    ctaLabel: "Falar com um consultor",
-    items: [
-      "Árvore de ativos (pai/filho) com histórico completo por TAG",
-      "Solicitações de serviço abertas pela operação, com triagem antes de virar ordem",
-      "Planos preventivos por tempo ou por medidor (horímetro, odômetro)",
-      "Ordens corretivas com checklist de execução, código de falha e análise de causa (RCA)",
-      "Gestão de lubrificação: lubrificantes, pontos, rotas, aplicações e previsão de consumo",
-      "Almoxarifado de peças por empresa, com reserva, consumo por ordem e estoque mínimo",
-      "Mão de obra com valor/hora, HH planejado x realizado e custo real por ordem",
-      "Programação semanal, quadro Kanban e painel de planejamento por fila",
-      "Indicadores MTTR, MTBF, disponibilidade, backlog e cumprimento do plano",
-      "Perfis de acesso: administrador, planejador, técnico e solicitante",
-      "Importação por planilha para subir o parque de ativos de uma vez",
-      "Portal próprio: sua equipe usa o sistema sem depender da OptiProcess no dia a dia",
-    ],
-    benefits: [
-      {
-        title: "Menos parada não planejada",
-        description: "Planos preventivos por tempo ou por uso, rotas de lubrificação e acompanhamento de condição antecipam a falha antes que ela pare a produção.",
-      },
-      {
-        title: "Custo de manutenção visível de verdade",
-        description: "Cada ordem soma peça e mão de obra usada; a ficha do ativo mostra o gasto total, pra decidir manter ou trocar com dado, não com achismo.",
-      },
-      {
-        title: "Lubrificação que não fica para depois",
-        description: "Cada ponto diz qual lubrificante, quanto e de quanto em quanto tempo; as rotas organizam a volta do lubrificador e a previsão mostra quanto de graxa e óleo comprar no mês.",
-      },
-      {
-        title: "Nunca falta peça na hora certa",
-        description: "Almoxarifado técnico próprio, com estoque mínimo por peça e alerta antes de faltar rolamento, retentor ou disjuntor.",
-      },
-      {
-        title: "Sua equipe no controle",
-        description: "Assinando o CMMS, sua própria equipe cadastra ativos, abre e executa ordens, controla estoque e mão de obra - sem depender de ligar pra OptiProcess pra cada passo.",
-      },
-      {
-        title: "Sem letra miúda",
-        description: "Assinatura mensal, sem instalar nada - acessa pelo navegador, no computador ou no celular, em qualquer lugar.",
-      },
-    ],
-    integrations: [
-      "Mesmo cadastro de ativo (TAG) usado na calibração - não duplica equipamento",
-      "Certificados de calibração e laudos técnicos no mesmo portal da manutenção",
-      "Ordens de serviço externas da OptiProcess e ordens internas do CMMS lado a lado",
-      "Um único login pra toda a gestão técnica da empresa",
-    ],
-    controls: [
-      "Preventiva por tempo (dias) ou por medidor (uso)",
-      "Acompanhamento de condição: a leitura lançada pela equipe fora do limite abre a ordem",
-      "Corretiva com checklist, código de falha, registro da quebra e RCA (5 porquês)",
-      "Lubrificação: ponto, lubrificante, quantidade, método, rota e histórico de aplicação",
-      "Árvore de ativos e lista de peças compatíveis (BOM) por ativo",
-      "Consumo de peça do almoxarifado direto na ordem, com baixa automática de estoque",
-      "Lançamento de mão de obra por ordem, com valor/hora congelado no histórico",
-      "Programação por arrasto e painel de planejamento (sem responsável, pendente, liberada, concluída)",
-      "Indicadores: MTTR, MTBF, disponibilidade, backlog, cumprimento do plano",
-      "Anexos e fotos por ativo: manual do fabricante, foto do equipamento e da equipe",
+      "Material elétrico",
+      "Material eletrônico",
+      "Automação",
+      "Instrumentação",
     ],
   },
 ];

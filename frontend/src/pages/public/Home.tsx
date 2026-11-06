@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ShieldCheck, BadgeCheck, FileWarning, Zap, Star, Wrench, MapPin } from "lucide-react";
+import { ArrowRight, ShieldCheck, BadgeCheck, FileWarning, Zap, Star, Package, MapPin } from "lucide-react";
 import { company, differentials, serviceLines } from "../../lib/companyInfo";
 import { listProducts } from "../../api/products";
 import { formatCurrency } from "../../lib/format";
@@ -26,8 +26,8 @@ export default function Home() {
             Manutenção elétrica, calibração e laudos para sua operação não parar
           </h1>
           <p className="max-w-xl text-lg text-navy-200">
-            {company.fullName}. Manutenção elétrica predial e industrial, calibração rastreável, laudos técnicos e
-            assistência especializada para manter sua planta segura e em pleno funcionamento.
+            {company.fullName}. Instalação e manutenção elétrica predial, comercial e industrial, calibração
+            rastreável, inspeção e laudos e material elétrico para manter sua planta segura e em pleno funcionamento.
           </p>
           <p className="flex items-center gap-2 text-sm font-medium text-navy-300">
             <MapPin className="h-4 w-4 text-safety-yellow" /> Atendimento em Sorocaba e região
@@ -43,8 +43,7 @@ export default function Home() {
           </div>
 
           {/* O lado direito estava vazio. Em vez de uma foto generica de banco de imagem,
-              mostra um recorte dos servicos executados pela OptiProcess (o CMMS, que e'
-              por assinatura, tem pagina e hero propria). */}
+              mostra um recorte dos servicos executados pela OptiProcess. */}
           <PainelDeServicos className="hidden lg:block" />
         </div>
       </section>
@@ -60,21 +59,21 @@ export default function Home() {
             />
             <HighlightCard
               icon={FileWarning}
-              title="Laudos técnicos"
-              description="Instalações elétricas, termografia infravermelha, aterramento e SPDA com validade técnica."
+              title="Inspeção e laudos"
+              description="Instalações elétricas, aterramento, termografia, banco de capacitores, motores, subestação e transformadores."
               to="/servicos/laudos-tecnicos"
             />
             <HighlightCard
               icon={Zap}
               title="Manutenção elétrica"
-              description="Predial e industrial, painéis, QGBT, CCM e motores CA/CC com equipe especializada."
+              description="Predial, comercial e industrial: painéis, QGBT, CCM e carregador veicular – integrador WEG."
               to="/servicos/manutencao-eletrica"
             />
             <HighlightCard
-              icon={Wrench}
-              title="Assistência técnica"
-              description="Assistência técnica em equipamentos eletrônicos e inversores das principais marcas."
-              to="/servicos/assistencia-tecnica"
+              icon={Package}
+              title="Material elétrico"
+              description="Material elétrico, eletrônico, de automação e de instrumentação."
+              to="/produtos"
             />
           </div>
         </div>
@@ -84,12 +83,10 @@ export default function Home() {
         <div className="container-page">
           <h2 className="text-2xl font-bold text-navy-900 sm:text-3xl">Nossos serviços</h2>
           <p className="mt-2 max-w-2xl text-graphite-500">
-            Soluções completas para instalação, manutenção, instrumentação e assistência técnica industrial.
+            Instalação, manutenção elétrica, calibração, inspeção e laudos para indústria e comércio.
           </p>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {/* O CMMS e' um produto por assinatura, com pagina propria - a home fala so
-                dos servicos executados pela OptiProcess. */}
-            {serviceLines.filter((service) => service.slug !== "rlp-maintenance-cmms").map((service) => (
+            {serviceLines.map((service) => (
               <Link
                 key={service.slug}
                 to={`/servicos/${service.slug}`}
@@ -126,7 +123,7 @@ export default function Home() {
           <div className="flex items-end justify-between">
             <div>
               <h2 className="text-2xl font-bold text-navy-900 sm:text-3xl">Produtos em destaque</h2>
-              <p className="mt-2 text-graphite-500">Materiais elétricos, automação Gefran e carregadores WEG WEMOB.</p>
+              <p className="mt-2 text-graphite-500">Material elétrico, eletrônico, automação e instrumentação.</p>
             </div>
             <Link to="/produtos" className="hidden text-sm font-medium text-navy-700 hover:underline sm:inline">
               Ver catálogo completo

@@ -9,6 +9,6 @@ export const COMPANY_INFO = {
     process.env.COMPANY_FULL_NAME ??
     "OptiProcess - Instalacao, Manutencao Eletrica, Eletronica e Instrumentacao",
   address: process.env.COMPANY_ADDRESS ?? "Rua Cuba, 212 - Vila Barcelona - Sorocaba/SP - CEP 18025-540",
-  phone: process.env.COMPANY_PHONE ?? "(15) 99784-7299",
+  phone: process.env.COMPANY_PHONE ?? "(15) 99119-8557",
   email: process.env.COMPANY_EMAIL ?? "contatooptprocess@gmail.com",
 };

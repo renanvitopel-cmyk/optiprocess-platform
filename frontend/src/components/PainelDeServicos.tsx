@@ -1,4 +1,4 @@
-import { BadgeCheck, FileText, Wrench, Zap } from "lucide-react";
+import { BadgeCheck, FileText, PlugZap, Zap } from "lucide-react";
 
 /**
  * O visual do hero da home: o que a OptiProcess PRESTA.
@@ -14,9 +14,9 @@ import { BadgeCheck, FileText, Wrench, Zap } from "lucide-react";
  */
 export function PainelDeServicos({ className = "" }: { className?: string }) {
   const frentes = [
-    { icone: Zap, titulo: "Manutenção elétrica", detalhe: "Predial e industrial · painéis e motores" },
-    { icone: Wrench, titulo: "Assistência técnica", detalhe: "Inversores, CLPs e instrumentação" },
-    { icone: FileText, titulo: "Laudos técnicos", detalhe: "Documentação com responsável técnico" },
+    { icone: Zap, titulo: "Manutenção elétrica", detalhe: "Predial, comercial e industrial · painéis" },
+    { icone: PlugZap, titulo: "Carregador veicular", detalhe: "Instalação · integrador WEG" },
+    { icone: FileText, titulo: "Inspeção e laudos", detalhe: "Termografia, aterramento, subestação" },
   ];
 
   return (

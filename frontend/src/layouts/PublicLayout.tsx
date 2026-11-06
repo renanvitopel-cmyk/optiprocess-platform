@@ -13,7 +13,11 @@ export function PublicLayout() {
   // Validacao de certificado fica fora da manutencao: o QR Code dos certificados ja
   // emitidos aponta para ela e precisa continuar respondendo.
   const paginaSempreAberta = pathname.startsWith("/validar-certificado");
-  if (!paginaSempreAberta) {
+  // A manutencao fecha so o dominio oficial (optiprocess.com.br e www). Pelo endereco do
+  // Render (optiprocess-platform.onrender.com) o site novo continua visivel para conferir
+  // antes de liberar o .com.br.
+  const dominioOficial = /(^|\.)optiprocess\.com\.br$/i.test(window.location.hostname);
+  if (dominioOficial && !paginaSempreAberta) {
     // Sem a config ainda, nao mostra o site por um instante so' para trocar pela
     // manutencao logo depois.
     if (isLoading) return <div className="min-h-screen bg-navy-950" />;
